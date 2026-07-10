@@ -1,11 +1,11 @@
 /**
- * Phase 3.3: Instrumentation Overhead Validation (v3)
+ * Phase 3.3: Instrumentation Overhead Validation (v4 - Final)
  *
- * Critical fixes:
- * - Paired AB/BA bootstrap matching point estimate
- * - Non-inferiority decision logic
- * - Proper validation (fail-closed)
- * - execFileSync for shell safety
+ * All decision-quality issues fixed:
+ * - Pre-registered gating scenarios
+ * - Paired p50 and p95 analysis
+ * - Deterministic bootstrap with seed
+ * - Full audit trail preserved
  */
 
 import { execFileSync } from "node:child_process";
@@ -19,6 +19,20 @@ const PAIRS = 10;
 const WARMUP = 50;
 const ITERATIONS = 500;
 const THRESHOLD = 0.05;
+const BOOTSTRAP_ITERATIONS = 10000;
+const BOOTSTRAP_SEED = 0x33120202; // Phase 3.3, Feb 2nd
+
+// Pre-registered gating scenarios (instrumented paths)
+const GATING_SCENARIOS = [
+  "terminal_write_supplementary_cjk_hot",
+  "terminal_write_supplementary_cjk_cycling_rows",
+  "textCellWidth_ascii_long_fast_path",
+  "textCellWidth_cjk_long_hot",
+  "textCellWidth_cjk_unique",
+  "textCellWidth_complex_grapheme_hot",
+  "wrapByCells_cjk_long_hot",
+  "wrapByCells_cjk_unique",
+] as const;
 
 interface BenchmarkReport {
   commit: string;
@@ -30,22 +44,30 @@ interface BenchmarkReport {
   gitDirty: boolean;
   warmup: number;
   samples: number;
-  results: Record<string, { p50: number; p95: number; p99: number }>;
+  timestamp: string;
+  results: Record<string, { p50: number; p95: number; p99: number; cv?: number }>;
 }
 
 interface PairedRun {
+  index: number;
   order: "AB" | "BA";
   reportA: BenchmarkReport;
   reportB: BenchmarkReport;
 }
 
-interface ScenarioResult {
-  scenario: string;
-  pairedP95Ratios: number[];
+interface MetricAnalysis {
+  pairedRatios: number[];
   medianRatio: number;
   ciLower: number;
   ciUpper: number;
-  status: "pass" | "fail" | "inconclusive";
+}
+
+interface ScenarioResult {
+  scenario: string;
+  gating: boolean;
+  p50: MetricAnalysis;
+  p95: MetricAnalysis;
+  status: "pass" | "fail" | "inconclusive" | "informational";
 }
 
 function log(msg: string) {
@@ -58,24 +80,42 @@ function percentile(values: number[], p: number): number {
   return sorted[Math.max(0, idx)];
 }
 
-function pairedBootstrapCI(ratios: number[], iters = 1000): [number, number] {
+// Deterministic PRNG (LCG)
+class SeededRandom {
+  private state: number;
+  constructor(seed: number) {
+    this.state = seed;
+  }
+  next(): number {
+    this.state = (this.state * 1664525 + 1013904223) % 2 ** 32;
+    return this.state / 2 ** 32;
+  }
+}
+
+function pairedBootstrapCI(ratios: number[], seed: number, iters: number): [number, number] {
+  const rng = new SeededRandom(seed);
   const n = ratios.length;
   const boots: number[] = [];
+
   for (let i = 0; i < iters; i++) {
     const resampled: number[] = [];
     for (let j = 0; j < n; j++) {
-      resampled.push(ratios[Math.floor(Math.random() * n)]);
+      resampled.push(ratios[Math.floor(rng.next() * n)]);
     }
     boots.push(percentile(resampled, 50));
   }
+
   boots.sort((a, b) => a - b);
   return [percentile(boots, 2.5), percentile(boots, 97.5)];
 }
 
-function setupWorktrees(baseDir: string) {
-  const wA = join(baseDir, "commit-a");
-  const wB = join(baseDir, "commit-b");
+function removeWorktree(path: string) {
+  try {
+    execFileSync("git", ["worktree", "remove", "--force", path], { stdio: "ignore" });
+  } catch {}
+}
 
+function setupWorktrees(wA: string, wB: string) {
   log("Creating worktrees...");
   execFileSync("git", ["worktree", "add", "--detach", wA, COMMIT_A], { stdio: "inherit" });
   execFileSync("git", ["worktree", "add", "--detach", wB, COMMIT_B], { stdio: "inherit" });
@@ -87,8 +127,6 @@ function setupWorktrees(baseDir: string) {
   log("Building...");
   execFileSync("pnpm", ["run", "build"], { cwd: wA, stdio: "inherit" });
   execFileSync("pnpm", ["run", "build"], { cwd: wB, stdio: "inherit" });
-
-  return { wA, wB };
 }
 
 function runBench(wt: string, out: string): BenchmarkReport {
@@ -130,49 +168,76 @@ function validate(reportsA: BenchmarkReport[], reportsB: BenchmarkReport[]) {
   for (const r of [...reportsA, ...reportsB]) {
     if (Object.keys(r.results).sort().join() !== sA) throw new Error("Scenario mismatch");
   }
+
+  // Validate gating scenarios exist
+  for (const sc of GATING_SCENARIOS) {
+    if (!reportsA[0].results[sc]) {
+      throw new Error(`Gating scenario missing: ${sc}`);
+    }
+  }
 }
 
-function analyzeSc(sc: string, pairs: PairedRun[]): ScenarioResult {
+function analyzeMetric(
+  pairs: PairedRun[],
+  scenario: string,
+  metric: "p50" | "p95",
+  seed: number,
+): MetricAnalysis {
   const ratios: number[] = [];
   for (const p of pairs) {
-    const pA = p.reportA.results[sc]?.p95;
-    const pB = p.reportB.results[sc]?.p95;
-    if (!pA || !pB || !isFinite(pA) || !isFinite(pB) || pA <= 0 || pB <= 0) {
-      throw new Error(`Invalid p95 for ${sc}`);
+    const vA = p.reportA.results[scenario]?.[metric];
+    const vB = p.reportB.results[scenario]?.[metric];
+    if (!vA || !vB || !isFinite(vA) || !isFinite(vB) || vA <= 0 || vB <= 0) {
+      throw new Error(`Invalid ${metric} for ${scenario}`);
     }
-    ratios.push(pB / pA);
+    ratios.push(vB / vA);
   }
   const med = percentile(ratios, 50);
-  const [ciL, ciU] = pairedBootstrapCI(ratios);
+  const [ciL, ciU] = pairedBootstrapCI(ratios, seed, BOOTSTRAP_ITERATIONS);
+  return { pairedRatios: ratios, medianRatio: med, ciLower: ciL, ciUpper: ciU };
+}
 
-  let status: "pass" | "fail" | "inconclusive";
-  if (ciL > 1 + THRESHOLD) status = "fail";
-  else if (ciU <= 1 + THRESHOLD) status = "pass";
-  else status = "inconclusive";
+function analyzeSc(pairs: PairedRun[], scenario: string, gating: boolean): ScenarioResult {
+  const p50 = analyzeMetric(pairs, scenario, "p50", BOOTSTRAP_SEED);
+  const p95 = analyzeMetric(pairs, scenario, "p95", BOOTSTRAP_SEED + 1);
 
-  return {
-    scenario: sc,
-    pairedP95Ratios: ratios,
-    medianRatio: med,
-    ciLower: ciL,
-    ciUpper: ciU,
-    status,
-  };
+  let status: "pass" | "fail" | "inconclusive" | "informational";
+
+  if (!gating) {
+    status = "informational";
+  } else {
+    // Decision based on p95 only
+    if (p95.ciLower > 1 + THRESHOLD) {
+      status = "fail";
+    } else if (p95.ciUpper <= 1 + THRESHOLD) {
+      status = "pass";
+    } else {
+      status = "inconclusive";
+    }
+  }
+
+  return { scenario, gating, p50, p95, status };
 }
 
 function main() {
   console.log("=".repeat(80));
-  console.log("Phase 3.3: Instrumentation Overhead Validation (v3)");
+  console.log("Phase 3.3: Instrumentation Overhead Validation (v4)");
   console.log("=".repeat(80));
-  console.log(`Pairs: ${PAIRS} AB/BA\n`);
+  console.log(`Pairs: ${PAIRS}, Threshold: ${THRESHOLD * 100}%`);
+  console.log(
+    `Bootstrap: ${BOOTSTRAP_ITERATIONS} iterations, seed: 0x${BOOTSTRAP_SEED.toString(16)}`,
+  );
+  console.log(`Gating scenarios: ${GATING_SCENARIOS.length}\n`);
 
   const base = join(tmpdir(), `phase3.3-${Date.now()}`);
   const outDir = join(base, "results");
   mkdirSync(outDir, { recursive: true });
 
-  let wA: string | undefined, wB: string | undefined;
+  const wA = join(base, "commit-a");
+  const wB = join(base, "commit-b");
+
   try {
-    ({ wA, wB } = setupWorktrees(base));
+    setupWorktrees(wA, wB);
 
     const pairs: PairedRun[] = [];
     for (let i = 0; i < PAIRS; i++) {
@@ -183,17 +248,17 @@ function main() {
       const oB = join(outDir, `pair-${i}-B.json`);
 
       if (ord === "AB") {
-        log("  Running A...");
+        log("  A...");
         const rA = runBench(wA, oA);
-        log("  Running B...");
+        log("  B...");
         const rB = runBench(wB, oB);
-        pairs.push({ order: ord, reportA: rA, reportB: rB });
+        pairs.push({ index: i, order: ord, reportA: rA, reportB: rB });
       } else {
-        log("  Running B...");
+        log("  B...");
         const rB = runBench(wB, oB);
-        log("  Running A...");
+        log("  A...");
         const rA = runBench(wA, oA);
-        pairs.push({ order: ord, reportA: rA, reportB: rB });
+        pairs.push({ index: i, order: ord, reportA: rA, reportB: rB });
       }
     }
 
@@ -210,24 +275,61 @@ function main() {
     console.log("=".repeat(80) + "\n");
 
     for (const sc of scenarios) {
-      const r = analyzeSc(sc, pairs);
+      const gating = GATING_SCENARIOS.includes(sc as any);
+      const r = analyzeSc(pairs, sc, gating);
       results.push(r);
-      const sym = r.status === "pass" ? "✅" : r.status === "fail" ? "❌" : "⚠️";
-      const pct = ((r.medianRatio - 1) * 100).toFixed(2);
-      console.log(`${sym} ${sc}`);
-      console.log(`   Median: ${r.medianRatio.toFixed(3)} (${pct >= "0" ? "+" : ""}${pct}%)`);
-      console.log(`   95% CI: [${r.ciLower.toFixed(3)}, ${r.ciUpper.toFixed(3)}]`);
+
+      const sym =
+        r.status === "pass"
+          ? "✅"
+          : r.status === "fail"
+            ? "❌"
+            : r.status === "inconclusive"
+              ? "⚠️"
+              : "ℹ️";
+      const pct = ((r.p95.medianRatio - 1) * 100).toFixed(2);
+
+      console.log(`${sym} ${sc} ${gating ? "(GATING)" : "(informational)"}`);
+      console.log(
+        `   p50: ${r.p50.medianRatio.toFixed(3)}, p95: ${r.p95.medianRatio.toFixed(3)} (${pct >= "0" ? "+" : ""}${pct}%)`,
+      );
+      console.log(`   p95 CI: [${r.p95.ciLower.toFixed(3)}, ${r.p95.ciUpper.toFixed(3)}]`);
       console.log(`   ${r.status.toUpperCase()}`);
       console.log();
     }
 
+    // Save complete audit trail
     mkdirSync("docs/perf", { recursive: true });
     writeFileSync(
       "docs/perf/phase3.3-overhead-results.json",
       JSON.stringify(
         {
-          config: { commitA: COMMIT_A, commitB: COMMIT_B, pairs: PAIRS, threshold: THRESHOLD },
+          config: {
+            commitA: COMMIT_A,
+            commitB: COMMIT_B,
+            pairs: PAIRS,
+            warmup: WARMUP,
+            samples: ITERATIONS,
+            threshold: THRESHOLD,
+            bootstrapIterations: BOOTSTRAP_ITERATIONS,
+            bootstrapSeed: BOOTSTRAP_SEED,
+            gatingScenarios: Array.from(GATING_SCENARIOS),
+          },
           environment: pairs[0].reportA,
+          pairedRuns: pairs.map((p) => ({
+            index: p.index,
+            order: p.order,
+            A: {
+              timestamp: p.reportA.timestamp,
+              commit: p.reportA.commit,
+              results: p.reportA.results,
+            },
+            B: {
+              timestamp: p.reportB.timestamp,
+              commit: p.reportB.commit,
+              results: p.reportB.results,
+            },
+          })),
           timestamp: new Date().toISOString(),
           results,
         },
@@ -236,12 +338,16 @@ function main() {
       ),
     );
 
-    const fail = results.filter((r) => r.status === "fail").length;
-    const inc = results.filter((r) => r.status === "inconclusive").length;
-    const pass = results.filter((r) => r.status === "pass").length;
+    log(`Results saved. Raw reports preserved in: ${outDir}`);
+
+    // Summary (gating scenarios only)
+    const gating = results.filter((r) => r.gating);
+    const fail = gating.filter((r) => r.status === "fail").length;
+    const inc = gating.filter((r) => r.status === "inconclusive").length;
+    const pass = gating.filter((r) => r.status === "pass").length;
 
     console.log("=".repeat(80));
-    console.log("SUMMARY");
+    console.log("SUMMARY (Gating Scenarios Only)");
     console.log("=".repeat(80));
     console.log(`Pass: ${pass}, Fail: ${fail}, Inconclusive: ${inc}\n`);
 
@@ -254,20 +360,15 @@ function main() {
     } else {
       console.log("✅ PROVEN <= 5%");
     }
+  } catch (err) {
+    console.error("\n❌ Benchmark failed:", err);
+    log(`Preserving data in: ${base}`);
+    throw err;
   } finally {
-    if (wA)
-      try {
-        execFileSync("git", ["worktree", "remove", "--force", wA]);
-      } catch {}
-    if (wB)
-      try {
-        execFileSync("git", ["worktree", "remove", "--force", wB]);
-      } catch {}
+    removeWorktree(wA);
+    removeWorktree(wB);
     try {
-      execFileSync("git", ["worktree", "prune"]);
-    } catch {}
-    try {
-      rmSync(base, { recursive: true, force: true });
+      execFileSync("git", ["worktree", "prune"], { stdio: "ignore" });
     } catch {}
   }
 }

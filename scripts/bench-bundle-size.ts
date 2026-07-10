@@ -1,11 +1,10 @@
 /**
- * Phase 3.3: Bundle Size Comparison (v3)
+ * Phase 3.3: Bundle Size Comparison (v4 - Final)
  *
  * Fixes:
- * - Fail-closed (missing bundles throw)
- * - Positive-only failures
- * - execFileSync for shell safety
- * - Tests both ESM and CJS
+ * - Derives entries from package.json exports
+ * - Tests all published JS/CJS files
+ * - Robust cleanup
  */
 
 import { execFileSync } from "node:child_process";
@@ -18,15 +17,6 @@ const COMMIT_A = "697472b0cc5c000fb46baf16e85c60d84ee22471";
 const COMMIT_B = "4d543ff7042f9c2400fa50a9dff921a0f36f77a3";
 const WARN_THRESHOLD = 2048;
 const FAIL_THRESHOLD = 5120;
-
-const EXPECTED_ENTRIES = [
-  "dist/core.js",
-  "dist/core.cjs",
-  "dist/vue.js",
-  "dist/vue.cjs",
-  "dist/index.js",
-  "dist/index.cjs",
-];
 
 interface BundleStats {
   raw: number;
@@ -56,10 +46,36 @@ function getSize(p: string): BundleStats {
   return { raw, gzip };
 }
 
-function setup(base: string) {
-  const wA = join(base, "commit-a");
-  const wB = join(base, "commit-b");
+function extractExportPaths(pkgPath: string): string[] {
+  const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+  const paths = new Set<string>();
 
+  function walk(obj: any) {
+    if (typeof obj === "string") {
+      if (obj.startsWith("./dist/") && (obj.endsWith(".js") || obj.endsWith(".cjs"))) {
+        paths.add(obj.substring(2)); // Remove leading ./
+      }
+    } else if (typeof obj === "object" && obj !== null) {
+      for (const v of Object.values(obj)) {
+        walk(v);
+      }
+    }
+  }
+
+  if (pkg.exports) {
+    walk(pkg.exports);
+  }
+
+  return Array.from(paths).sort();
+}
+
+function removeWorktree(path: string) {
+  try {
+    execFileSync("git", ["worktree", "remove", "--force", path], { stdio: "ignore" });
+  } catch {}
+}
+
+function setup(wA: string, wB: string) {
   log("Creating worktrees...");
   execFileSync("git", ["worktree", "add", "--detach", wA, COMMIT_A], { stdio: "inherit" });
   execFileSync("git", ["worktree", "add", "--detach", wB, COMMIT_B], { stdio: "inherit" });
@@ -71,24 +87,34 @@ function setup(base: string) {
   log("Building...");
   execFileSync("pnpm", ["run", "build"], { cwd: wA, stdio: "inherit" });
   execFileSync("pnpm", ["run", "build"], { cwd: wB, stdio: "inherit" });
-
-  return { wA, wB };
 }
 
 function main() {
   console.log("=".repeat(80));
-  console.log("Phase 3.3: Bundle Size Comparison (v3)");
+  console.log("Phase 3.3: Bundle Size Comparison (v4)");
   console.log("=".repeat(80) + "\n");
 
   const base = join(tmpdir(), `bundle-${Date.now()}`);
   mkdirSync(base, { recursive: true });
 
-  let wA: string | undefined, wB: string | undefined;
+  const wA = join(base, "commit-a");
+  const wB = join(base, "commit-b");
+
   try {
-    ({ wA, wB } = setup(base));
+    setup(wA, wB);
+
+    // Extract entries from package.json
+    const entriesA = extractExportPaths(join(wA, "package.json"));
+    const entriesB = extractExportPaths(join(wB, "package.json"));
+
+    if (entriesA.sort().join() !== entriesB.sort().join()) {
+      throw new Error("Export paths changed between commits");
+    }
+
+    log(`Found ${entriesA.length} published entries\n`);
 
     const comps: EntryComp[] = [];
-    for (const entry of EXPECTED_ENTRIES) {
+    for (const entry of entriesA) {
       const a = getSize(join(wA, entry));
       const b = getSize(join(wB, entry));
 
@@ -99,13 +125,7 @@ function main() {
       if (gzip > FAIL_THRESHOLD) status = "fail";
       else if (gzip > WARN_THRESHOLD) status = "warning";
 
-      comps.push({
-        entry,
-        commitA: a,
-        commitB: b,
-        delta: { raw, gzip },
-        status,
-      });
+      comps.push({ entry, commitA: a, commitB: b, delta: { raw, gzip }, status });
 
       const sym = status === "acceptable" ? "✅" : status === "warning" ? "⚠️" : "❌";
       const pct = ((b.gzip / a.gzip - 1) * 100).toFixed(2);
@@ -117,7 +137,7 @@ function main() {
       console.log();
     }
 
-    if (comps.length !== EXPECTED_ENTRIES.length) {
+    if (comps.length !== entriesA.length) {
       throw new Error("Incomplete bundle comparison");
     }
 
@@ -142,11 +162,13 @@ function main() {
 
     const fail = comps.filter((c) => c.status === "fail").length;
     const warn = comps.filter((c) => c.status === "warning").length;
+    const totalIncrease = comps.reduce((sum, c) => sum + Math.max(0, c.delta.gzip), 0);
 
     console.log("=".repeat(80));
     console.log("SUMMARY");
     console.log("=".repeat(80));
-    console.log(`Fail: ${fail}, Warning: ${warn}\n`);
+    console.log(`Entries: ${comps.length}, Fail: ${fail}, Warning: ${warn}`);
+    console.log(`Total gzip increase: +${fmt(totalIncrease)}\n`);
 
     if (fail > 0) {
       console.log("❌ BUNDLE SIZE FAIL");
@@ -156,17 +178,14 @@ function main() {
     } else {
       console.log("✅ BUNDLE SIZE ACCEPTABLE");
     }
+  } catch (err) {
+    console.error("\n❌ Bundle comparison failed:", err);
+    throw err;
   } finally {
-    if (wA)
-      try {
-        execFileSync("git", ["worktree", "remove", "--force", wA]);
-      } catch {}
-    if (wB)
-      try {
-        execFileSync("git", ["worktree", "remove", "--force", wB]);
-      } catch {}
+    removeWorktree(wA);
+    removeWorktree(wB);
     try {
-      execFileSync("git", ["worktree", "prune"]);
+      execFileSync("git", ["worktree", "prune"], { stdio: "ignore" });
     } catch {}
     try {
       rmSync(base, { recursive: true, force: true });
