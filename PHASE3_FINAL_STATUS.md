@@ -1,5 +1,15 @@
 # Phase 3.1: Instrumentation Foundation
 
+> **⚠️ SUPERSEDED BY PHASE 4.0 CHECKPOINT**
+>
+> **Critical updates**:
+>
+> - Disabled-path overhead was not validated vs pre-Phase-3 implementation
+> - Timing and heap conclusions in this document must not be used for decisions
+> - "Low overhead verified" and "Zero-cost performance" claims are not supported
+> - See `docs/PHASE4.0_CHECKPOINT.md` and **issue #119** for current status
+> - Phase 3.3 validation is **required** before claiming Phase 3 complete
+
 **Important**: This is Phase 3.1 - it provides instrumentation infrastructure but is **not sufficient for cache-size tuning decisions**. Cell cache bucket distribution and targeted stress workloads are needed for Phase 4.
 
 ---

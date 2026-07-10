@@ -1,8 +1,11 @@
 /**
- * Performance instrumentation for Phase 3 profiling
+ * Debug performance instrumentation (Phase 3)
  *
- * This module provides debug-only metrics collection without affecting production behavior.
- * All instrumentation is designed to be low-overhead when disabled.
+ * Collection is disabled by default. Hook functions are called from
+ * production hot paths even when disabled. Disabled-path runtime and
+ * bundle overhead are tracked separately and must not be assumed negligible.
+ *
+ * See issue #119 for validation status.
  */
 
 export interface CellCacheMetrics {

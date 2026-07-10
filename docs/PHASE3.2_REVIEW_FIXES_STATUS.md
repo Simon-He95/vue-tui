@@ -1,5 +1,18 @@
 # Phase 3.2 Review Fixes - Status and Plan
 
+> **⚠️ SUPERSEDED BY PHASE 4.0 CHECKPOINT**
+>
+> This document is a historical review-fix plan from Phase 3.2.
+> Its Phase 4 readiness conclusions are no longer valid.
+>
+> **Important updates from Phase 4.0**:
+>
+> - Current data does not validate MAX=128 capacity
+> - Current data cannot compare clear-all against LRU/LFU
+> - Timing and heap conclusions are not decision-grade
+> - Bucket distribution is snapshot, not peak
+> - See `docs/PHASE4.0_CHECKPOINT.md` for current status
+
 ## Review Feedback Summary
 
 Reviewer identified 6 critical issues affecting Phase 4 readiness. This document tracks progress.

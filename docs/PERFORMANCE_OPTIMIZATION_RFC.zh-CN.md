@@ -1,26 +1,49 @@
 # vue-tui 性能优化 RFC
 
-**文档类型**: RFC / 草案  
-**状态**: Phase 1 已实施；Phase 2+ 待实施  
+**文档类型**: RFC / 路线图  
+**状态**: Phase 1-2 完成；Phase 3.1-3.2 实现完成、3.3 验证待完成；Phase 4.0 checkpoint 完成  
 **创建日期**: 2026-07-09  
-**修订版本**: v4 (基于四轮 review 反馈)  
+**最后更新**: 2026-07-10 (Phase 4.0 checkpoint)  
+**修订版本**: v5 (Phase roadmap 更新)  
 **Unicode 版本**: 17.0.0
 
 ---
 
+## Phase Status
+
+| Phase | Scope                              | Status                                | PR   |
+| ----- | ---------------------------------- | ------------------------------------- | ---- |
+| 1     | Unicode width correctness          | ✅ Complete                           | #114 |
+| 2     | Statistical baseline harness       | ✅ Complete                           | #115 |
+| 3.1   | Instrumentation foundation         | ✅ Complete                           | #116 |
+| 3.2   | Complete instrumentation           | ✅ Complete                           | #117 |
+| 4.0   | Cell-cache tuning decision gate    | ✅ Checkpoint: no change              | #118 |
+| 4.1   | Targeted cache workload validation | ⏸️ Optional for tuning / deferred     | -    |
+| 4.2   | Long-text cache admission          | ⏸️ Not measured                       | -    |
+| 4.3   | Provider-aware cache               | ⏸️ No reproducible issue              | -    |
+| 4.4   | Virtual-scroll optimization        | ⏸️ Requires browser profiler evidence | -    |
+| -     | **Phase 3 disabled-path overhead** | ⚠️ **Required** (independent)         | #119 |
+
+**Note**: Phase 4.0 completed the Cell-cache tuning decision checkpoint. Current cache implementation unchanged. Comprehensive cache validation (4.1+) and original Phase 4 work (long-text, provider, virtual-scroll) remain deferred or unmeasured.
+
+**Critical**: Phase 3 instrumentation hooks are in production hot paths. Disabled-path overhead validation is required independently of cache tuning decisions.
+
+---
+
+> **Update 2026-07-10**: Phase 4.0 (Cell-Cache Tuning Checkpoint) 完成于 PR #118。决策：基于当前合成工作负载数据，不修改 cache 参数或 eviction 策略。这是有限的决策 checkpoint，不代表全面的 cache 验证。
+>
 > **Update 2026-07-09**: Phase 1 (Unicode Width Correctness) 已在 PR #114 实现。
-> 本 RFC 中 Phase 2+ 仍作为后续独立 PR 的参考路线。
 
 ## 📋 执行摘要
 
 本 RFC 基于代码审查和多轮 review 反馈，提出 vue-tui 性能优化方向和实施建议。
 
-- ✅ 本文档是**优化方向草案**，非最终实施方案
-- ✅ **Phase 1 已完成** - Unicode 17.0.0 East Asian Width 正确性修复
-- ⏳ **Phase 2+ 待实施** - 需要独立 PR，基于真实 baseline 数据
+- ✅ **Phase 1-2 完成；Phase 3 实现已合并但验证未完成** - Unicode correctness, baseline, instrumentation
+- ✅ **Phase 4.0 checkpoint 完成** - Cell-cache 决策：当前证据不足以支持调整，暂不改动
+- ⏳ **Phase 4.1+ 待实施** - 目标 cache 工作负载（若继续 cache 优化）
+- ⚠️ **Phase 3 overhead 验证必需** - 独立于 cache 工作
 - 📊 后续优化应拆分为多个小 PR，每个 PR 配真实性能数据
-- ⚠️ 所有诊断和收益预期基于代码审查，需要真实 baseline 数据验证
-- 📊 后续应拆分为多个小 PR，每个 PR 配真实性能数据
+- 📊 所有收益预期基于代码审查，需要真实 baseline 数据验证
 
 ---
 
@@ -271,7 +294,35 @@ const useRenderPassCache =
 
 ---
 
-## 🛠️ 建议的实施路线
+## 🛠️ 当前执行路线（实际）
+
+基于实际执行情况，Phase 路线已演化如下：
+
+**Phase 1**: Unicode 17.0.0 width correctness ✅ (#114)
+
+**Phase 2**: Statistical baseline harness ✅ (#115)
+
+- 7 stable / 8 noisy / 3 unstable scenarios
+
+**Phase 3**: Instrumentation foundation
+
+- Phase 3.1: Instrumentation hooks ✅ (#116)
+- Phase 3.2: Counter/bucket instrumentation ✅ (#117)
+- Phase 3.3: Disabled-path overhead validation ⚠️ **Required** (#119)
+
+**Phase 4**: Cache and optimization decisions
+
+- Phase 4.0: Cell-cache tuning checkpoint ✅ (#118) - insufficient evidence, no change
+- Phase 4.1: Targeted cache workloads ⏸️ Deferred (required before cache changes)
+- Phase 4.2: Long-text cache admission ⏸️ Not measured
+- Phase 4.3: Provider-aware cache ⏸️ No reproducible issue
+- Phase 4.4: Virtual-scroll optimization ⏸️ Requires browser profiler evidence
+
+---
+
+## 🛠️ 原始提议路线（历史参考）
+
+> **Note**: 以下为RFC原始提议路线，已被上述"当前执行路线"取代。保留供参考。
 
 ### Phase 1: 功能正确性修复
 
@@ -416,61 +467,54 @@ const useRenderPassCache =
 
 ### Baseline PR
 
-- ✅ 新增 baseline harness (现有脚本不足)
+- ✅ 新增统一 statistical baseline harness
 - ✅ JSON 包含: commit, Unicode version, Node, V8, OS, CPU, p50/p95/p99/mean/stdev/CV
-- ✅ 多次运行数据稳定（CV < 10%）
-- ✅ DOM benchmark 区分 happy-dom vs 真实浏览器
+- ⚠️ Stability: 7 stable / 8 noisy / 3 unstable scenarios
+- ⚠️ 不稳定场景仅供参考，不可用于回归门禁
+- ⏸️ Real-browser DOM benchmark 超出 Phase 2 范围（仅涵盖 Unicode/text microbenchmarks）
+- ⏸️ 声明用户可见 DOM 改进前仍需 browser benchmark
 
-### Cache Tuning PR
+---
 
-- ✅ Profiler 证明 Cell allocation 是瓶颈
-- ✅ Before/after: createCell count, new Cell count, map.clear count
-- ✅ Live Style 数量和 cache size 分布
-- ✅ Retained Cell 上限估算
-- ✅ Before/after p50/p95
-- ✅ Heap delta 测量
+## ✅ 当前状态总结
 
-### Long Text PR
+**已完成**:
 
-- ✅ Profiler 证明 textCellWidth 是 hotspot
-- ✅ Benchmark: unique vs repeated long text
-- ✅ 证明不污染 global cache
-- ✅ Heap 不膨胀
+- ✅ Phase 1: Unicode 17.0.0 width correctness (#114)
+- ✅ Phase 2: Statistical baseline harness (#115)
+- ✅ Phase 3.1-3.2: Instrumentation foundation (#116, #117)
+- ✅ Phase 4.0: Cell-cache tuning checkpoint (#118) - no change proposed
 
-### Virtual Scroll PR
+**进行中**:
 
-- ✅ Profiler 指出具体瓶颈
-- ✅ 滚动工作负载描述
-- ✅ Dirty rows, candidate fallback 指标
-- ✅ FPS 或 frame duration 数据
+- ⚠️ Phase 3.3: Instrumentation overhead validation (#119) - **REQUIRED**
+
+**已推迟**:
+
+- ⏸️ Phase 4.1+: Targeted cache workloads (optional unless continuing cache work)
+- ⏸️ Long-text cache admission (not measured)
+- ⏸️ Provider-aware cache (no reproducible issue)
+- ⏸️ Virtual-scroll (requires browser evidence)
 
 ---
 
 ## 🎓 经验教训
 
-### 从四轮 Review 学到的
+### 从多轮 Review 和实施中学到的
 
 1. ✅ **Pin Unicode 版本** - 2026 年应使用 Unicode 17.0.0 (包含 Extension J)
 2. ✅ **测试标注准确** - U+2B820 是 Ext E，U+2CEB0 是 Ext F，U+2EBF0 是 Ext I
 3. ✅ **EAW 不是 Oracle** - 需要 terminal tailoring 优先级
-4. ✅ **Cache 调参需谨慎** - 不是 quick-win，需完整指标
+4. ✅ **Cache 调参需谨慎** - 不是 quick-win，需完整指标和复用场景验证
 5. ✅ **Chunking 需明确目的** - 不应引入额外分配
+6. ✅ **Instrumentation 非零成本** - disabled 路径仍需验证 overhead 和 bundle 影响
+7. ✅ **Profiler 需方法论** - 单次固定顺序测量不可信，需统计方法和隔离对比
 
 ---
 
-## ✅ 下一步行动
-
-1. **立即**: 合并本 RFC，作为优化方向参考
-2. **Week 1**: 实施 PR #1 (Unicode Correctness, Unicode 17.0.0)
-3. **Week 2**: 实施 PR #2 (Real Baseline with harness)
-4. **Week 3**: 根据 baseline + profiler 数据决定候选优化
-5. **Week 4+**: 仅实施 profiler 证明的瓶颈优化
-
----
-
-**文档状态**: ✅ RFC / 草案  
-**实施状态**: ⏳ 待实施  
+**文档状态**: ✅ Roadmap / 执行记录  
+**实施状态**: Phase 1-2 完成；Phase 3 实现已合并但验证未完成（#119）；Phase 4.0 checkpoint 完成；Phase 4.1+ 推迟  
 **验证方式**: 真实 baseline + profiler 数据驱动  
 **Unicode 版本**: 17.0.0
 
-**最后更新**: 2026-07-09 (v4, 基于四轮 review 修正)
+**最后更新**: 2026-07-10 (v5, Phase 1-4.0 执行完成，Phase 3.3 跟踪中)

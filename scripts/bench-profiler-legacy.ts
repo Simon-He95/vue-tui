@@ -1,8 +1,19 @@
 /**
- * Phase 3 Profiler Benchmark
+ * DEPRECATED: Phase 3 Legacy Profiler
  *
- * This script runs targeted workloads with instrumentation enabled
- * to collect cache hit/miss, allocation, and GC metrics.
+ * ⚠️ THIS SCRIPT IS DEPRECATED AND NOT SUITABLE FOR DECISION-GRADE MEASUREMENTS
+ *
+ * Issues:
+ * - Single-shot timing (no warmup, no samples)
+ * - Setup included in timing window
+ * - No cache cleanup between workloads
+ * - No terminal disposal
+ * - No prominent non-decision-grade warnings
+ *
+ * Use the counter-only snapshot instead:
+ *   pnpm run bench:profiler
+ *
+ * This legacy version is preserved for historical reference only.
  */
 
 import { createTerminal } from "../src/core/index.js";
@@ -14,6 +25,10 @@ import {
   getMetrics,
   type PerformanceMetrics,
 } from "../src/core/perf/instrumentation.js";
+
+console.error("\n⚠️  WARNING: This is a DEPRECATED legacy profiler");
+console.error("⚠️  Single-shot timing is not decision-grade");
+console.error("⚠️  Use 'pnpm run bench:profiler' for counter snapshots\n");
 
 interface WorkloadResult {
   name: string;
