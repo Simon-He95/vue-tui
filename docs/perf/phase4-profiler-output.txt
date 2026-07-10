@@ -5,6 +5,29 @@
 Phase 3.2 Complete Profiler Benchmark (Corrected)
 ==================================================
 
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                          DATA QUALITY WARNING                             ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+1. HEAP DELTA VALUES ARE INVALID FOR RETAINED-MEMORY ANALYSIS
+   heapBefore was captured before resetMetrics(), so deltas include cleanup
+   from the previous workload. These values are retained for audit only.
+
+2. "INSTRUMENTATION OVERHEAD" IS SINGLE-SHOT, FIXED-ORDER COMPARISON
+   Both timing arms still execute the instrumentation hook functions.
+   These values do not measure pre-instrumentation vs post-instrumentation
+   production overhead.
+
+3. AVERAGE OVERHEAD IS INVALID
+   Negative overhead values are measurement noise, not actual performance
+   benefit. Fixed-order single-run timing is unsuitable for overhead estimates.
+
+4. DO NOT USE FOR OPTIMIZATION DECISIONS
+   Phase 4.0 uses only counters and bucket distribution snapshots.
+   Duration, heap delta, and overhead percentages must not be used.
+
+═══════════════════════════════════════════════════════════════════════════
+
 Environment:
 - Node: v24.18.0
 - V8: 13.6.233.17-node.50
@@ -253,3 +276,8 @@ Grapheme:
 ✅ Profiler benchmark completed
 Total workloads: 8
 Average overhead: -24.26%
+
+═══════════════════════════════════════════════════════════════════════════
+WARNING: Average overhead value is INVALID and must not be used.
+Negative values indicate measurement noise, not performance benefit.
+═══════════════════════════════════════════════════════════════════════════

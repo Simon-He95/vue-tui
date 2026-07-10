@@ -191,6 +191,16 @@ The current synthetic measurements do not provide sufficient evidence to justify
 
 ---
 
+### Instrumentation Disabled-Path Overhead
+
+**Issue**: The "without instrumentation" arm disables metric collection, but still executes the instrumentation hook functions added in Phase 3.
+
+**Impact**: This benchmark does not measure the production cost of adding the instrumentation foundation itself (pre-Phase-3 vs post-Phase-3).
+
+**Additional**: The fixed disabled-first/enabled-second order makes the single-run timing unsuitable for overhead estimates. Negative overhead values are measurement noise.
+
+---
+
 ### Workload Coverage
 
 **Gaps**:
@@ -236,7 +246,15 @@ Before claiming comprehensive cache validation, add:
 
 5. **Long text scenarios**: Unique vs repeated long non-ASCII text through textCellWidth, wrapByCells, formatInlineCellLine
 
-6. **Production traces**: Real terminal session logs or realistic patterns
+6. **Realistic workload replay**: Offline replay of sanitized terminal/session traces
+
+   **Important**: Do not enable the current strong-reference bucket registry for an unbounded production session. The instrumentation retains all registered buckets until `resetMetrics()`, which will alter GC and retained-memory behavior.
+
+   **Recommended approaches**:
+   - Bounded capture windows
+   - Periodic `resetMetrics()` calls
+   - Maximum registered-bucket sampling
+   - Offline trace replay (preferred)
 
 ---
 
