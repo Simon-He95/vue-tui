@@ -294,7 +294,35 @@ const useRenderPassCache =
 
 ---
 
-## 🛠️ 建议的实施路线
+## 🛠️ 当前执行路线（实际）
+
+基于实际执行情况，Phase 路线已演化如下：
+
+**Phase 1**: Unicode 17.0.0 width correctness ✅ (#114)
+
+**Phase 2**: Statistical baseline harness ✅ (#115)
+
+- 7 stable / 8 noisy / 3 unstable scenarios
+
+**Phase 3**: Instrumentation foundation
+
+- Phase 3.1: Instrumentation hooks ✅ (#116)
+- Phase 3.2: Counter/bucket instrumentation ✅ (#117)
+- Phase 3.3: Disabled-path overhead validation ⚠️ **Required** (#119)
+
+**Phase 4**: Cache and optimization decisions
+
+- Phase 4.0: Cell-cache tuning checkpoint ✅ (#118) - insufficient evidence, no change
+- Phase 4.1: Targeted cache workloads ⏸️ Deferred (required before cache changes)
+- Phase 4.2: Long-text cache admission ⏸️ Not measured
+- Phase 4.3: Provider-aware cache ⏸️ No reproducible issue
+- Phase 4.4: Virtual-scroll optimization ⏸️ Requires browser profiler evidence
+
+---
+
+## 🛠️ 原始提议路线（历史参考）
+
+> **Note**: 以下为RFC原始提议路线，已被上述"当前执行路线"取代。保留供参考。
 
 ### Phase 1: 功能正确性修复
 
