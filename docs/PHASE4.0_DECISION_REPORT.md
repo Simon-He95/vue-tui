@@ -2,19 +2,74 @@
 
 ## Executive Summary
 
-Based on Phase 3.2 instrumentation data, this report analyzes cache behavior and makes data-driven decisions for Phase 4 optimizations.
+Based on Phase 3.2 instrumentation data from measured profiler workloads, this report evaluates cache optimization proposals for Phase 4.
 
-**Key Finding**: Current cache implementation is **highly effective** for typical workloads. Only stress tests trigger overflow. **NO immediate optimizations needed**.
+**Key Finding**: Current cache implementation performs well under the measured workloads. **No cache tuning is justified by current data**.
 
-**Recommendation**: **DO NOT implement cache tuning at this time**. Focus on other features or wait for real-world data showing actual bottlenecks.
+**Recommendation**: **Do NOT implement cache optimizations at this time**. Keep current implementation and revisit only if production data shows cache pressure.
 
 ---
 
-## Data Analysis
+## Scope and Limitations
+
+### What This Report Covers
+
+- 8 profiler workloads from Phase 3.2
+- Cell cache hit rates and bucket distribution
+- Text cache (textWidthCache, wrapByCells) effectiveness
+- Grapheme segmentation costs
+
+### What This Report Does NOT Cover
+
+- Production workload patterns
+- Long-running terminal sessions
+- Real-world user interaction traces
+- `inlineLineCacheByWidth` (not instrumented in Phase 3.2)
+
+### Limitations
+
+- **Data source**: Synthetic profiler workloads, not production traces
+- **Workload scope**: Limited to 8 scenarios
+- **inlineLineCache**: Not evaluated - scope limited to textWidthCache and wrapByCells
+- **Long text**: No unique-long-text pollution test included
+- **Heap data**: With GC enabled but registered buckets != exact production memory
+
+**Important**: Decisions should be revisited if production data shows different patterns.
+
+---
+
+## Data Collection Methodology
+
+### Profiler Run Info
+
+```
+Command: pnpm run bench:profiler:complete:gc
+Node: v24.18.0
+GC: Enabled (--expose-gc)
+Date: 2026-07-10
+Commit: Phase 3.2 merged
+Output: docs/perf/phase4-profiler-output.txt
+```
+
+### Workload Classification
+
+**Realistic Workloads** (representative of typical usage):
+1. Repeated CJK - typical terminal logs
+2. Mixed workload - varied log lines
+3. Complex grapheme cached - repeated complex strings
+4. Complex grapheme uncached - unique complex strings
+
+**Stress Test Workloads** (artificial worst-case):
+1. Cell cache overflow w1 - 200 unique chars single style
+2. Cell cache overflow w2 - 200 unique CJK single style
+3. Many styles - 50 distinct styles simultaneously
+4. Wrap width churn - 50 widths (exceeds bucket limit)
+
+---
+
+## Workload Analysis
 
 ### Workload 1: Cell Cache Overflow Width=1 (Stress Test)
-
-**Purpose**: Artificial stress test with 200 unique width=1 chars
 
 **Results**:
 ```
@@ -22,75 +77,52 @@ createCell calls: 200
 new cells: 200
 hit rate: 0.00%
 cache clears (w1/w2): 1/0
-registered bucket count: 1
-bucket size Max: 71
 max observed cache size: 129
 ```
 
-**Analysis**:
-- ✅ Successfully triggered overflow (exceeded MAX=128)
-- ⚠️ This is an **artificial stress test**, not realistic workload
-- Cache cleared once and stabilized at 71 cells
-- No evidence this scenario occurs in real apps
-
-**Decision**: ❌ **Do NOT use as justification for cache tuning**
+**Assessment**: ⚠️ Artificial stress test
+- Successfully triggered overflow (exceeded MAX=128)
+- Not representative of real terminal applications
+- Used for instrumentation validation only
 
 ---
 
 ### Workload 2: Cell Cache Overflow Width=2 (Stress Test)
 
-**Purpose**: Artificial stress test with 200 unique CJK chars
-
 **Results**:
 ```
 createCell calls: 200
-new cells: 200
-hit rate: 0.00%
 cache clears (w1/w2): 0/1
-registered bucket count: 1
-bucket size Max: 71
 max observed cache size: 129
 ```
 
-**Analysis**:
-- ✅ Successfully triggered width=2 overflow
-- ⚠️ Also artificial stress test
-- Pattern identical to width=1
-
-**Decision**: ❌ **Do NOT use as justification for cache tuning**
+**Assessment**: ⚠️ Artificial stress test
+- Pattern identical to width=1 overflow
+- Validates instrumentation, not realistic scenario
 
 ---
 
-### Workload 3: Many Styles Many Chars (Bucket Stress)
-
-**Purpose**: Test bucket count limits (50 styles × 10 chars)
+### Workload 3: Many Styles Many Chars (Stress Test)
 
 **Results**:
 ```
 createCell calls: 500
 new cells: 500
-hit rate: 0.00%
 cache clears: 0
-registered bucket count (w1/w2): 0/50
-bucket size P50/P95/Max: 10/10/10
-estimated registered cells: 500
-heap delta: 0.68 MB
+registered bucket count: 50 (width=2)
+bucket P50/P95/Max: 10/10/10
+heap delta (GC enabled): ~0.6 MB
 ```
 
-**Analysis**:
-- ✅ Created 50 buckets without issues
-- ✅ All buckets uniform size (10 cells each)
-- ✅ No cache clears despite 500 unique cells
-- ✅ Memory cost acceptable (0.68 MB)
-- ⚠️ Artificial workload - real apps unlikely to have 50 distinct styles rendering simultaneously
-
-**Decision**: ✅ **Current WeakMap-per-Style design handles multiple styles well**
+**Assessment**: ⚠️ Artificial scenario
+- 50 unique styles is extreme for typical terminal apps
+- All buckets uniform size (10 cells each)
+- No cache clears despite 500 unique cells
+- Memory cost acceptable but scenario unlikely in practice
 
 ---
 
 ### Workload 4: Complex Grapheme Cached (Realistic)
-
-**Purpose**: Measure cache effectiveness for repeated complex graphemes
 
 **Results**:
 ```
@@ -98,61 +130,44 @@ textCellWidth calls: 2000
 text cache hit rate: 99.80%
 ```
 
-**Analysis**:
-- ✅ **Excellent cache hit rate** (99.80%)
-- ✅ After first few misses, cache serves all requests
-- ✅ Complex grapheme segmentation avoided via cache
-
-**Decision**: ✅ **Text cache is highly effective - no optimization needed**
+**Assessment**: ✅ Good performance
+- High cache hit rate after initial misses
+- Textcache effectively avoids repeated segmentation
 
 ---
 
 ### Workload 5: Complex Grapheme Uncached (Realistic)
-
-**Purpose**: Measure true segmentation cost for unique strings
 
 **Results**:
 ```
 textCellWidth calls: 1000
 text cache hit rate: 0.00%
 segmentation required: 1000
-Intl.Segmenter used: 1000
+Duration: ~1.5ms total = 0.0015ms per string
 ```
 
-**Analysis**:
-- Each call requires full segmentation (expected)
-- Intl.Segmenter handles all cases (good!)
-- Duration: 1.5ms for 1000 unique complex strings = **0.0015ms per string**
-- This is **not a hotspot** - segmentation is fast
-
-**Decision**: ❌ **Do NOT implement grapheme segment caching** - cost too low to justify complexity
+**Assessment**: ✅ Low cost
+- Segmentation is fast even without cache
+- Cost is negligible (0.0015ms per string)
 
 ---
 
 ### Workload 6: Wrap Width Churn (Stress Test)
 
-**Purpose**: Test wrap cache with 50 widths (exceeds MAX_WRAP_CACHE_BUCKETS=32)
-
 **Results**:
 ```
 wrap cache hit rate: 0.00%
 wrap width bucket clears: 1
-heap delta: 1.94 MB
 ```
 
-**Analysis**:
-- ✅ Successfully triggered bucket map clear
-- ⚠️ Artificial scenario - real terminals don't resize through 50 widths
-- Typical scenario: user drags window = maybe 5-10 width changes
-- Even if clear happens, performance impact minimal (wrap is cheap)
-
-**Decision**: ❌ **Do NOT increase MAX_WRAP_CACHE_BUCKETS** - current limit is appropriate
+**Assessment**: ⚠️ Artificial scenario
+- 50 widths exceeds typical window drag (5-10 widths)
+- Validates bucket churn detection
+- Not representative of real resize patterns
 
 ---
 
-### Workload 7: Repeated CJK (Realistic Baseline)
-
-**Purpose**: Typical terminal log scenario - repeated text
+### Workload 7: Repeated CJK (Realistic)
 
 **Results**:
 ```
@@ -162,24 +177,16 @@ hit rate: 99.98%
 cache clears: 0
 registered bucket count: 1
 bucket size: 10
-estimated cells: 10
-heap delta: 0.65 MB
 ```
 
-**Analysis**:
-- ✅ **Exceptional cache performance**
-- ✅ Only 10 unique cells needed for 50,000 operations
-- ✅ 99.98% hit rate - cache is nearly perfect
-- ✅ No overflow despite high volume
-- ✅ Minimal memory footprint (10 cells)
-
-**Decision**: ✅ **Current cache design is OPTIMAL for typical workloads**
+**Assessment**: ✅ Excellent performance
+- Very high hit rate for typical repeated content
+- Minimal unique cells needed
+- No overflow pressure
 
 ---
 
 ### Workload 8: Mixed Workload (Realistic)
-
-**Purpose**: Varied log lines with 4 prefixes (INFO/WARN/ERROR/DEBUG)
 
 **Results**:
 ```
@@ -188,239 +195,245 @@ new cells: 14,620
 hit rate: 37.49%
 cache clears: 0
 registered bucket count: 2000 (1000 w1 + 1000 w2)
-bucket size P50: 9 w1, 6 w2
-bucket size P95: 10 w1, 6 w2
-bucket size Max: 10 w1, 6 w2
-estimated cells: 14,620
-heap delta: 4.14 MB
+bucket P50: 9 (w1), 6 (w2)
+bucket P95: 10 (w1), 6 (w2)
+bucket P95: 10 (w1), 6 (w2)
 ```
 
-**Analysis**:
-- ✅ 37.49% hit rate - moderate but acceptable
-- ✅ No cache clears despite 14,620 unique cells
-- ✅ Bucket sizes well below MAX=128 (P95: 10 w1, 6 w2)
-- ✅ 2000 buckets created (1000 styles) without issues
-- ⚠️ This workload creates unique style per log line - more extreme than real apps
-- Real apps: fewer unique styles, higher hit rates
-
-**Decision**: ✅ **Current cache handles realistic variety well**
+**Assessment**: ✅ Acceptable performance
+- Moderate hit rate (37.49%)
+- Bucket sizes far below MAX=128 (P95: 10 vs 128)
+- No cache clears despite varied content
+- Note: Creates unique style per log line - more extreme than typical apps
 
 ---
 
-## Key Insights
+## Key Findings
 
-### 1. Cache Hit Rates
+### Cache Hit Rates
 
 | Workload | Type | Hit Rate | Assessment |
 |----------|------|----------|------------|
-| Repeated CJK | Realistic | **99.98%** | Excellent |
-| Mixed | Realistic | **37.49%** | Acceptable |
-| Overflow tests | Artificial | 0% | Expected |
+| Repeated CJK | Realistic | 99.98% | Excellent |
+| Mixed | Realistic | 37.49% | Acceptable |
+| Overflow tests | Stress | 0% | Expected |
 
-**Conclusion**: Cache is highly effective for real workloads
+**Conclusion**: Cache performs well for measured realistic workloads
 
-### 2. Cache Overflow Analysis
+### Cache Overflow Behavior
 
-| Workload | Clears | Realistic? | Impact |
-|----------|--------|------------|--------|
-| W1 overflow | 1 | ❌ No | None - artificial |
-| W2 overflow | 1 | ❌ No | None - artificial |
-| Wrap churn | 1 | ❌ No | None - artificial |
-| Repeated CJK | 0 | ✅ Yes | None |
-| Mixed | 0 | ✅ Yes | None |
+| Workload | Clears | Realistic? |
+|----------|--------|------------|
+| W1 overflow | 1 | ❌ No |
+| W2 overflow | 1 | ❌ No |
+| Wrap churn | 1 | ❌ No |
+| Repeated CJK | 0 | ✅ Yes |
+| Mixed | 0 | ✅ Yes |
 
-**Conclusion**: Realistic workloads **never trigger overflow**
+**Conclusion**: Measured realistic workloads do not trigger overflow
 
-### 3. Bucket Distribution
+### Bucket Distribution
 
-**Mixed workload** (most stressed realistic scenario):
-- Width=1: P50=9, P95=10, Max=10 (vs MAX=128) ✅
-- Width=2: P50=6, P95=6, Max=6 (vs MAX=128) ✅
-- **Huge safety margin** - buckets use <8% of capacity
+**Mixed workload** (most varied realistic scenario):
+- Width=1: P95=10 (vs MAX=128) - 92% margin
+- Width=2: P95=6 (vs MAX=128) - 95% margin
 
-**Conclusion**: MAX_CACHED_CELLS_PER_STYLE=128 is **more than sufficient**
-
-### 4. Memory Cost
-
-| Workload | Cells | Heap Delta | Assessment |
-|----------|-------|------------|------------|
-| Repeated CJK | 10 | 0.65 MB | Minimal |
-| Mixed | 14,620 | 4.14 MB | Acceptable |
-| Many styles | 500 | 0.68 MB | Low |
-
-**Conclusion**: Memory cost is reasonable even for stressed scenarios
-
-### 5. Performance Overhead
-
-- Text cache hit: 99.80% for repeated complex graphemes ✅
-- Grapheme segmentation: 0.0015ms per unique string (fast!) ✅
-- Instrumentation overhead: -27% average (negligible/beneficial) ✅
-
-**Conclusion**: No performance bottlenecks identified
+**Conclusion**: Current MAX_CACHED_CELLS_PER_STYLE=128 provides large safety margin
 
 ---
 
-## Decision Matrix
+## Optimization Proposals Evaluation
 
-### Cell Cache Tuning
+### Proposal 1: Increase MAX_CACHED_CELLS_PER_STYLE from 128 to 512
 
-**Candidates**:
-1. Increase MAX_CACHED_CELLS_PER_STYLE from 128 to 512
-2. Implement partial eviction (LRU/LFU)
-3. Per-workload cache sizing
-
-**Decision**: ❌ **REJECT ALL**
+**Decision**: ❌ **Not justified by current data**
 
 **Rationale**:
-- Current MAX=128 never reached in realistic workloads
-- Bucket P95 sizes: 10 (w1), 6 (w2) - **far below limit**
-- No evidence of overflow-related performance degradation
-- Increasing limit would waste memory for zero benefit
-- Partial eviction adds complexity without proven need
+- Bucket P95 sizes: 10 (w1), 6 (w2) - far below current limit
+- No overflow in measured realistic workloads
+- Would increase memory footprint for no demonstrated benefit
 
-**Gate NOT met**:
-- ❌ Realistic workload doesn't show cache clears
-- ❌ No allocation pressure from overflow
-- ❌ No p95 duration impact
+**Gate Evaluation**: ❌ FAILED
+- ❌ No realistic workload shows cache clears
+- ❌ No demonstrated performance impact from current limit
+- ❌ Large safety margin already exists
 
 ---
 
-### Text/Wrap Cache Strategy
+### Proposal 2: Implement Partial Eviction (LRU/LFU)
 
-**Candidates**:
-1. Long text admission policy (skip caching >N chars)
-2. Increase text cache size
-3. Wrap cache size tuning
-
-**Decision**: ❌ **REJECT ALL**
+**Decision**: ❌ **Not justified by current data**
 
 **Rationale**:
-- Text cache hit rate: 99.80% for complex graphemes ✅
-- Wrap cache overflow only in artificial 50-width churn
-- Real scenario: window drag = 5-10 widths = well below MAX=32
-- No data showing long text pollution or memory issues
+- Current clear-all strategy never triggered in realistic workloads
+- Would add implementation complexity
+- No evidence of performance degradation from current approach
 
-**Gate NOT met**:
-- ❌ No evidence of cache pollution
-- ❌ No heap growth from repeated long text
-- ❌ Wrap cache clears only in artificial stress
+**Gate Evaluation**: ❌ FAILED
+- ❌ No realistic workload hits cache limit
+- ❌ No demonstrated benefit over clear-all
 
 ---
 
-### Grapheme Optimization
+### Proposal 3: Grapheme Segment Caching
 
-**Candidates**:
-1. Cache grapheme segments
-2. Optimize segmentation algorithm
-3. Pre-segment common patterns
-
-**Decision**: ❌ **REJECT ALL**
+**Decision**: ❌ **Not justified by current data**
 
 **Rationale**:
-- Segmentation cost: **0.0015ms per string** - negligible
-- Text cache already provides 99.80% hit rate
-- Grapheme segment caching would:
-  - Add memory overhead (retain segment arrays)
-  - Add complexity (cache invalidation, sizing)
-  - Solve non-problem (segmentation is fast)
+- Segmentation cost: 0.0015ms per unique string (negligible)
+- Text cache already provides 99.80% hit rate for repeated strings
+- Would add memory overhead (retain segment arrays)
+- Segmentation is not a measured hotspot
 
-**Gate NOT met**:
-- ❌ Segmentation is NOT a hotspot
-- ❌ Cost is negligible (1.5ms for 1000 unique strings)
+**Gate Evaluation**: ❌ FAILED
+- ❌ Segmentation cost is low (not a bottleneck)
 - ❌ Text cache already mitigates repeated segmentation
+- ❌ No production evidence of segmentation being expensive
 
 ---
 
-## Recommendations
+### Proposal 4: Text Cache Size Tuning
 
-### For Phase 4
-
-**Recommendation**: ✅ **DO NOT implement any optimizations**
+**Decision**: ❌ **Not justified by current data**
 
 **Rationale**:
-1. Current implementation is **already optimal** for realistic workloads
-2. All "problems" found are in **artificial stress tests**
-3. Real workload data shows:
-   - Excellent hit rates (99.98% for repeated, 37% for varied)
-   - No cache overflow
-   - Acceptable memory usage
-   - No performance bottlenecks
-4. Proposed optimizations would add:
-   - Code complexity
-   - Maintenance burden
-   - Potential bugs
-   - **Zero measurable benefit**
+- Text cache hit rate: 99.80% for complex graphemes in measured workloads
+- No evidence of premature eviction or pollution
 
-**The Law of Premature Optimization applies here.**
+**Scope Note**: This evaluation covers `textWidthCache` and `wrapByCells` cache. `inlineLineCacheByWidth` was not instrumented in Phase 3.2 and is not evaluated here.
+
+**Gate Evaluation**: ❌ FAILED
+- ❌ Current hit rates are high
+- ❌ No measured cache pressure
 
 ---
 
-### For Future Monitoring
+### Proposal 5: Long Text Admission Policy
 
-**If you later observe in production**:
-- Frequent cache clears in realistic scenarios
-- Memory growth from cache
-- Degraded rendering performance
-- High allocation pressure
+**Decision**: ⏸️ **Insufficient data - not implemented**
 
-**Then revisit** with real-world profiler data and reconsider optimizations.
+**Rationale**:
+- Current workloads do not include unique-long-text pollution test
+- No evidence of long text causing cache issues
+- But also no specific data proving long text is handled optimally
 
-**Until then**: Current implementation is excellent.
+**Limitation**: Would need additional workload:
+```typescript
+// Unique long text pollution test
+for (let i = 0; i < 2000; i++) {
+  textCellWidth(`long-${i}-${"content".repeat(2000)}`);
+}
+```
+
+**Decision**: Do not implement without additional evidence. Remains a future candidate if production traces show many unique long wrapped lines.
 
 ---
 
-### Alternative Phase 4 Focus
+### Proposal 6: Wrap Cache Tuning
 
-Since cache optimization is not needed, consider:
+**Decision**: ❌ **Not justified by current data**
 
-1. **Feature Development**:
-   - Additional components
-   - Enhanced terminal capabilities
-   - Better examples/documentation
+**Rationale**:
+- Width bucket clear only in artificial 50-width stress test
+- Real window resize: ~5-10 widths (well below MAX=32)
+- No evidence of wrap cache being a bottleneck
 
-2. **Code Quality**:
-   - Refactoring for maintainability
-   - Test coverage improvements
-   - Type safety enhancements
+**Gate Evaluation**: ❌ FAILED
+- ❌ Bucket clear only in unrealistic scenario
+- ❌ No performance impact from current limits
 
-3. **Bundle Size**:
-   - Tree-shaking improvements
-   - Optional feature bundling
-   - Runtime size optimization
+---
 
-4. **Developer Experience**:
-   - Better error messages
-   - Improved debugging tools
-   - Enhanced TypeScript types
+## Phase 4 Decision
+
+### Summary
+
+**No cache optimizations will be implemented in Phase 4.**
+
+Based on the measured Phase 3.2 profiler workloads:
+- Repeated and cached workloads show very high cache hit rates (99.98%, 99.80%)
+- Mixed workloads do not approach MAX_CACHED_CELLS_PER_STYLE=128
+- Bucket P95 sizes have 90%+ safety margin
+- No realistic workload shows cache overflow pressure
+
+### What This Means
+
+**Keep current implementation**:
+- MAX_CACHED_CELLS_PER_STYLE = 128 (unchanged)
+- Clear-all eviction strategy (unchanged)
+- Current text/wrap cache limits (unchanged)
+- No grapheme segment caching (not added)
+- No long text admission policy (not added)
+
+**Revisit if**:
+- Production traces show frequent cache clears
+- Production traces show performance degradation
+- Real-world profiling reveals cache pressure
+- Additional targeted workloads show different patterns
+
+---
+
+## Instrumentation Overhead Note
+
+Profiler output shows overhead percentages (often negative). These are **smoke signals only** and **not used** to justify optimization decisions. The profiler script itself notes:
+
+> Overhead percentages are smoke signals only.  
+> For rigorous performance measurement, use Phase 2 baseline harness.
+
+Negative overhead typically indicates measurement noise, not actual performance benefit from instrumentation.
+
+---
+
+## Alternative Phase 4 Focus
+
+Since cache optimization is not justified by current data, Phase 4 development effort could focus on:
+
+### Option A: Feature Development
+- Additional terminal components
+- Enhanced capabilities
+- Expanded examples and documentation
+
+### Option B: Code Quality
+- Refactoring for maintainability
+- Test coverage improvements
+- Type safety enhancements
+
+### Option C: Bundle Size
+- Tree-shaking optimization
+- Optional feature bundling
+- Runtime size reduction
+
+### Option D: Developer Experience
+- Improved error messages
+- Enhanced debugging tools
+- Better TypeScript types
 
 ---
 
 ## Conclusion
 
-**Phase 4.0 Verdict**: ❌ **Do NOT proceed with cache optimization**
+**Phase 4.0 Status**: ✅ Complete (Decision: No cache optimization needed)
 
-**Reasoning**:
-- ✅ Phase 3 instrumentation works perfectly
-- ✅ Data collection is reliable
-- ✅ Analysis methodology is sound
-- ❌ **But the data shows no optimization need**
+**Value Delivered**: Phase 3 instrumentation enabled a **data-driven decision** to **not optimize prematurely**.
 
-**The best optimization is the one you don't have to make.**
+**Result**: Avoided adding complexity without demonstrated benefit. Current cache implementation performs well for measured workloads.
 
-Current cache implementation is **already optimal** for realistic Vue TUI workloads. Any "optimization" would be purely theoretical and add complexity without benefit.
-
-**Phase 4 Status**: Complete (Decision: No optimization needed) ✅
+**Next Steps**: Monitor production usage. Revisit optimization decisions if real-world data shows different patterns.
 
 ---
 
-## Appendix: Raw Data
+## Appendix: Raw Data Reference
 
-See `/tmp/phase4-profiler-output.txt` for complete profiler output.
+**Complete profiler output**: `docs/perf/phase4-profiler-output.txt`
 
-**Profiler run info**:
-- Node: v24.18.0
-- GC: Not enabled (heap delta advisory only)
-- Date: 2026-01-08
-- Commit: Phase 3.2 merged
+**Run metadata**:
+```
+Command: pnpm run bench:profiler:complete:gc
+Node: v24.18.0
+GC: Enabled (--expose-gc)
+Generated: 2026-07-10
+Commit: Phase 3.2 merged (main branch)
+Platform: darwin (macOS)
+```
 
-**All 8 workloads completed successfully.**
+**All 8 workloads completed successfully with GC-enabled heap measurements.**

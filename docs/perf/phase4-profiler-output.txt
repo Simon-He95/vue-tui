@@ -1,0 +1,249 @@
+
+> @simon_he/vue-tui@1.1.0 bench:profiler:complete:gc /Users/Simon/Github/vue-tui
+> node --expose-gc --import=tsx scripts/bench-profiler-complete.ts
+
+Phase 3.2 Complete Profiler Benchmark (Corrected)
+==================================================
+
+Environment:
+- Node: v24.18.0
+- GC available: true
+
+Fixes applied:
+- clearTextCaches() between runs
+- Unique styles per run (isolated bucket creation)
+- Fixed w1 overflow (200 unique width=1 chars)
+- withTerminal() for robust cleanup
+- P50/P95/Max bucket size metrics
+- Fixed runId consistency (same length for overhead measurement)
+
+⚠️  Note: Overhead percentages are smoke signals only.
+   For rigorous performance measurement, use Phase 2 baseline harness.
+
+
+Running: cell_cache_overflow_w1...
+Duration without instrumentation: 2.59ms
+Duration with instrumentation: 0.99ms
+Instrumentation overhead: -61.89%
+Heap delta: 0.01 MB
+
+Cell Cache:
+  createCell calls: 200
+  new cells: 200
+  hit rate: 0.00%
+  cache clears (w1/w2): 1/0
+  registered bucket count (w1/w2): 1/0
+  bucket size P50 (w1/w2): 71/0
+  bucket size P95 (w1/w2): 71/0
+  bucket size Max (w1/w2): 71/0
+  estimated registered cells: 71
+  max observed cache size (w1/w2): 129/0
+
+Text Cache:
+  textCellWidth calls: 0
+  text cache hit rate: N/A
+  wrap cache hit rate: N/A
+  wrap width bucket clears: 0
+
+Grapheme:
+  segmentation required: 0
+  Intl.Segmenter used: 0
+──────────────────────────────────────────────────────────────────────
+
+Running: cell_cache_overflow_w2...
+Duration without instrumentation: 2.93ms
+Duration with instrumentation: 1.75ms
+Instrumentation overhead: -40.44%
+Heap delta: 0.01 MB
+
+Cell Cache:
+  createCell calls: 200
+  new cells: 200
+  hit rate: 0.00%
+  cache clears (w1/w2): 0/1
+  registered bucket count (w1/w2): 0/1
+  bucket size P50 (w1/w2): 0/71
+  bucket size P95 (w1/w2): 0/71
+  bucket size Max (w1/w2): 0/71
+  estimated registered cells: 71
+  max observed cache size (w1/w2): 0/129
+
+Text Cache:
+  textCellWidth calls: 0
+  text cache hit rate: N/A
+  wrap cache hit rate: N/A
+  wrap width bucket clears: 0
+
+Grapheme:
+  segmentation required: 0
+  Intl.Segmenter used: 0
+──────────────────────────────────────────────────────────────────────
+
+Running: many_styles_many_chars...
+Duration without instrumentation: 2.26ms
+Duration with instrumentation: 2.00ms
+Instrumentation overhead: -11.73%
+Heap delta: 0.00 MB
+
+Cell Cache:
+  createCell calls: 500
+  new cells: 500
+  hit rate: 0.00%
+  cache clears (w1/w2): 0/0
+  registered bucket count (w1/w2): 0/50
+  bucket size P50 (w1/w2): 0/10
+  bucket size P95 (w1/w2): 0/10
+  bucket size Max (w1/w2): 0/10
+  estimated registered cells: 500
+  max observed cache size (w1/w2): 0/10
+
+Text Cache:
+  textCellWidth calls: 0
+  text cache hit rate: N/A
+  wrap cache hit rate: N/A
+  wrap width bucket clears: 0
+
+Grapheme:
+  segmentation required: 0
+  Intl.Segmenter used: 0
+──────────────────────────────────────────────────────────────────────
+
+Running: complex_grapheme_cached...
+Duration without instrumentation: 1.38ms
+Duration with instrumentation: 0.96ms
+Instrumentation overhead: -30.85%
+Heap delta: -0.45 MB
+
+Cell Cache:
+  createCell calls: 0
+  new cells: 0
+  hit rate: N/A
+  cache clears (w1/w2): 0/0
+  registered bucket count (w1/w2): 0/0
+  estimated registered cells: 0
+  max observed cache size (w1/w2): 0/0
+
+Text Cache:
+  textCellWidth calls: 2000
+  text cache hit rate: 99.80%
+  wrap cache hit rate: N/A
+  wrap width bucket clears: 0
+
+Grapheme:
+  segmentation required: 4
+  Intl.Segmenter used: 4
+──────────────────────────────────────────────────────────────────────
+
+Running: complex_grapheme_uncached...
+Duration without instrumentation: 8.89ms
+Duration with instrumentation: 8.51ms
+Instrumentation overhead: -4.27%
+Heap delta: 0.17 MB
+
+Cell Cache:
+  createCell calls: 0
+  new cells: 0
+  hit rate: N/A
+  cache clears (w1/w2): 0/0
+  registered bucket count (w1/w2): 0/0
+  estimated registered cells: 0
+  max observed cache size (w1/w2): 0/0
+
+Text Cache:
+  textCellWidth calls: 1000
+  text cache hit rate: 0.00%
+  wrap cache hit rate: N/A
+  wrap width bucket clears: 0
+
+Grapheme:
+  segmentation required: 1000
+  Intl.Segmenter used: 1000
+──────────────────────────────────────────────────────────────────────
+
+Running: wrap_width_churn...
+Duration without instrumentation: 5.25ms
+Duration with instrumentation: 4.20ms
+Instrumentation overhead: -19.95%
+Heap delta: -0.01 MB
+
+Cell Cache:
+  createCell calls: 0
+  new cells: 0
+  hit rate: N/A
+  cache clears (w1/w2): 0/0
+  registered bucket count (w1/w2): 0/0
+  estimated registered cells: 0
+  max observed cache size (w1/w2): 0/0
+
+Text Cache:
+  textCellWidth calls: 0
+  text cache hit rate: N/A
+  wrap cache hit rate: 0.00%
+  wrap width bucket clears: 1
+
+Grapheme:
+  segmentation required: 0
+  Intl.Segmenter used: 0
+──────────────────────────────────────────────────────────────────────
+
+Running: repeated_cjk...
+Duration without instrumentation: 40.07ms
+Duration with instrumentation: 39.22ms
+Instrumentation overhead: -2.14%
+Heap delta: 0.01 MB
+
+Cell Cache:
+  createCell calls: 50000
+  new cells: 10
+  hit rate: 99.98%
+  cache clears (w1/w2): 0/0
+  registered bucket count (w1/w2): 0/1
+  bucket size P50 (w1/w2): 0/10
+  bucket size P95 (w1/w2): 0/10
+  bucket size Max (w1/w2): 0/10
+  estimated registered cells: 10
+  max observed cache size (w1/w2): 0/10
+
+Text Cache:
+  textCellWidth calls: 0
+  text cache hit rate: N/A
+  wrap cache hit rate: N/A
+  wrap width bucket clears: 0
+
+Grapheme:
+  segmentation required: 0
+  Intl.Segmenter used: 0
+──────────────────────────────────────────────────────────────────────
+
+Running: mixed_workload...
+Duration without instrumentation: 23.99ms
+Duration with instrumentation: 18.53ms
+Instrumentation overhead: -22.77%
+Heap delta: 1.62 MB
+
+Cell Cache:
+  createCell calls: 27390
+  new cells: 14620
+  hit rate: 37.49%
+  cache clears (w1/w2): 0/0
+  registered bucket count (w1/w2): 1000/1000
+  bucket size P50 (w1/w2): 9/6
+  bucket size P95 (w1/w2): 10/6
+  bucket size Max (w1/w2): 10/6
+  estimated registered cells: 14620
+  max observed cache size (w1/w2): 10/6
+
+Text Cache:
+  textCellWidth calls: 0
+  text cache hit rate: N/A
+  wrap cache hit rate: N/A
+  wrap width bucket clears: 0
+
+Grapheme:
+  segmentation required: 0
+  Intl.Segmenter used: 0
+──────────────────────────────────────────────────────────────────────
+
+✅ Profiler benchmark completed
+Total workloads: 8
+Average overhead: -24.26%
