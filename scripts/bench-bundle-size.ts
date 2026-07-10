@@ -1,7 +1,5 @@
 /**
- * Phase 3.3: Bundle Size Comparison (Final)
- *
- * All emitted files gated, no false passes
+ * Phase 3.3: Bundle Size Comparison (Final + Non-blocking improvements)
  */
 
 import { execFileSync } from "node:child_process";
@@ -123,6 +121,11 @@ function main() {
     const emittedB = listRuntimeFiles(join(wB, "dist"));
     const allFiles = Array.from(new Set([...emittedA, ...emittedB])).sort();
 
+    // Non-blocking improvement: Assert non-empty
+    if (allFiles.length === 0) {
+      throw new Error("No JS/CJS runtime files emitted");
+    }
+
     const exportsA = extractExportPaths(join(wA, "package.json"));
     const exportsB = extractExportPaths(join(wB, "package.json"));
 
@@ -130,9 +133,18 @@ function main() {
       throw new Error("Export paths changed between commits");
     }
 
+    // Non-blocking improvement: Validate exports exist
+    for (const file of exportsA) {
+      if (!emittedA.includes(file)) {
+        throw new Error(`Commit A did not emit declared export: ${file}`);
+      }
+      if (!emittedB.includes(file)) {
+        throw new Error(`Commit B did not emit declared export: ${file}`);
+      }
+    }
+
     log(`Found ${allFiles.length} total files (${exportsA.length} exports)\n`);
 
-    // Classify and compare ALL files
     const comps: FileComp[] = [];
     let totalRawA = 0;
     let totalRawB = 0;
@@ -165,7 +177,6 @@ function main() {
       });
     }
 
-    // Report by category
     console.log("PUBLIC EXPORTS:");
     console.log("=".repeat(80) + "\n");
 
@@ -237,11 +248,13 @@ function main() {
     console.log("=".repeat(80));
     console.log(`Files: ${comps.length}, Fail: ${fail}, Warning: ${warn}\n`);
 
+    // Non-blocking improvement: Exit 2 on warnings
     if (fail > 0) {
       console.log("❌ BUNDLE SIZE FAIL");
       process.exitCode = 1;
     } else if (warn > 0) {
-      console.log("⚠️  BUNDLE SIZE WARNING");
+      console.log("⚠️  BUNDLE SIZE WARNING (manual review required)");
+      process.exitCode = 2;
     } else {
       console.log("✅ BUNDLE SIZE ACCEPTABLE");
     }
