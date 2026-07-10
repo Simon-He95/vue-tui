@@ -59,8 +59,8 @@ No per-style Cell cache capacity or eviction change is justified by the currentl
 
 ### Grapheme
 
-- **Decision**: Inconclusive
-- **Data**: ~8.5-8.9ms/1000 strings (advisory, end-to-end, Phase 2 CV=177%)
+- **Decision**: Not measured with decision-grade timing
+- **Conclusion**: Inconclusive (counter coverage confirmed; no isolated segmentation benchmark)
 
 ### Long Text / inlineLineCache
 
@@ -76,7 +76,7 @@ No per-style Cell cache capacity or eviction change is justified by the currentl
 
 ### Measurement Issues
 
-- Heap measurements advisory only (measurement order issue)
+- Heap measurements invalid for retained-memory analysis (excluded from decisions)
 - Registered buckets ≠ live production buckets
 - Mixed workload artificially sharded (fresh Style per line)
 

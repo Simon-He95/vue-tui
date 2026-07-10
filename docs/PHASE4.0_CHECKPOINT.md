@@ -127,21 +127,20 @@ The current synthetic measurements do not provide sufficient evidence to justify
 
 ### Grapheme Optimization
 
-**Decision**: Inconclusive; current timing is advisory and unstable.
+**Decision**: Not measured with decision-grade timing.
 
 **Observations**:
 
-- Uncached workload: ~8.5-8.9ms for 1000 unique strings (single-run, end-to-end)
-- Cached workload: 99.80% hit rate
+- Counter snapshots confirm cached and unique workloads exercised expected segmentation paths
+- Historical single-shot duration values intentionally excluded (not suitable for performance decisions)
 
 **Limitations**:
 
-- Timing includes string construction, cache operations, not isolated segmentation
-- Single-run, no warmup or p50/p95 sampling
-- Phase 2 reports CV=177.27% for unique complex grapheme (unstable)
-- Environment-specific (Node v24.18.0 / V8 13.6 / arm64)
+- Phase 2 complex-grapheme unique scenario has CV=177.27% (unstable)
+- No isolated segmentation benchmark with warmup and statistical samples
+- Single-run end-to-end timing includes string construction and cache operations
 
-**Conclusion**: No stable evidence that segmentation is or is not a bottleneck. No optimization implemented.
+**Conclusion**: No decision-grade evidence that segmentation is or is not a bottleneck. No optimization implemented.
 
 ---
 
@@ -185,7 +184,7 @@ The current synthetic measurements do not provide sufficient evidence to justify
 
 **Issue**: `heapBefore` captured before `resetMetrics()`, which releases previous workload's bucket registry. Heap deltas include memory from prior workload cleanup.
 
-**Impact**: All heap delta values are advisory only and cannot be used to infer production retained memory.
+**Impact**: Heap delta values are invalid for retained-memory analysis and optimization decisions. They are preserved in the annotated historical transcript only as audit data and must not be used.
 
 **Status**: Heap-based conclusions removed from this report.
 

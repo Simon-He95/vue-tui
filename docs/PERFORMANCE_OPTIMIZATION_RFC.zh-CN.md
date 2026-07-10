@@ -22,7 +22,7 @@
 | 4.2   | Long-text cache admission          | ⏸️ Not measured                       | -    |
 | 4.3   | Provider-aware cache               | ⏸️ No reproducible issue              | -    |
 | 4.4   | Virtual-scroll optimization        | ⏸️ Requires browser profiler evidence | -    |
-| -     | **Phase 3 disabled-path overhead** | ⚠️ **Required** (independent)         | TBD  |
+| -     | **Phase 3 disabled-path overhead** | ⚠️ **Required** (independent)         | #119 |
 
 **Note**: Phase 4.0 completed the Cell-cache tuning decision checkpoint. Current cache implementation unchanged. Comprehensive cache validation (4.1+) and original Phase 4 work (long-text, provider, virtual-scroll) remain deferred or unmeasured.
 

@@ -146,7 +146,7 @@ function workload_complexGraphemeUncached(ctx: WorkloadContext) {
 function workload_wrapWidthChurn(_ctx: WorkloadContext) {
   const longLine = "这是一个很长的中文文本行，用来测试文本换行缓存的行为。".repeat(10);
 
-  // 50 widths exceeds MAX_WRAP_CACHE_BUCKETS=32
+  // 51 widths (20-70 inclusive) exceeds MAX_WRAP_CACHE_BUCKETS=32
   for (let width = 20; width <= 70; width++) {
     wrapByCells(longLine, width);
   }
@@ -306,7 +306,7 @@ async function main() {
     {
       fn: workload_wrapWidthChurn,
       name: "wrap_width_churn",
-      desc: "Wrap width churn (50 widths > 32 bucket limit)",
+      desc: "Wrap width churn (51 widths (20-70 inclusive) > 32 bucket limit)",
     },
     { fn: workload_repeatedCJK, name: "repeated_cjk", desc: "Repeated CJK baseline (1000 lines)" },
     {
