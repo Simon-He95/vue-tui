@@ -123,7 +123,7 @@ Phase 3 instrumentation hooks are in production hot paths (`createCell`, `textCe
 - p50/p95 comparison with confidence intervals
 - Use Phase 2 baseline harness
 
-**Track separately** with dedicated issue/PR.
+**Tracked in #119**.
 
 ---
 

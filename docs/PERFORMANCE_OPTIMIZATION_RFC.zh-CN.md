@@ -444,56 +444,47 @@ const useRenderPassCache =
 - ✅ 多次运行数据稳定（CV < 10%）
 - ✅ DOM benchmark 区分 happy-dom vs 真实浏览器
 
-### Cache Tuning PR
+---
 
-- ✅ Profiler 证明 Cell allocation 是瓶颈
-- ✅ Before/after: createCell count, new Cell count, map.clear count
-- ✅ Live Style 数量和 cache size 分布
-- ✅ Retained Cell 上限估算
-- ✅ Before/after p50/p95
-- ✅ Heap delta 测量
+## ✅ 当前状态总结
 
-### Long Text PR
+**已完成**:
 
-- ✅ Profiler 证明 textCellWidth 是 hotspot
-- ✅ Benchmark: unique vs repeated long text
-- ✅ 证明不污染 global cache
-- ✅ Heap 不膨胀
+- ✅ Phase 1: Unicode 17.0.0 width correctness (#114)
+- ✅ Phase 2: Statistical baseline harness (#115)
+- ✅ Phase 3.1-3.2: Instrumentation foundation (#116, #117)
+- ✅ Phase 4.0: Cell-cache tuning checkpoint (#118) - no change proposed
 
-### Virtual Scroll PR
+**进行中**:
 
-- ✅ Profiler 指出具体瓶颈
-- ✅ 滚动工作负载描述
-- ✅ Dirty rows, candidate fallback 指标
-- ✅ FPS 或 frame duration 数据
+- ⚠️ Phase 3.3: Instrumentation overhead validation (#119) - **REQUIRED**
+
+**已推迟**:
+
+- ⏸️ Phase 4.1+: Targeted cache workloads (optional unless continuing cache work)
+- ⏸️ Long-text cache admission (not measured)
+- ⏸️ Provider-aware cache (no reproducible issue)
+- ⏸️ Virtual-scroll (requires browser evidence)
 
 ---
 
 ## 🎓 经验教训
 
-### 从四轮 Review 学到的
+### 从多轮 Review 和实施中学到的
 
 1. ✅ **Pin Unicode 版本** - 2026 年应使用 Unicode 17.0.0 (包含 Extension J)
 2. ✅ **测试标注准确** - U+2B820 是 Ext E，U+2CEB0 是 Ext F，U+2EBF0 是 Ext I
 3. ✅ **EAW 不是 Oracle** - 需要 terminal tailoring 优先级
-4. ✅ **Cache 调参需谨慎** - 不是 quick-win，需完整指标
+4. ✅ **Cache 调参需谨慎** - 不是 quick-win，需完整指标和复用场景验证
 5. ✅ **Chunking 需明确目的** - 不应引入额外分配
+6. ✅ **Instrumentation 非零成本** - disabled 路径仍需验证 overhead 和 bundle 影响
+7. ✅ **Profiler 需方法论** - 单次固定顺序测量不可信，需统计方法和隔离对比
 
 ---
 
-## ✅ 下一步行动
-
-1. **立即**: 合并本 RFC，作为优化方向参考
-2. **Week 1**: 实施 PR #1 (Unicode Correctness, Unicode 17.0.0)
-3. **Week 2**: 实施 PR #2 (Real Baseline with harness)
-4. **Week 3**: 根据 baseline + profiler 数据决定候选优化
-5. **Week 4+**: 仅实施 profiler 证明的瓶颈优化
-
----
-
-**文档状态**: ✅ RFC / 草案  
-**实施状态**: ⏳ 待实施  
+**文档状态**: ✅ Roadmap / 执行记录  
+**实施状态**: Phase 1-4.0 已完成；Phase 3.3 进行中（必需）  
 **验证方式**: 真实 baseline + profiler 数据驱动  
 **Unicode 版本**: 17.0.0
 
-**最后更新**: 2026-07-09 (v4, 基于四轮 review 修正)
+**最后更新**: 2026-07-10 (v5, Phase 1-4.0 执行完成，Phase 3.3 跟踪中)
