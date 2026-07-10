@@ -24,17 +24,18 @@ Phase 3 adds **observation-only instrumentation** to measure cache behavior, all
 - **Text Cache Metrics**: textCellWidth calls, text width cache hit/miss, wrap cache behavior
 - **Grapheme Metrics**: segmentation calls, Intl.Segmenter vs fallback usage
 
-### ✅ Low-Overhead When Disabled
+### ⚠️ Disabled-Path Overhead Not Yet Validated
 
-- All instrumentation checks `isInstrumentationEnabled()` first
-- When disabled: minimal overhead (function call + boolean check) when instrumentation disabled
-- Enable only for profiling/benchmarking
+- Instrumentation is designed to have a small disabled-path cost
+- Hook functions are still invoked from production hot paths when collection is disabled
+- The incremental runtime and bundle-size overhead compared to pre-Phase-3 has not yet been validated
+- Validation is tracked by **issue #119** (required before claiming Phase 3 complete)
 
 ### ✅ Profiler Benchmark
 
 - 6 targeted workloads covering realistic scenarios
 - Detailed metrics output for each workload
-- Duration measurements
+- **Note**: Provides counter snapshots only; timing/overhead measurements are not decision-grade
 
 ## What Phase 3 Does NOT Do
 
@@ -194,7 +195,7 @@ Only after analyzing instrumentation data:
 
 - **Data-Driven Only**: No optimization without profiler evidence
 - **Observation Phase**: This PR only measures, does not optimize
-- **Low-Overhead When Disabled**: Instrumentation disabled by default
+- **Disabled-Path Cost**: Validation pending in issue #119 (required)
 - **Targeted Workloads**: Each workload tests specific behavior
 
 ## Files Modified
@@ -218,7 +219,8 @@ pnpm run typecheck
 
 pnpm run bench:profiler
 
-# Verify low-overhead when disabled (same performance as Phase 2)
+# Smoke-check benchmark correctness only
+# This does not validate pre-Phase-3 vs post-Phase-3 overhead (see #119)
 
 pnpm run bench:perf-baseline:smoke
 ```

@@ -1,7 +1,7 @@
 # vue-tui 性能优化 RFC
 
 **文档类型**: RFC / 路线图  
-**状态**: Phase 1-3 已完成；Phase 4.0 checkpoint 完成；Phase 4.1+ 待定  
+**状态**: Phase 1-2 完成；Phase 3.1-3.2 实现完成、3.3 验证待完成；Phase 4.0 checkpoint 完成  
 **创建日期**: 2026-07-09  
 **最后更新**: 2026-07-10 (Phase 4.0 checkpoint)  
 **修订版本**: v5 (Phase roadmap 更新)  
@@ -39,7 +39,7 @@
 本 RFC 基于代码审查和多轮 review 反馈，提出 vue-tui 性能优化方向和实施建议。
 
 - ✅ **Phase 1-3 已完成** - Unicode correctness, baseline, instrumentation
-- ✅ **Phase 4.0 checkpoint 完成** - Cell-cache 决策：无需调整
+- ✅ **Phase 4.0 checkpoint 完成** - Cell-cache 决策：当前证据不足以支持调整，暂不改动
 - ⏳ **Phase 4.1+ 待实施** - 目标 cache 工作负载（若继续 cache 优化）
 - ⚠️ **Phase 3 overhead 验证必需** - 独立于 cache 工作
 - 📊 后续优化应拆分为多个小 PR，每个 PR 配真实性能数据
