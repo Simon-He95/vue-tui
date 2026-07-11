@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { AGENT_CONSOLE_PROFILE_SCENARIOS } from "../examples/agent-console/src/perf-harness.js";
+import { agentConsoleProfileEnvironment } from "./agent-console-profile-environment.js";
 
 const root = process.cwd();
 const outputDir = resolve(root, ".tmp/perf/agent-console/cli");
@@ -25,6 +26,7 @@ for (const scenario of AGENT_CONSOLE_PROFILE_SCENARIOS) {
           VUE_TUI_PROFILE: "1",
           AGENT_CONSOLE_PROFILE_SMOKE: smoke ? "1" : "0",
           AGENT_CONSOLE_PROFILE_SCENARIO: scenario,
+          AGENT_CONSOLE_PROFILE_RUN: String(run + 1),
         },
       },
     );
@@ -38,3 +40,15 @@ for (const scenario of AGENT_CONSOLE_PROFILE_SCENARIOS) {
   }
 }
 writeFileSync(resolve(outputDir, "all.json"), JSON.stringify(all, null, 2));
+writeFileSync(
+  resolve(outputDir, "environment.json"),
+  JSON.stringify(
+    {
+      ...agentConsoleProfileEnvironment(["dist/cli.js", "dist/vue.js"]),
+      runCount,
+      smoke,
+    },
+    null,
+    2,
+  ),
+);

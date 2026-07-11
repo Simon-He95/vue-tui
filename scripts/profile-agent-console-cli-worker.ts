@@ -41,6 +41,7 @@ async function collectGarbage(): Promise<void> {
   await new Promise<void>((done) => setTimeout(done, 0));
 }
 const selectedScenario = process.env.AGENT_CONSOLE_PROFILE_SCENARIO;
+const runNumber = process.env.AGENT_CONSOLE_PROFILE_RUN ?? "1";
 const scenarios = selectedScenario
   ? AGENT_CONSOLE_PROFILE_SCENARIOS.filter((scenario) => scenario === selectedScenario)
   : AGENT_CONSOLE_PROFILE_SCENARIOS;
@@ -132,7 +133,7 @@ for (const scenario of scenarios) {
     let cpuHotspots: ReturnType<typeof summarizeCpuProfile> | undefined;
     if (inspector) {
       const { profile } = await post<{ profile: CpuProfile }>(inspector, "Profiler.stop");
-      cpuProfilePath = resolve(outputDir, `${scenario}.node.cpuprofile`);
+      cpuProfilePath = resolve(outputDir, `${scenario}-run-${runNumber}.node.cpuprofile`);
       writeFileSync(cpuProfilePath, JSON.stringify(profile));
       cpuHotspots = summarizeCpuProfile(profile);
       inspector.disconnect();
@@ -146,6 +147,12 @@ for (const scenario of scenarios) {
         after: memoryAfter,
         heapUsedDelta: memoryAfter.heapUsed - memoryBefore.heapUsed,
         rssDelta: memoryAfter.rss - memoryBefore.rss,
+        heapBytesPerEvent: result.eventsAdded
+          ? (memoryAfter.heapUsed - memoryBefore.heapUsed) / result.eventsAdded
+          : 0,
+        rssBytesPerEvent: result.eventsAdded
+          ? (memoryAfter.rss - memoryBefore.rss) / result.eventsAdded
+          : 0,
       },
       cpuProfilePath,
       cpuHotspots,

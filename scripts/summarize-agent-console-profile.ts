@@ -111,11 +111,28 @@ function main() {
     const summaries = runs.map((r) =>
       summarizeFrameSamples(r.frameSamples ?? r.snapshot?.samples ?? []),
     );
+    const inputToPaint = runs.flatMap(
+      (r) => r.diagnostics?.inputToPaintMs ?? r.profileResult?.diagnostics?.inputToPaintMs ?? [],
+    );
     result[key] = {
       runCount: runs.length,
+      elapsedMs: summarizeRunStability(
+        runs.map((run) => run.elapsedMs ?? run.timing?.elapsedMs ?? 0),
+      ),
       frameP95: summarizeRunStability(summaries.map((s) => s.durationMs.p95)),
       frameMax: summarizeRunStability(summaries.map((s) => s.durationMs.max)),
       runs: summaries,
+      correctness: runs.map((r) => r.correctness ?? r.profileResult?.correctness).filter(Boolean),
+      corpus: runs.map((r) => r.corpus ?? r.profileResult?.corpus).filter(Boolean),
+      inputToPaintMs: {
+        p50: percentile(inputToPaint, 0.5),
+        p95: percentile(inputToPaint, 0.95),
+        p99: percentile(inputToPaint, 0.99),
+        max: Math.max(0, ...inputToPaint),
+        over16_7ms: inputToPaint.filter((value) => value > 16.7).length,
+        over33_3ms: inputToPaint.filter((value) => value > 33.3).length,
+        over50ms: inputToPaint.filter((value) => value > 50).length,
+      },
       stdout: runs.map((r) => r.stdout).filter(Boolean),
       memory: runs.map((r) => r.memory).filter(Boolean),
       cpuHotspots: runs.flatMap((r) => r.cpuHotspots ?? []),

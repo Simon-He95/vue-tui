@@ -83,6 +83,14 @@ jobs:
 
       - run: pnpm run profile:agent-console:smoke
 
+      - name: Upload Agent Console profile smoke artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-console-profile-smoke
+          path: .tmp/perf/agent-console
+          if-no-files-found: error
+
       - run: pnpm run e2e:charts
 
       - run: pnpm run e2e:component-terminal-charts

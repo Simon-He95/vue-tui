@@ -152,9 +152,11 @@ export async function runAgentConsoleProfileScenario(
       await appendFramed(adapter, appendStartIndex, appendCount, batchSize);
       const after = viewportAnchor(adapter.api);
       correctness.detachedAfterAppend = adapter.api.metrics.value?.atBottom === false;
-      correctness.scrollTopPreserved = after.scrollTop === before.scrollTop;
-      correctness.anchorLinePreserved = after.firstLineIndex === before.firstLineIndex;
-      correctness.anchorRowPreserved = after.firstVisibleRow === before.firstVisibleRow;
+      const retentionShifted = after.firstLineIndex !== before.firstLineIndex;
+      correctness.viewportAnchorPreserved = after.firstVisibleRow === before.firstVisibleRow;
+      diagnostics.retentionShifted = retentionShifted ? 1 : 0;
+      diagnostics.scrollTopDelta = after.scrollTop - before.scrollTop;
+      diagnostics.firstLineIndexDelta = after.firstLineIndex - before.firstLineIndex;
       diagnostics.scrollTopBefore = before.scrollTop;
       diagnostics.scrollTopAfter = after.scrollTop;
       diagnostics.firstLineIndexBefore = before.firstLineIndex;

@@ -5,6 +5,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type CDPSession, type Page } from "@playwright/test";
 import { summarizeCpuProfile } from "./agent-console-cpu-profile.js";
+import { agentConsoleProfileEnvironment } from "./agent-console-profile-environment.js";
 
 const root = process.cwd();
 const outputDir = resolve(
@@ -30,6 +31,7 @@ type ScenarioResult = Readonly<{
   run: number;
   timing: BrowserTiming;
   snapshot: unknown;
+  profileResult: unknown;
   memory: Readonly<{ beforeUsedSize: number; afterUsedSize: number; deltaUsedSize: number }>;
   cpuProfilePath?: string;
   cpuHotspots?: ReturnType<typeof summarizeCpuProfile>;
@@ -86,7 +88,7 @@ async function measure(
   session: CDPSession,
   name: string,
   run: number,
-  action: () => Promise<void>,
+  action: () => Promise<unknown>,
 ): Promise<ScenarioResult> {
   await session.send("HeapProfiler.collectGarbage");
   const memoryBefore = await session.send("Runtime.getHeapUsage");
@@ -117,7 +119,7 @@ async function measure(
     }
     (window as any).__agentPerfStarted = performance.now();
   });
-  await action();
+  const profileResult = await action();
   const measured = await page.evaluate(
     (scenarioName) => {
       cancelAnimationFrame((window as any).__agentPerfRaf);
@@ -139,7 +141,7 @@ async function measure(
   let cpuHotspots: ReturnType<typeof summarizeCpuProfile> | undefined;
   if (profileCpu) {
     const { profile } = await session.send("Profiler.stop");
-    cpuProfilePath = join(outputDir, `${name}.browser.cpuprofile`);
+    cpuProfilePath = join(outputDir, `${name}-run-${run + 1}.browser.cpuprofile`);
     writeFileSync(cpuProfilePath, JSON.stringify(profile));
     cpuHotspots = summarizeCpuProfile(profile);
     await session.send("Profiler.disable");
@@ -148,10 +150,15 @@ async function measure(
   const memoryAfter = await session.send("Runtime.getHeapUsage");
   return {
     ...measured,
+    profileResult,
     memory: {
       beforeUsedSize: memoryBefore.usedSize,
       afterUsedSize: memoryAfter.usedSize,
       deltaUsedSize: memoryAfter.usedSize - memoryBefore.usedSize,
+      bytesPerEvent: (profileResult as { eventsAdded?: number })?.eventsAdded
+        ? (memoryAfter.usedSize - memoryBefore.usedSize) /
+          (profileResult as { eventsAdded: number }).eventsAdded
+        : 0,
     },
     cpuProfilePath,
     cpuHotspots,
@@ -238,11 +245,16 @@ async function main(): Promise<void> {
       runtime: "browser",
       generatedAt: new Date().toISOString(),
       environment: {
-        node: process.version,
+        ...agentConsoleProfileEnvironment([
+          "dist/vue.js",
+          "dist/cli.js",
+          "examples/agent-console/dist/index.html",
+        ]),
         browser: await browser.version(),
         seedCount,
         appendCount,
         steadyCount,
+        runCount,
       },
       results,
     };

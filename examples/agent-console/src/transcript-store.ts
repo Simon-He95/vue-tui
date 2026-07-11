@@ -2,7 +2,7 @@ import type { AppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
 import type { TuiMarkdownBlock } from "@simon_he/vue-tui/markdown";
 import type { AgentEvent, AgentFixtureExpansion } from "./mock-agent-stream";
 import type { Ref } from "vue";
-import { ref } from "vue";
+import { ref, shallowRef } from "vue";
 import { createAppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
 import { createMarkdownBlockSource } from "@simon_he/vue-tui/markdown";
 import {
@@ -107,7 +107,8 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
     toolErrors: 0,
     approxTokens: 0,
   });
-  const eventLog = ref<readonly AgentEvent[]>([]);
+  let eventLogBacking: AgentEvent[] = [];
+  const eventLog = shallowRef<readonly AgentEvent[]>(eventLogBacking);
   let assistantOpen = false;
   let toolFenceOpen = false;
   let fixtureExpansion: AgentFixtureExpansion = {
@@ -172,7 +173,7 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
   }
 
   function applyEvent(event: AgentEvent, record: boolean): void {
-    if (record) eventLog.value = [...eventLog.value, event];
+    if (record) eventLogBacking.push(event);
 
     if (event.type === "user") {
       closeAssistantLine();
@@ -260,7 +261,8 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
 
   function clear(): void {
     resetDerived();
-    eventLog.value = [];
+    eventLogBacking = [];
+    eventLog.value = eventLogBacking;
   }
 
   function seed(count = 28): void {
