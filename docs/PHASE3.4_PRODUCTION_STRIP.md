@@ -41,6 +41,7 @@ Remove debug performance instrumentation from standard ESM/CJS production bundle
 ### Step 2: Hot-Path Modifications
 
 **Files to modify**:
+
 - `src/core/buffer/buffer.ts`
 - `src/vue/utils/text.ts`
 - `src/utils/grapheme.ts`
@@ -49,22 +50,23 @@ Remove debug performance instrumentation from standard ESM/CJS production bundle
 \`\`\`typescript
 // Define at module top
 const PERF_INSTRUMENTATION_COMPILED =
-  typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined"
-    ? true
-    : __VUE_TUI_PERF_INSTRUMENTATION__;
+typeof **VUE_TUI_PERF_INSTRUMENTATION** === "undefined"
+? true
+: **VUE_TUI_PERF_INSTRUMENTATION**;
 
 // Guard all instrumentation calls
 if (PERF_INSTRUMENTATION_COMPILED && isInstrumentationEnabled()) {
-  textInstr.recordTextCellWidthCall(text.length, true);
+textInstr.recordTextCellWidthCall(text.length, true);
 }
 
 // Or for unconditional dispatches
 if (PERF_INSTRUMENTATION_COMPILED) {
-  textInstr.recordWrapByCellsCall();
+textInstr.recordWrapByCellsCall();
 }
 \`\`\`
 
 **Special attention**:
+
 - Remove `width` parameter from `getOrCreateCellCache()` (instrumentation-only)
 - Restore production function signatures
 
@@ -73,6 +75,7 @@ if (PERF_INSTRUMENTATION_COMPILED) {
 **New file**: `scripts/check-production-instrumentation-strip.mjs`
 
 **Checks**:
+
 - No `recordTextCellWidthCall` etc. in dist files
 - No `instrumentationEnabled` in dist files
 - No separate instrumentation chunks
@@ -85,17 +88,20 @@ if (PERF_INSTRUMENTATION_COMPILED) {
 **New file**: `scripts/bench-instrumentation-overhead-dist.ts`
 
 **Versions**:
+
 - A = 697472b0 (pre-Phase-3)
 - B = 4d543ff7 (current instrumentation)
 - C = current PR HEAD (compile-time strip)
 
 **Method**:
+
 - Load built `dist/core.js`, `dist/vue.js`, `dist/core.cjs`, `dist/vue.cjs`
 - Balanced 3-version ordering (ABC, BCA, CAB, etc.)
 - Auto-calibrate sample batches to 2-5ms
 - Test both ESM and CJS
 
 **Gates**:
+
 - C/A: p50 CI upper <= 1.05 (non-inferiority)
 - C/B: Should show clear improvement
 - No INCONCLUSIVE accepted
@@ -105,11 +111,13 @@ if (PERF_INSTRUMENTATION_COMPILED) {
 **New file**: `scripts/bench-consumer-bundle.ts`
 
 **Fixtures**:
+
 1. Core: `import { createTerminal } from "@simon_he/vue-tui/core"`
 2. Text utils: `import { textCellWidth, wrapByCells } from "@simon_he/vue-tui/vue"`
 3. Components: `import { TerminalProvider, TText } from "@simon_he/vue-tui/vue"`
 
 **Verification**:
+
 - esbuild with tree-shaking, minify, metafile
 - Assert no instrumentation in closure
 - C/A <= +2KB gzip
@@ -154,12 +162,14 @@ if (PERF_INSTRUMENTATION_COMPILED) {
 ## Issue Closure Rule
 
 **PR changes to `Closes #119` only when**:
+
 - All acceptance criteria met
 - Built ESM/CJS validation passes
 - Consumer bundle validation passes
 - No results remain inconclusive
 
 If validation fails, options:
+
 1. Further optimize code structure
 2. Use profiling-only build variant
 3. Consider Phase 3 rollback
