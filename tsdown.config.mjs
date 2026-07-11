@@ -19,10 +19,11 @@ const productionDefine = {
   __VUE_TUI_PERF_INSTRUMENTATION__: "false",
 };
 
-// Production alias: replace instrumentation with no-op stub
+// Production alias: replace instrumentation imports with no-op stub
+// This ensures entire instrumentation module is excluded from production bundles
 const productionAlias = {
   "./perf/instrumentation.js": "./perf/instrumentation-noop.js",
-  "../core/perf/instrumentation.js": "../core/perf/instrumentation-noop.js",
+  "../core/perf/instrumentation.js": "../core/perf/instrumentation-noop.js", 
   "../../core/perf/instrumentation.js": "../../core/perf/instrumentation-noop.js",
 };
 
