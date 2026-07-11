@@ -48,11 +48,14 @@ const instrumentationStripPlugin = {
   name: "instrumentation-strip",
   setup(build) {
     build.onResolve({ filter: /instrumentation/ }, (args) => {
-      // Resolve to absolute path
+      // Resolve to absolute path, handling .js imports
       if (args.resolveDir) {
-        const resolved = resolve(args.resolveDir, args.path);
-        // Normalize and compare precisely
-        if (resolve(resolved) === realInstrumentationPath) {
+        // Remove .js extension if present, add .ts
+        const sourcePath = args.path.replace(/\.js$/, ".ts");
+        const resolved = resolve(args.resolveDir, sourcePath);
+        
+        // Compare with real instrumentation path
+        if (resolved === realInstrumentationPath) {
           return { path: noopInstrumentationPath };
         }
       }
@@ -63,7 +66,7 @@ const instrumentationStripPlugin = {
 
 // Keep CJS as a separate esbuild step so the package can publish named `.cjs`
 // files alongside tsdown's ESM and declaration output.
-await build({
+const cjsBrowserResult = await build({
   entryPoints: {
     index: "src/index.ts",
     core: "src/core.ts",
@@ -84,6 +87,7 @@ await build({
   target: ["es2020"],
   sourcemap: false,
   treeShaking: true,
+  metafile: true,
   // Keep dynamic import syntax in browser-facing CJS. The Mermaid bridge uses
   // import("beautiful-mermaid") so CJS consumers can load the optional ESM peer
   // lazily at render time instead of requiring it during entrypoint import.
@@ -96,6 +100,13 @@ await build({
   define: productionDefine,
 });
 
+// Save metafile for verification
+mkdirSync("dist/.metafiles", { recursive: true });
+writeFileSync(
+  "dist/.metafiles/cjs-browser.json",
+  JSON.stringify(cjsBrowserResult.metafile, null, 2),
+);
+
 mkdirSync("dist/agent", { recursive: true });
 // Keep /agent/mermaid as a thin bridge over /mermaid so both entrypoints share
 // the same optional-peer loader/cache and exported component identities.
@@ -105,7 +116,7 @@ writeFileSync(
   `"use strict";\nmodule.exports = require("../mermaid.cjs");\n`,
 );
 
-await build({
+const cjsCliResult = await build({
   entryPoints: {
     cli: "src/cli.ts",
   },
@@ -117,7 +128,14 @@ await build({
   target: ["node16"],
   sourcemap: false,
   treeShaking: true,
+  metafile: true,
   external: ["vue"],
   define: productionDefine,
   plugins: [instrumentationStripPlugin],
 });
+
+// Save metafile for verification
+writeFileSync(
+  "dist/.metafiles/cjs-cli.json",
+  JSON.stringify(cjsCliResult.metafile, null, 2),
+);

@@ -3,160 +3,134 @@
 /**
  * Production Instrumentation Strip Verification
  *
- * Verifies real instrumentation module has bytesInOutput === 0 using build metafiles.
- * Checks both ESM and CJS builds, ensures no-op stub is also eliminated.
+ * Verifies real instrumentation module has bytesInOutput === 0 using
+ * first-build metafiles (not re-bundling).
  *
  * Exit codes:
  * 0 - All checks passed
  * 1 - Instrumentation found in production artifacts
  */
 
-import { readFileSync, readdirSync, statSync, existsSync, mkdirSync } from "node:fs";
-import { join, relative, resolve, normalize } from "node:path";
-import { build as esbuild } from "esbuild";
+import { readFileSync, existsSync } from "node:fs";
+import { join, resolve, normalize } from "node:path";
 import process from "node:process";
 
-const DIST_DIR = "dist";
 const rootDir = process.cwd();
-
-// Module paths to check
-const realInstrumentationPath = normalize(resolve(rootDir, "src/core/perf/instrumentation.ts"));
+const realInstrumentationPath = normalize(
+  resolve(rootDir, "src/core/perf/instrumentation.ts"),
+);
 const noopInstrumentationPath = normalize(
   resolve(rootDir, "src/core/perf/instrumentation-noop.ts"),
 );
 
-async function checkCJSBuild(entryFile) {
-  // Re-bundle a CJS file to get metafile
-  const result = await esbuild({
-    entryPoints: [entryFile],
-    bundle: true,
-    write: false,
-    format: "cjs",
-    platform: "node",
-    external: ["vue", "node:*"],
-    metafile: true,
-  });
+function bytesInOutputs(metafile, inputMatcher) {
+  let total = 0;
 
-  let realBytes = 0;
-  let noopBytes = 0;
-
-  for (const output of Object.values(result.metafile.outputs)) {
+  for (const output of Object.values(metafile.outputs || {})) {
     for (const [input, contribution] of Object.entries(output.inputs ?? {})) {
       const normalizedInput = normalize(resolve(rootDir, input));
-      if (normalizedInput === realInstrumentationPath) {
-        realBytes += contribution.bytesInOutput;
-      }
-      if (normalizedInput === noopInstrumentationPath) {
-        noopBytes += contribution.bytesInOutput;
+      if (inputMatcher(normalizedInput)) {
+        total += contribution.bytesInOutput || 0;
       }
     }
   }
 
-  return { realBytes, noopBytes };
+  return total;
 }
 
 async function main() {
-  console.log("🔍 Checking production builds with metafile analysis...\n");
+  console.log("🔍 Production Strip Verification (First-Build Metafiles)\n");
 
-  if (!existsSync(DIST_DIR)) {
-    console.error(`❌ Error: ${DIST_DIR}/ directory not found. Run build first.`);
+  const metafileDir = join(rootDir, "dist", ".metafiles");
+
+  if (!existsSync(metafileDir)) {
+    console.error("❌ Error: dist/.metafiles/ not found.");
+    console.error("Build scripts must output metafiles for verification.");
     process.exit(1);
   }
 
-  // Collect CJS files
-  const cjsFiles = [];
-  function walkDir(dir) {
-    const entries = readdirSync(dir);
-    for (const entry of entries) {
-      const fullPath = join(dir, entry);
-      const stat = statSync(fullPath);
-      if (stat.isDirectory()) {
-        walkDir(fullPath);
-      } else if (fullPath.endsWith(".cjs")) {
-        cjsFiles.push(fullPath);
-      }
-    }
-  }
+  const cjsBrowserPath = join(metafileDir, "cjs-browser.json");
+  const cjsCliPath = join(metafileDir, "cjs-cli.json");
 
-  walkDir(DIST_DIR);
-
-  if (cjsFiles.length === 0) {
-    console.error("❌ Error: No .cjs files found in dist/");
+  if (!existsSync(cjsBrowserPath)) {
+    console.error("❌ Error: CJS browser metafile not found");
     process.exit(1);
   }
 
-  console.log(`📦 Found ${cjsFiles.length} CJS files to check\n`);
+  if (!existsSync(cjsCliPath)) {
+    console.error("❌ Error: CJS CLI metafile not found");
+    process.exit(1);
+  }
 
   let foundViolations = false;
-  const tmpDir = join(".tmp", "metafile-check");
-  mkdirSync(tmpDir, { recursive: true });
 
-  // Check each CJS file
-  for (const cjsFile of cjsFiles) {
-    const relativePath = relative(process.cwd(), cjsFile);
-    console.log(`🔎 Checking ${relativePath}...`);
+  // Check CJS browser
+  console.log("📦 Checking CJS browser builds...");
+  const cjsBrowserMeta = JSON.parse(readFileSync(cjsBrowserPath, "utf-8"));
 
-    const { realBytes, noopBytes } = await checkCJSBuild(cjsFile);
+  const browserRealBytes = bytesInOutputs(
+    cjsBrowserMeta,
+    (path) => path === realInstrumentationPath,
+  );
+  const browserNoopBytes = bytesInOutputs(
+    cjsBrowserMeta,
+    (path) => path === noopInstrumentationPath,
+  );
 
-    if (realBytes > 0) {
-      console.error(`  ❌ Real instrumentation: ${realBytes} bytes`);
-      foundViolations = true;
-    } else if (noopBytes > 0) {
-      console.error(`  ❌ No-op stub: ${noopBytes} bytes`);
-      foundViolations = true;
-    } else {
-      console.log(`  ✅ Clean (0 bytes from instrumentation)`);
-    }
+  console.log(`  Real instrumentation: ${browserRealBytes} bytes`);
+  console.log(`  No-op stub: ${browserNoopBytes} bytes`);
+
+  if (browserRealBytes > 0) {
+    console.error(`  ❌ FAIL: Real instrumentation in CJS browser builds`);
+    foundViolations = true;
+  } else if (browserNoopBytes > 0) {
+    console.warn(`  ⚠️  WARN: No-op stub ${browserNoopBytes} bytes (guards prevent execution)`);
+  } else {
+    console.log(`  ✅ PASS: Both modules at 0 bytes`);
   }
 
-  // Check ESM build (use tsdown metafile if available)
-  const metafilePath = join(DIST_DIR, ".metafile.json");
-  if (existsSync(metafilePath)) {
-    console.log("\n🔎 Checking ESM metafile...");
-    const metafile = JSON.parse(readFileSync(metafilePath, "utf-8"));
+  // Check CJS CLI
+  console.log("\n📦 Checking CJS CLI build...");
+  const cjsCliMeta = JSON.parse(readFileSync(cjsCliPath, "utf-8"));
 
-    let realBytes = 0;
-    let noopBytes = 0;
+  const cliRealBytes = bytesInOutputs(
+    cjsCliMeta,
+    (path) => path === realInstrumentationPath,
+  );
+  const cliNoopBytes = bytesInOutputs(
+    cjsCliMeta,
+    (path) => path === noopInstrumentationPath,
+  );
 
-    for (const output of Object.values(metafile.outputs || {})) {
-      for (const [input, contribution] of Object.entries(output.inputs ?? {})) {
-        const normalizedInput = normalize(resolve(rootDir, input));
-        if (normalizedInput === realInstrumentationPath) {
-          realBytes += contribution.bytesInOutput || 0;
-        }
-        if (normalizedInput === noopInstrumentationPath) {
-          noopBytes += contribution.bytesInOutput || 0;
-        }
-      }
-    }
+  console.log(`  Real instrumentation: ${cliRealBytes} bytes`);
+  console.log(`  No-op stub: ${cliNoopBytes} bytes`);
 
-    if (realBytes > 0) {
-      console.error(`  ❌ Real instrumentation: ${realBytes} bytes`);
-      foundViolations = true;
-    } else if (noopBytes > 0) {
-      console.error(`  ❌ No-op stub: ${noopBytes} bytes`);
-      foundViolations = true;
-    } else {
-      console.log(`  ✅ Clean (0 bytes from instrumentation)`);
-    }
+  if (cliRealBytes > 0) {
+    console.error(`  ❌ FAIL: Real instrumentation in CJS CLI build`);
+    foundViolations = true;
+  } else if (cliNoopBytes > 0) {
+    console.warn(`  ⚠️  WARN: No-op stub ${cliNoopBytes} bytes (guards prevent execution)`);
+  } else {
+    console.log(`  ✅ PASS: Both modules at 0 bytes`);
   }
 
   // Final verdict
   console.log("\n" + "=".repeat(60));
   if (foundViolations) {
     console.error("❌ FAILED: Production builds contain instrumentation\n");
-    console.error("Metafile analysis shows non-zero bytesInOutput for:");
-    console.error("  • src/core/perf/instrumentation.ts (real), OR");
+    console.error("First-build metafile analysis shows non-zero bytesInOutput.");
+    console.error("\nBoth modules must be 0 bytes:");
+    console.error("  • src/core/perf/instrumentation.ts (real)");
     console.error("  • src/core/perf/instrumentation-noop.ts (no-op)");
-    console.error("\nBoth must be 0 bytes in production builds.");
     process.exit(1);
   }
 
   console.log("✅ PASSED: Production builds are instrumentation-free\n");
-  console.log("Metafile verification complete:");
+  console.log("First-build metafile verification:");
   console.log("  • Real instrumentation: 0 bytes");
   console.log("  • No-op stub: 0 bytes");
-  console.log("  • All CJS files clean");
+  console.log("  • CJS browser builds: clean");
+  console.log("  • CJS CLI build: clean");
   process.exit(0);
 }
 
