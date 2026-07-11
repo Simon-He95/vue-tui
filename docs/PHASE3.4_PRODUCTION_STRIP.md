@@ -28,11 +28,15 @@ Missing ESM or CJS metafiles are hard failures.
 
 - A: `697472b0cc5c000fb46baf16e85c60d84ee22471`
 - B: `4d543ff7042f9c2400fa50a9dff921a0f36f77a3`
-- C: PR implementation commit
+- Built-dist C: `ff1f2820c9d41893afc3af426a807afd3694f2af`
+- Packed-consumer C: `359896331846b254a82315d4f829a43ea30b2ac8`
+- Reviewed production/release-tooling head: `ecf60023198e0353739273c168d5fb4012c4ea00`
+
+Commits after the two audit points changed validation/release tooling, result metadata, and build-metadata placement; they did not change production hot-path source behavior. The final branch head is independently covered by the first-build structural gates and current packed-package closure check.
 
 Each measurement runs in a fresh Node child process. All six A/B/C permutations are used, timed batches calibrate toward 3 ms, and the primary C/A gate is the seeded bootstrap 95% CI of paired p50 ratios with upper bound `<= 1.05`.
 
-All twelve ESM/CJS gates passed. The widest passing upper bound was `1.0462` for ESM terminal write.
+All twelve ESM/CJS gates passed. After correcting the cycling-working-set scenario names, the widest passing upper bound is `1.0450` for the ESM CJK cycling working set.
 
 Detailed raw observations and analysis: `docs/perf/phase3.4-built-dist-abc.json`.
 
@@ -43,7 +47,7 @@ Detailed raw observations and analysis: `docs/perf/phase3.4-built-dist-abc.json`
 1. `check:production-instrumentation-strip`
 2. `check:consumer-bundle`
 
-The packed consumer A/B/C validator compares the same core, text utility, and Vue component fixtures from independently packed A/B/C worktrees, reports minified/raw/gzip/brotli sizes and module closure, and enforces the registered size gates.
+The permanent `check:consumer-bundle` command is read-only and checks only the current packed package for instrumentation closure and forbidden temporary/metafile entries. The one-time `validate:consumer-bundle-abc` audit command compares independently packed historical A/B/C worktrees, reports minified raw/gzip/brotli sizes and module closure, and writes an audit file only when explicitly passed `--output`.
 
 ## Source-mode correctness
 
