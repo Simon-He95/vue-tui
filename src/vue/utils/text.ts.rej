@@ -1,0 +1,13 @@
+@@ -5,6 +5,12 @@
+ import { segmentedGraphemes } from "../../utils/grapheme.js";
+ import type { GraphemeSegmenter } from "../../utils/grapheme.js";
+ 
++// Compile-time constant for instrumentation stripping in production builds
++const PERF_INSTRUMENTATION_COMPILED =
++  typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined"
++    ? true
++    : __VUE_TUI_PERF_INSTRUMENTATION__;
++
+ function hasAsciiFastPath(provider?: WidthProvider): boolean {
+   return !provider || provider === "unicode-17.0-eaw";
+ }
