@@ -19,6 +19,13 @@ const productionDefine = {
   __VUE_TUI_PERF_INSTRUMENTATION__: "false",
 };
 
+// Production alias: replace instrumentation with no-op stub
+const productionAlias = {
+  "./perf/instrumentation.js": "./perf/instrumentation-noop.js",
+  "../core/perf/instrumentation.js": "../core/perf/instrumentation-noop.js",
+  "../../core/perf/instrumentation.js": "../../core/perf/instrumentation-noop.js",
+};
+
 export default defineConfig([
   {
     target: "es2020",
@@ -42,6 +49,9 @@ export default defineConfig([
     external: browserExternals,
     define: productionDefine,
     treeshake: true,
+    resolve: {
+      alias: productionAlias,
+    },
   },
   {
     target: "node16",
@@ -55,5 +65,8 @@ export default defineConfig([
     external: ["vue", ...nodeBuiltins],
     define: productionDefine,
     treeshake: true,
+    resolve: {
+      alias: productionAlias,
+    },
   },
 ]);

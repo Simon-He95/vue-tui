@@ -1,6 +1,12 @@
 import { builtinModules } from "node:module";
 import { mkdirSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 import { build } from "esbuild";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const rootDir = resolve(__dirname, "..");
 
 const nodeBuiltins = Array.from(
   new Set([
@@ -33,6 +39,18 @@ const productionDefine = {
   __VUE_TUI_PERF_INSTRUMENTATION__: "false",
 };
 
+// Plugin to replace instrumentation imports with no-op stub
+const instrumentationStripPlugin = {
+  name: "instrumentation-strip",
+  setup(build) {
+    build.onResolve({ filter: /\/perf\/instrumentation$/ }, (args) => {
+      return {
+        path: resolve(rootDir, "src/core/perf/instrumentation-noop.ts"),
+      };
+    });
+  },
+};
+
 // Keep CJS as a separate esbuild step so the package can publish named `.cjs`
 // files alongside tsdown's ESM and declaration output.
 await build({
@@ -56,6 +74,7 @@ await build({
   target: ["es2020"],
   sourcemap: false,
   treeShaking: true,
+  minify: true,
   // Keep dynamic import syntax in browser-facing CJS. The Mermaid bridge uses
   // import("beautiful-mermaid") so CJS consumers can load the optional ESM peer
   // lazily at render time instead of requiring it during entrypoint import.
@@ -64,7 +83,7 @@ await build({
   // ESM entrypoints. Keep beautiful-mermaid external so the CJS bridge can
   // load the optional ESM peer through dynamic import at render time.
   external: ["vue", "beautiful-mermaid"],
-  plugins: [forbidNodeBuiltinsPlugin],
+  plugins: [forbidNodeBuiltinsPlugin, instrumentationStripPlugin],
   define: productionDefine,
 });
 
@@ -89,6 +108,8 @@ await build({
   target: ["node16"],
   sourcemap: false,
   treeShaking: true,
+  minify: true,
   external: ["vue"],
   define: productionDefine,
+  plugins: [instrumentationStripPlugin],
 });
