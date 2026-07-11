@@ -80,6 +80,7 @@ export type AgentConsoleApi = Readonly<{
   seekReplay: (eventIndex: number) => void;
   jumpToBottom: () => void;
   scrollBy: (delta: number) => void;
+  dispatchProfileWheel: (deltaY: number, time: number) => boolean;
   openSearch: (query?: string) => void;
   openLinks: () => void;
   openPalette: (query?: string) => void;
@@ -1105,6 +1106,24 @@ export const AgentConsoleSurface = defineComponent({
       scrollBy: (delta) => {
         logView.value?.scrollBy(delta);
         refreshMetrics();
+      },
+      dispatchProfileWheel: (deltaY, _time) => {
+        const container = (terminalContext.renderer.value as { container?: HTMLElement } | null)
+          ?.container;
+        if (!container || typeof WheelEvent === "undefined") return false;
+        const rect = container.getBoundingClientRect();
+        const size = terminalContext.terminal.size();
+        const cellX = AGENT_CONSOLE_LAYOUT.transcript.x + 2;
+        const cellY = AGENT_CONSOLE_LAYOUT.transcript.y + 2;
+        return !container.dispatchEvent(
+          new WheelEvent("wheel", {
+            bubbles: true,
+            cancelable: true,
+            clientX: rect.left + ((cellX + 0.5) * rect.width) / size.cols,
+            clientY: rect.top + ((cellY + 0.5) * rect.height) / size.rows,
+            deltaY,
+          }),
+        );
       },
       openSearch,
       openLinks,

@@ -1,8 +1,8 @@
 # Phase 3.3: Instrumentation Overhead Validation - Results
 
-**Status**: ⚠️ Initial Run Complete; Acceptance Criteria Not Met  
-**Date**: 2026-07-10  
-**Issue**: #119 (reopened)
+**Status**: ✅ Closed by production-strip and production-workload validation
+**Date**: 2026-07-11
+**Issue**: #119 (closed); remediation #122; final workload #123
 
 ---
 
@@ -74,7 +74,7 @@
 
 ### Primary Hypotheses (Not Proven)
 
-**ASCII fast path**: Additional branch check  
+**ASCII fast path**: Additional branch check
 **Wrap path**: Unconditional dispatch to internal check
 
 Formal attribution requires targeted ablation tests (A vs B vs C with built artifacts).
@@ -149,3 +149,9 @@ Profile real usage before cache tuning.
 ---
 
 **This audit record documents scope, findings, and next requirements.**
+
+---
+
+## Final closure
+
+The exploratory source-path regression was remediated by #122's production strip. #123 provides the real production workload closure and generated audit summary. Phase 3 instrumentation remains available for source profiling but imposes no standard package cost. The current performance initiative is complete.

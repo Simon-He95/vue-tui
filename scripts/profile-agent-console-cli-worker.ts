@@ -12,10 +12,10 @@ import {
 } from "../examples/agent-console/src/AgentConsoleSurface.js";
 import {
   AGENT_CONSOLE_PROFILE_SCENARIOS,
-  runAgentConsoleProfileScenario,
+  prepareAgentConsoleProfile,
+  runPreparedAgentConsoleProfileScenario,
 } from "../examples/agent-console/src/perf-harness.js";
 import { nextTick } from "vue";
-process.env.VUE_TUI_PROFILE = "1";
 const outputDir = resolve(process.cwd(), ".tmp/perf/agent-console/cli");
 mkdirSync(outputDir, { recursive: true });
 const smoke = process.env.AGENT_CONSOLE_PROFILE_SMOKE === "1";
@@ -97,8 +97,15 @@ for (const scenario of scenarios) {
         await nextTick();
         app.scheduler.flushNow();
       },
+      async sleepUntil(deadline) {
+        await new Promise<void>((done) =>
+          setTimeout(done, Math.max(0, deadline - performance.now())),
+        );
+      },
       async dispatchWheel(delta) {
         const started = performance.now();
+        const beforeTop = mountedApi.metrics.value?.scrollTop ?? -1;
+        const beforeFrame = mountedApi.getFramePerfSamples().at(-1)?.frameId ?? -1;
         app.events.dispatch({
           type: "wheel",
           cellX: AGENT_CONSOLE_LAYOUT.transcript.x + 2,
@@ -108,7 +115,16 @@ for (const scenario of scenarios) {
         });
         await nextTick();
         app.scheduler.flushNow();
-        return performance.now() - started;
+        const afterTop = mountedApi.metrics.value?.scrollTop ?? -1;
+        return {
+          inputToCommitMs: performance.now() - started,
+          inputToDomFlushMs: null,
+          inputToPaintOpportunityMs: null,
+          scrollChanged: afterTop !== beforeTop,
+          scrollFrameObserved:
+            (mountedApi.getFramePerfSamples().at(-1)?.frameId ?? -1) > beforeFrame,
+          direction: delta < 0 ? -1 : 1,
+        } as const;
       },
       async waitUntilSettled() {
         for (let i = 0; i < 5; i++) {
@@ -118,9 +134,16 @@ for (const scenario of scenarios) {
         }
       },
     };
+    const prepared = await prepareAgentConsoleProfile(adapter, options);
+    mountedApi.clearFramePerf();
+    output.writes = 0;
+    output.bytes = 0;
+    output.maxBytes = 0;
+    output.cursorMoves = 0;
     await collectGarbage();
     const memoryBefore = process.memoryUsage();
-    const profileCpu = !smoke && cpuProfileScenarios.has(scenario);
+    const profileCpu =
+      process.env.AGENT_CONSOLE_PROFILE_CPU === "1" && cpuProfileScenarios.has(scenario);
     const inspector = profileCpu ? new Session() : null;
     if (inspector) {
       inspector.connect();
@@ -128,7 +151,12 @@ for (const scenario of scenarios) {
       await post(inspector, "Profiler.setSamplingInterval", { interval: 100 });
       await post(inspector, "Profiler.start");
     }
-    const result = await runAgentConsoleProfileScenario(adapter, scenario, options);
+    const result = await runPreparedAgentConsoleProfileScenario(
+      adapter,
+      scenario,
+      prepared,
+      options,
+    );
     let cpuProfilePath: string | undefined;
     let cpuHotspots: ReturnType<typeof summarizeCpuProfile> | undefined;
     if (inspector) {

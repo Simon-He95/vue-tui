@@ -77,11 +77,6 @@ async function waitForServer(): Promise<void> {
 async function prepare(page: Page): Promise<void> {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   await page.waitForFunction(() => Boolean((window as any).__AGENT_CONSOLE_PERF__));
-  await page.evaluate(async (count) => {
-    const harness = (window as any).__AGENT_CONSOLE_PERF__;
-    await harness.seed(count);
-    harness.reset();
-  }, seedCount);
 }
 async function measure(
   page: Page,
@@ -89,10 +84,11 @@ async function measure(
   name: string,
   run: number,
   action: () => Promise<unknown>,
+  diagnosticCpu = false,
 ): Promise<ScenarioResult> {
   await session.send("HeapProfiler.collectGarbage");
   const memoryBefore = await session.send("Runtime.getHeapUsage");
-  const profileCpu = !smoke && cpuProfileScenarios.has(name);
+  const profileCpu = diagnosticCpu;
   if (profileCpu) {
     await session.send("Profiler.enable");
     await session.send("Profiler.setSamplingInterval", { interval: 100 });
@@ -166,7 +162,9 @@ async function measure(
 }
 async function main(): Promise<void> {
   mkdirSync(outputDir, { recursive: true });
-  execFileSync("pnpm", ["run", "build:checked"], { cwd: root, stdio: "inherit" });
+  if (process.env.AGENT_CONSOLE_PROFILE_SKIP_BUILD !== "1") {
+    execFileSync("pnpm", ["run", "build:checked"], { cwd: root, stdio: "inherit" });
+  }
   execFileSync("pnpm", ["-C", "examples/agent-console", "build"], {
     cwd: root,
     stdio: "inherit",
@@ -194,12 +192,19 @@ async function main(): Promise<void> {
       ];
       for (const scenario of scenarios) {
         await prepare(page);
+        const prepared = await page.evaluate(
+          (options) => globalThis.__AGENT_CONSOLE_PERF__.prepareScenario(options),
+          { seedCount, appendCount, steadyCount, cadenceMs },
+        );
+        await page.evaluate(() => globalThis.__AGENT_CONSOLE_PERF__.reset());
         results.push(
           await measure(page, session, scenario, run, () =>
             page.evaluate(
-              ({ name, options }) => globalThis.__AGENT_CONSOLE_PERF__.runScenario(name, options),
+              ({ name, prepared, options }) =>
+                globalThis.__AGENT_CONSOLE_PERF__.runPreparedScenario(name, prepared, options),
               {
                 name: scenario,
+                prepared,
                 options: { seedCount, appendCount, steadyCount, cadenceMs },
               },
             ),
@@ -208,6 +213,40 @@ async function main(): Promise<void> {
       }
 
       await context.close();
+    }
+
+    if (!smoke) {
+      for (const scenario of cpuProfileScenarios) {
+        const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+        const page = await context.newPage();
+        const session = await context.newCDPSession(page);
+        await page.addInitScript({ content: "globalThis.__name = (target) => target;" });
+        await prepare(page);
+        const options = { seedCount, appendCount, steadyCount, cadenceMs };
+        const prepared = await page.evaluate(
+          (value) => globalThis.__AGENT_CONSOLE_PERF__.prepareScenario(value),
+          options,
+        );
+        await page.evaluate(() => globalThis.__AGENT_CONSOLE_PERF__.reset());
+        const diagnostic = await measure(
+          page,
+          session,
+          scenario,
+          -1,
+          () =>
+            page.evaluate(
+              ({ name, prepared, options }) =>
+                globalThis.__AGENT_CONSOLE_PERF__.runPreparedScenario(name, prepared, options),
+              { name: scenario, prepared, options },
+            ),
+          true,
+        );
+        writeFileSync(
+          join(outputDir, `${scenario}-cpu-diagnostic.json`),
+          JSON.stringify(diagnostic, null, 2),
+        );
+        await context.close();
+      }
     }
 
     for (const result of results) {

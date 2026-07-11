@@ -4,7 +4,7 @@
 
 **Phase 4.0 checkpoint complete: no runtime cache change proposed.**
 
-**Comprehensive cache validation is not complete.**
+**Final measured decision**: #123's production Agent Console workload does not justify a cache change. This is not a claim of global optimality.
 
 ---
 
@@ -330,3 +330,7 @@ Before claiming comprehensive cache validation, add:
 **Note**: Profiler data collected at c4182b6c. Workload definitions and counter-collection logic used by this report have not changed since that data commit. Later commits removed invalid timing/heap/control-arm measurements from the profiler tool and updated documentation and output labeling.
 
 **Output**: `docs/perf/phase4-profiler-output-c4182b6c-annotated.txt` (annotated historical transcript)
+
+## Production workload follow-up
+
+PR #123 completed the Agent Console production workload profile. It found and contained an application replay-history publication hotspot, but supplied no evidence for changing Cell cache capacity, eviction, text/wrap caches, provider caches, or virtual scrolling. Phase 4.0 remains a no-change decision for those areas.

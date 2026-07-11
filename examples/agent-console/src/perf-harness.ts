@@ -10,7 +10,13 @@ export const AGENT_CONSOLE_PROFILE_SCENARIOS = [
   "stream-scroll-interaction",
 ] as const;
 export type AgentConsoleProfileScenario = (typeof AGENT_CONSOLE_PROFILE_SCENARIOS)[number];
-
+export const AGENT_CONSOLE_PROFILE_DEFAULTS = Object.freeze({
+  seedCount: 6_000,
+  appendCount: 1_000,
+  steadyCount: 400,
+  cadenceMs: 12,
+  batchSize: 10,
+});
 export interface AgentConsoleProfileOptions {
   seedCount?: number;
   appendCount?: number;
@@ -18,17 +24,28 @@ export interface AgentConsoleProfileOptions {
   cadenceMs?: number;
   batchSize?: number;
 }
-
+export type AgentConsoleProfileInputLatency = Readonly<{
+  inputToCommitMs: number;
+  inputToDomFlushMs: number | null;
+  inputToPaintOpportunityMs: number | null;
+  scrollChanged: boolean;
+  scrollFrameObserved: boolean;
+  direction: -1 | 1;
+}>;
 export interface AgentConsoleProfileAdapter {
   api: AgentConsoleApi;
   now(): number;
   append(index: number): void;
   yieldTask(): Promise<void>;
   yieldFrame(): Promise<void>;
-  dispatchWheel(delta: number): Promise<number>;
+  sleepUntil(deadline: number): Promise<void>;
+  dispatchWheel(delta: number): Promise<AgentConsoleProfileInputLatency>;
   waitUntilSettled(): Promise<void>;
 }
-
+export type PreparedAgentConsoleProfile = Readonly<{
+  seedCount: number;
+  appendStartIndex: number;
+}>;
 export interface AgentConsoleProfileResult {
   scenario: AgentConsoleProfileScenario;
   elapsedMs: number;
@@ -47,13 +64,14 @@ export interface AgentConsoleProfileResult {
     firstLineIndex: number;
   }>;
 }
-
 interface ViewportAnchor {
   scrollTop: number;
   firstLineIndex: number;
   firstVisibleRow: string;
 }
-
+function optionsWithDefaults(options: AgentConsoleProfileOptions) {
+  return { ...AGENT_CONSOLE_PROFILE_DEFAULTS, ...options };
+}
 function viewportAnchor(api: AgentConsoleApi): ViewportAnchor {
   const metrics = api.metrics.value;
   return {
@@ -62,37 +80,35 @@ function viewportAnchor(api: AgentConsoleApi): ViewportAnchor {
     firstVisibleRow: api.getTranscriptRows().find((row) => row.length > 0) ?? "",
   };
 }
-
 async function appendFramed(
   adapter: AgentConsoleProfileAdapter,
   startIndex: number,
   count: number,
   batchSize: number,
-): Promise<void> {
+) {
   for (let start = 0; start < count; start += batchSize) {
-    for (let offset = start; offset < Math.min(count, start + batchSize); offset++) {
+    for (let offset = start; offset < Math.min(count, start + batchSize); offset++)
       adapter.append(startIndex + offset);
-    }
     await adapter.yieldTask();
     await adapter.yieldFrame();
   }
 }
-
 async function appendSteady(
   adapter: AgentConsoleProfileAdapter,
   startIndex: number,
   count: number,
   cadenceMs: number,
-): Promise<void> {
+) {
+  let deadline = adapter.now();
   for (let offset = 0; offset < count; offset++) {
     adapter.append(startIndex + offset);
-    await adapter.yieldFrame();
-    if (cadenceMs > 0) await new Promise<void>((resolve) => setTimeout(resolve, cadenceMs));
+    deadline += cadenceMs;
+    if (cadenceMs > 0) await adapter.sleepUntil(deadline);
     else await adapter.yieldTask();
   }
+  await adapter.waitUntilSettled();
 }
-
-async function settleSearch(adapter: AgentConsoleProfileAdapter): Promise<void> {
+async function settleSearch(adapter: AgentConsoleProfileAdapter) {
   for (let turn = 0; turn < 240; turn++) {
     await adapter.yieldFrame();
     const status = adapter.api.searchState.value.status;
@@ -101,37 +117,30 @@ async function settleSearch(adapter: AgentConsoleProfileAdapter): Promise<void> 
   }
   throw new Error("search-large-history did not settle");
 }
-
 export async function prepareAgentConsoleProfile(
   adapter: AgentConsoleProfileAdapter,
-  seedCount: number,
-): Promise<number> {
+  options: AgentConsoleProfileOptions = {},
+): Promise<PreparedAgentConsoleProfile> {
+  const { seedCount } = optionsWithDefaults(options);
   adapter.api.seed(seedCount);
   await adapter.waitUntilSettled();
   adapter.api.jumpToBottom();
   await adapter.waitUntilSettled();
-  const appendStartIndex = adapter.api.replayTotal.value;
-  adapter.api.clearFramePerf();
-  return appendStartIndex;
+  return { seedCount, appendStartIndex: adapter.api.replayTotal.value };
 }
-
-export async function runAgentConsoleProfileScenario(
+export async function runPreparedAgentConsoleProfileScenario(
   adapter: AgentConsoleProfileAdapter,
   scenario: AgentConsoleProfileScenario,
+  prepared: PreparedAgentConsoleProfile,
   options: AgentConsoleProfileOptions = {},
 ): Promise<AgentConsoleProfileResult> {
-  const seedCount = options.seedCount ?? 6_000;
-  const appendCount = options.appendCount ?? 1_000;
-  const steadyCount = options.steadyCount ?? 400;
-  const cadenceMs = options.cadenceMs ?? 12;
-  const batchSize = options.batchSize ?? 10;
-  const appendStartIndex = await prepareAgentConsoleProfile(adapter, seedCount);
+  const { appendCount, steadyCount, cadenceMs, batchSize } = optionsWithDefaults(options);
+  const { appendStartIndex, seedCount } = prepared;
   const frameSamples: FramePerfSample[] = [];
   const unsubscribe = adapter.api.subscribeFramePerf((sample) => frameSamples.push(sample));
   const started = adapter.now();
   const correctness: Record<string, boolean | number | string> = {};
   const diagnostics: Record<string, number | string | readonly number[]> = {};
-
   try {
     if (scenario === "tail-stream-steady") {
       await appendSteady(adapter, appendStartIndex, steadyCount, cadenceMs);
@@ -152,9 +161,8 @@ export async function runAgentConsoleProfileScenario(
       await appendFramed(adapter, appendStartIndex, appendCount, batchSize);
       const after = viewportAnchor(adapter.api);
       correctness.detachedAfterAppend = adapter.api.metrics.value?.atBottom === false;
-      const retentionShifted = after.firstLineIndex !== before.firstLineIndex;
       correctness.viewportAnchorPreserved = after.firstVisibleRow === before.firstVisibleRow;
-      diagnostics.retentionShifted = retentionShifted ? 1 : 0;
+      diagnostics.retentionShifted = after.firstLineIndex !== before.firstLineIndex ? 1 : 0;
       diagnostics.scrollTopDelta = after.scrollTop - before.scrollTop;
       diagnostics.firstLineIndexDelta = after.firstLineIndex - before.firstLineIndex;
       diagnostics.scrollTopBefore = before.scrollTop;
@@ -170,24 +178,40 @@ export async function runAgentConsoleProfileScenario(
       correctness.matches = adapter.api.searchState.value.matchCount;
       correctness.hasMatches = adapter.api.searchState.value.matchCount > 0;
     } else {
-      const inputToPaintMs: number[] = [];
+      const inputLatencies: AgentConsoleProfileInputLatency[] = [];
+      let deadline = adapter.now();
       for (let offset = 0; offset < steadyCount; offset++) {
         adapter.append(appendStartIndex + offset);
         if (offset % 8 === 0) {
-          inputToPaintMs.push(await adapter.dispatchWheel(offset % 16 === 0 ? -6 : 6));
+          inputLatencies.push(await adapter.dispatchWheel(offset % 16 === 0 ? -6 : 6));
         }
-        await adapter.yieldFrame();
-        if (cadenceMs > 0) await new Promise<void>((resolve) => setTimeout(resolve, cadenceMs));
+        deadline += cadenceMs;
+        if (cadenceMs > 0) await adapter.sleepUntil(deadline);
+        else await adapter.yieldTask();
       }
-      diagnostics.inputToPaintMs = inputToPaintMs;
+      await adapter.waitUntilSettled();
+      diagnostics.inputToCommitMs = inputLatencies.map((sample) => sample.inputToCommitMs);
+      diagnostics.inputToDomFlushMs = inputLatencies.flatMap((sample) =>
+        sample.inputToDomFlushMs == null ? [] : [sample.inputToDomFlushMs],
+      );
+      diagnostics.inputToPaintOpportunityMs = inputLatencies.flatMap((sample) =>
+        sample.inputToPaintOpportunityMs == null ? [] : [sample.inputToPaintOpportunityMs],
+      );
+      correctness.inputSamples = inputLatencies.length;
+      correctness.inputSamplesCorrect = inputLatencies.length === Math.ceil(steadyCount / 8);
+      correctness.scrollChanged = inputLatencies.some((sample) => sample.scrollChanged);
+      correctness.scrollFramesObserved = inputLatencies.some(
+        (sample) => sample.scrollFrameObserved,
+      );
+      correctness.directionReversalObserved = inputLatencies.some(
+        (sample, index) => index > 0 && sample.direction !== inputLatencies[index - 1]?.direction,
+      );
       correctness.contentVisible = adapter.api.getTranscriptRows().some((row) => row.length > 0);
     }
-
     await adapter.waitUntilSettled();
   } finally {
     unsubscribe();
   }
-
   const elapsedMs = adapter.now() - started;
   const finalReplayTotal = adapter.api.replayTotal.value;
   const expectedAdded =
@@ -199,14 +223,12 @@ export async function runAgentConsoleProfileScenario(
   const eventsAdded = finalReplayTotal - appendStartIndex;
   correctness.eventCount = eventsAdded;
   correctness.eventCountCorrect = eventsAdded === expectedAdded;
-  const metrics = adapter.api.metrics.value;
   const failed = Object.entries(correctness).filter(
     ([, value]) => value === false || value === "error",
   );
-  if (failed.length) {
+  if (failed.length)
     throw new Error(`${scenario} correctness failed: ${failed.map(([key]) => key).join(", ")}`);
-  }
-
+  const metrics = adapter.api.metrics.value;
   return {
     scenario,
     elapsedMs,
@@ -225,4 +247,13 @@ export async function runAgentConsoleProfileScenario(
       firstLineIndex: metrics?.firstLineIndex ?? 0,
     },
   };
+}
+export async function runAgentConsoleProfileScenario(
+  adapter: AgentConsoleProfileAdapter,
+  scenario: AgentConsoleProfileScenario,
+  options: AgentConsoleProfileOptions = {},
+) {
+  const prepared = await prepareAgentConsoleProfile(adapter, options);
+  adapter.api.clearFramePerf();
+  return runPreparedAgentConsoleProfileScenario(adapter, scenario, prepared, options);
 }

@@ -237,7 +237,7 @@
     "profile:agent-console:cli": "tsx scripts/profile-agent-console-cli.ts",
     "profile:agent-console:browser": "tsx scripts/profile-agent-console-browser.ts",
     "profile:agent-console:summarize": "tsx scripts/summarize-agent-console-profile.ts",
-    "profile:agent-console": "pnpm run profile:agent-console:cli && pnpm run profile:agent-console:browser && pnpm run profile:agent-console:summarize",
+    "profile:agent-console": "tsx scripts/profile-agent-console.ts",
     "profile:agent-console:smoke": "AGENT_CONSOLE_PROFILE_SMOKE=1 pnpm run profile:agent-console",
     "example:tlog-view-lab": "pnpm run build && VT_SMOKE=1 tsx examples/tlog-view-lab.ts",
     "run:basic:terminal": "pnpm run build && pnpm -C examples/basic terminal",

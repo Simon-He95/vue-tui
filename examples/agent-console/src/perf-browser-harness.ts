@@ -4,8 +4,9 @@ import type {
   AgentConsoleProfileOptions,
   AgentConsoleProfileResult,
   AgentConsoleProfileScenario,
+  PreparedAgentConsoleProfile,
 } from "./perf-harness";
-import { runAgentConsoleProfileScenario } from "./perf-harness";
+import { prepareAgentConsoleProfile, runPreparedAgentConsoleProfileScenario } from "./perf-harness";
 import { nextTick } from "vue";
 
 export type AgentConsoleBrowserPerfApi = Readonly<{
@@ -16,8 +17,10 @@ export type AgentConsoleBrowserPerfApi = Readonly<{
   appendSteady: (count: number, cadenceMs?: number) => Promise<void>;
   scrollBy: (delta: number) => Promise<void>;
   search: (query: string) => Promise<void>;
-  runScenario: (
+  prepareScenario: (options?: AgentConsoleProfileOptions) => Promise<PreparedAgentConsoleProfile>;
+  runPreparedScenario: (
     scenario: AgentConsoleProfileScenario,
+    prepared: PreparedAgentConsoleProfile,
     options?: AgentConsoleProfileOptions,
   ) => Promise<AgentConsoleProfileResult>;
   snapshot: () => Readonly<{
@@ -27,6 +30,10 @@ export type AgentConsoleBrowserPerfApi = Readonly<{
     replayTotal: number;
     inputVisible: boolean;
     rendererDebugStats: ReturnType<AgentConsoleApi["getRendererDebugStats"]>;
+    rendererDelta: Readonly<{
+      flushCount: number;
+      rowRender: Record<string, number>;
+    }>;
     domFlushSamples: readonly { startedAt: number; durationMs: number; planeRows: number }[];
   }>;
 }>;
@@ -44,10 +51,74 @@ async function settle(turns = 4): Promise<void> {
   }
 }
 
+function browserAdapter(api: AgentConsoleApi, getSamples: () => readonly FramePerfSample[]) {
+  return {
+    api,
+    now: () => performance.now(),
+    append: (index: number) => api.appendSyntheticChunk(index),
+    async yieldTask() {
+      await new Promise<void>((done) => setTimeout(done, 0));
+    },
+    async yieldFrame() {
+      await nextTick();
+      await new Promise<void>((done) => requestAnimationFrame(() => done()));
+    },
+    async sleepUntil(deadline: number) {
+      await new Promise<void>((done) =>
+        setTimeout(done, Math.max(0, deadline - performance.now())),
+      );
+    },
+    async dispatchWheel(delta: number) {
+      const started = performance.now();
+      const beforeTop = api.metrics.value?.scrollTop ?? -1;
+      const beforeFrame = getSamples().at(-1)?.frameId ?? -1;
+      const beforeFlush = api.getRendererDebugStats()?.flush.count ?? 0;
+      api.dispatchProfileWheel(delta, started);
+      for (let turn = 0; turn < 60; turn++) {
+        await nextTick();
+        await new Promise<void>((done) => requestAnimationFrame(() => done()));
+        if (getSamples().some((sample) => sample.frameId > beforeFrame)) break;
+      }
+      const commitAt = performance.now();
+      for (let turn = 0; turn < 60; turn++) {
+        if ((api.getRendererDebugStats()?.flush.count ?? 0) > beforeFlush) break;
+        await new Promise<void>((done) => requestAnimationFrame(() => done()));
+      }
+      const flushAt = performance.now();
+      await new Promise<void>((done) => requestAnimationFrame(() => done()));
+      const afterTop = api.metrics.value?.scrollTop ?? -1;
+      return {
+        inputToCommitMs: commitAt - started,
+        inputToDomFlushMs: flushAt - started,
+        inputToPaintOpportunityMs: performance.now() - started,
+        scrollChanged: afterTop !== beforeTop,
+        scrollFrameObserved: getSamples().some((sample) => sample.frameId > beforeFrame),
+        direction: (delta < 0 ? -1 : 1) as -1 | 1,
+      };
+    },
+    async waitUntilSettled() {
+      await settle(8);
+    },
+  };
+}
+
 export function installAgentConsoleBrowserPerf(api: AgentConsoleApi): () => void {
   let samples: FramePerfSample[] = [];
   let domFlushSamples: { startedAt: number; durationMs: number; planeRows: number }[] = [];
   let lastFlushStartedAt = Number.NEGATIVE_INFINITY;
+  let rendererFlushBaseline = 0;
+  let rendererRowBaseline: Record<string, number> = {};
+  const rendererTotals = () => {
+    const stats = api.getRendererDebugStats();
+    return {
+      flushCount: stats?.flush.count ?? 0,
+      rowRender: Object.fromEntries(
+        Object.entries(stats?.rowRender.total ?? {}).filter(
+          (entry): entry is [string, number] => typeof entry[1] === "number",
+        ),
+      ),
+    };
+  };
   let polling = true;
   const pollRenderer = () => {
     if (!polling) return;
@@ -69,7 +140,11 @@ export function installAgentConsoleBrowserPerf(api: AgentConsoleApi): () => void
     reset() {
       samples = [];
       domFlushSamples = [];
-      lastFlushStartedAt = Number.NEGATIVE_INFINITY;
+      lastFlushStartedAt =
+        api.getRendererDebugStats()?.flush.last?.startedAt ?? Number.NEGATIVE_INFINITY;
+      const rendererBaseline = rendererTotals();
+      rendererFlushBaseline = rendererBaseline.flushCount;
+      rendererRowBaseline = rendererBaseline.rowRender;
       api.clearFramePerf();
       performance.clearMarks();
       performance.clearMeasures();
@@ -105,41 +180,37 @@ export function installAgentConsoleBrowserPerf(api: AgentConsoleApi): () => void
         if (api.searchState.value.status !== "scanning") break;
       }
     },
-    runScenario(scenario, options) {
-      return runAgentConsoleProfileScenario(
-        {
-          api,
-          now: () => performance.now(),
-          append: (index) => api.appendSyntheticChunk(index),
-          async yieldTask() {
-            await new Promise<void>((done) => setTimeout(done, 0));
-          },
-          async yieldFrame() {
-            await nextTick();
-            await new Promise<void>((done) => requestAnimationFrame(() => done()));
-          },
-          async dispatchWheel(delta) {
-            const started = performance.now();
-            api.scrollBy(delta);
-            await nextTick();
-            await new Promise<void>((done) => requestAnimationFrame(() => done()));
-            return performance.now() - started;
-          },
-          async waitUntilSettled() {
-            await settle(8);
-          },
-        },
+    prepareScenario(options) {
+      return prepareAgentConsoleProfile(
+        browserAdapter(api, () => samples),
+        options,
+      );
+    },
+    runPreparedScenario(scenario, prepared, options) {
+      return runPreparedAgentConsoleProfileScenario(
+        browserAdapter(api, () => samples),
         scenario,
+        prepared,
         options,
       );
     },
     snapshot() {
+      const rendererCurrent = rendererTotals();
       return {
         samples: samples.slice(),
         metrics: api.metrics.value,
         search: api.searchState.value,
         replayTotal: api.replayTotal.value,
         rendererDebugStats: api.getRendererDebugStats(),
+        rendererDelta: {
+          flushCount: rendererCurrent.flushCount - rendererFlushBaseline,
+          rowRender: Object.fromEntries(
+            Object.entries(rendererCurrent.rowRender).map(([key, value]) => [
+              key,
+              value - (rendererRowBaseline[key] ?? 0),
+            ]),
+          ),
+        },
         domFlushSamples: domFlushSamples.slice(),
         inputVisible: api
           .getTerminalSnapshot()

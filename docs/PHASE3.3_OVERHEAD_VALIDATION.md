@@ -1,8 +1,8 @@
 # Phase 3.3: Instrumentation Overhead Validation
 
-**Status**: ⚠️ Initial Run Complete; Acceptance Criteria Not Met  
-**Related**: #119 (reopened)  
-**Type**: Performance validation (required)
+**Status**: ✅ Complete — production strip validated and merged
+**Related**: #119 (closed), #122 (merged), #123 (real workload closure)
+**Type**: Performance validation (complete)
 
 ---
 
@@ -150,7 +150,7 @@ Per #119, if runtime regression > 5% proven:
 
 **Critical limitation**: Measured tsx executing `src/*`, NOT published dist or real workloads.
 
-**Detailed analysis**: See `docs/PHASE3.3_RESULTS.md`  
+**Detailed analysis**: See `docs/PHASE3.3_RESULTS.md`
 **Raw data**: `docs/perf/phase3.3-overhead-results.json`, `docs/perf/phase3.3-bundle-sizes.json`
 
 **Next required**:
@@ -203,3 +203,9 @@ Per #119, if runtime regression > 5% proven:
 - Phase 4.0: #118 (identified this as required)
 - Phase 3.1: #116, Phase 3.2: #117
 - Phase 2: #115 (baseline harness)
+
+---
+
+## Final closure (2026-07-11)
+
+PR #122 validated that standard ESM/CJS and packed consumers contain no instrumentation collector, no no-op stub, and no hot-path dispatch. PR #123 then exercised the production Agent Console package in CLI and Chromium. The only accepted follow-up is the measured Agent Console replay-history publication optimization. No cache, long-text, provider, renderer-architecture, or virtual-scroll change is justified by this workload.

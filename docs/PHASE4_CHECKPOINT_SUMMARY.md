@@ -6,7 +6,7 @@
 
 **Decision**: No runtime cache change proposed
 
-**Comprehensive validation**: ❌ Not complete
+**Production workload follow-up**: ✅ Complete in #123; no cache change justified
 
 ---
 
@@ -154,3 +154,7 @@ Required before:
 Engineering decision: Keep implementation unchanged due to insufficient evidence for change.
 
 **Not a validation** that current cache is optimal or adequate for all scenarios.
+
+## Final workload status
+
+Agent Console production profiling completed in #123. The measured replay-history optimization is accepted. Cache, long-text, provider, renderer architecture, and virtual-scroll changes remain unjustified by the measured workload. The current performance initiative is closed.
