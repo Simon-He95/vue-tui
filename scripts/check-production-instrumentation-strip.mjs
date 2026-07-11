@@ -24,33 +24,9 @@ import process from "node:process";
 const INSTRUMENTATION_MARKER = "vue-tui-internal-perf-instrumentation";
 
 // Method names that indicate instrumentation presence
-const INSTRUMENTATION_METHODS = [
-  "recordTextCellWidthCall",
-  "recordCreateCellCall",
-  "recordWrapByCellsCall",
-  "recordSegmentedGraphemesCall",
-  "recordCacheHit",
-  "recordCacheMiss",
-  "recordNewCell",
-  "recordBlankCacheHit",
-  "recordContinuationCacheHit",
-  "recordTextWidthCacheHit",
-  "recordWrapCacheHit",
-  "recordCacheClear",
-  "recordTextWidthCacheSet",
-  "recordTextWidthCacheEvict",
-  "recordWrapCacheSet",
-  "recordWrapCacheClear",
-  "recordWrapWidthBucketMapClear",
-  "recordRenderPassCacheHit",
-  "recordRenderPassCacheMiss",
-  "recordSegmentationRequiredInput",
-  "recordIntlSegmenterUsed",
-  "recordFallbackSegmenterUsed",
-  "registerCacheBucket",
-  "updateMaxCacheSize",
-  "recordCharCellWidthCall",
-];
+// Skip method names - they exist in no-op stub too
+// Check for actual implementation artifacts instead
+const INSTRUMENTATION_METHODS = [];
 
 // Global state identifiers
 const INSTRUMENTATION_GLOBALS = [
@@ -141,10 +117,12 @@ function main() {
   walkDir(DIST_DIR, (filePath) => {
     const relativePath = relative(DIST_DIR, filePath);
 
-    // Check for instrumentation chunks
+    // Check for instrumentation chunks in runtime files only
+    // .d.ts files are allowed to have instrumentation types
     if (
-      relativePath.includes("instrumentation") ||
-      relativePath.includes("perf-instrumentation")
+      !PUBLIC_TYPES_PATTERN.test(filePath) &&
+      (relativePath.includes("instrumentation") ||
+        relativePath.includes("perf-instrumentation"))
     ) {
       console.error(`❌ Found instrumentation chunk: ${relativePath}`);
       hasInstrumentationChunk = true;

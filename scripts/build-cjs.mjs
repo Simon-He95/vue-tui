@@ -43,16 +43,77 @@ const productionDefine = {
 const instrumentationStripPlugin = {
   name: "instrumentation-strip",
   setup(build) {
-    // Match any import ending with instrumentation (with or without .js/.ts)
-    build.onResolve(
-      { filter: /\/perf\/instrumentation(\.js|\.ts)?$/ },
-      (args) => {
-        // Return the resolved path to no-op stub
+    // Use namespace to inject no-op stub
+    build.onResolve({ filter: /.*/ }, (args) => {
+      // Intercept instrumentation imports
+      if (
+        args.path.endsWith("/perf/instrumentation.js") ||
+        args.path.endsWith("/perf/instrumentation.ts") ||
+        args.path === "../perf/instrumentation.js" ||
+        args.path === "./perf/instrumentation.js" ||
+        args.path === "../../core/perf/instrumentation.js"
+      ) {
         return {
-          path: resolve(rootDir, "src/core/perf/instrumentation-noop.ts"),
+          path: args.path,
+          namespace: "instrumentation-noop",
         };
-      },
-    );
+      }
+    });
+
+    build.onLoad({ filter: /.*/, namespace: "instrumentation-noop" }, () => {
+      return {
+        contents: `
+          const noop = () => {};
+          const noopWithArg = (_arg) => {};
+          const noopWithArgs = (..._args) => {};
+          
+          export const cellInstr = {
+            recordCreateCellCall: noop,
+            recordCharCellWidthCall: noop,
+            recordCacheHit: noopWithArg,
+            recordCacheMiss: noopWithArg,
+            recordNewCell: noop,
+            recordBlankCacheHit: noop,
+            recordBlankCacheMiss: noop,
+            recordContinuationCacheHit: noop,
+            recordContinuationCacheMiss: noop,
+            recordCacheClear: noopWithArg,
+            registerCacheBucket: noopWithArgs,
+            updateMaxCacheSize: noopWithArgs,
+          };
+          
+          export const textInstr = {
+            recordTextCellWidthCall: noopWithArgs,
+            recordRenderPassCacheHit: noop,
+            recordRenderPassCacheMiss: noop,
+            recordTextWidthCacheHit: noop,
+            recordTextWidthCacheMiss: noop,
+            recordTextWidthCacheSet: noop,
+            recordTextWidthCacheEvict: noop,
+            recordWrapByCellsCall: noop,
+            recordWrapCacheHit: noop,
+            recordWrapCacheMiss: noop,
+            recordWrapCacheClear: noop,
+            recordWrapCacheSet: noop,
+            recordWrapWidthBucketMapClear: noop,
+          };
+          
+          export const graphemeInstr = {
+            recordSegmentedGraphemesCall: noop,
+            recordSegmentationRequiredInput: noop,
+            recordIntlSegmenterUsed: noop,
+            recordFallbackSegmenterUsed: noop,
+          };
+          
+          export const isInstrumentationEnabled = () => false;
+          export const enableInstrumentation = noop;
+          export const disableInstrumentation = noop;
+          export const resetInstrumentation = noop;
+          export const getInstrumentationMetrics = () => ({});
+        `,
+        loader: "js",
+      };
+    });
   },
 };
 
