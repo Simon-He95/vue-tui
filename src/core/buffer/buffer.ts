@@ -3,10 +3,6 @@ import { charCellWidth } from "./width.js";
 import type { WidthProvider } from "./width.js";
 import { cellInstr } from "../perf/instrumentation.js";
 
-// Compile-time constant for instrumentation stripping in production builds
-const PERF_INSTRUMENTATION_COMPILED =
-  typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ? true : __VUE_TUI_PERF_INSTRUMENTATION__;
-
 const DEFAULT_STYLE: Style = Object.freeze({});
 const styleCache = new WeakMap<object, Style>();
 const blankCellCache = new WeakMap<Style, Cell>();
@@ -35,7 +31,7 @@ function getOrCreateCellCache(
   map.set(style, next);
 
   // Register bucket for distribution tracking when instrumentation enabled
-  if (PERF_INSTRUMENTATION_COMPILED) {
+  if (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" || __VUE_TUI_PERF_INSTRUMENTATION__) {
     cellInstr.registerCacheBucket(map === cellCacheWidth2 ? 2 : 1, next);
   }
 
@@ -43,14 +39,14 @@ function getOrCreateCellCache(
 }
 
 export function createCell(ch: string, style?: Style, widthProvider?: WidthProvider): Cell {
-  if (PERF_INSTRUMENTATION_COMPILED) {
+  if (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" || __VUE_TUI_PERF_INSTRUMENTATION__) {
     cellInstr.recordCreateCellCall();
   }
 
   if (ch === " ") return createBlankCell(style);
 
   const normalizedStyle = normalizeStyle(style);
-  if (PERF_INSTRUMENTATION_COMPILED) {
+  if (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" || __VUE_TUI_PERF_INSTRUMENTATION__) {
     cellInstr.recordCharCellWidthCall();
   }
   const width = charCellWidth(ch, widthProvider);
@@ -62,13 +58,16 @@ export function createCell(ch: string, style?: Style, widthProvider?: WidthProvi
 
   const cached = map.get(ch);
   if (cached) {
-    if (PERF_INSTRUMENTATION_COMPILED) {
+    if (
+      typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ||
+      __VUE_TUI_PERF_INSTRUMENTATION__
+    ) {
       cellInstr.recordCacheHit(width as 1 | 2);
     }
     return cached;
   }
 
-  if (PERF_INSTRUMENTATION_COMPILED) {
+  if (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" || __VUE_TUI_PERF_INSTRUMENTATION__) {
     cellInstr.recordCacheMiss(width as 1 | 2);
     cellInstr.recordNewCell();
   }
@@ -76,12 +75,15 @@ export function createCell(ch: string, style?: Style, widthProvider?: WidthProvi
   const cell: Cell = { ch, width, style: normalizedStyle };
   map.set(ch, cell);
 
-  if (PERF_INSTRUMENTATION_COMPILED) {
+  if (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" || __VUE_TUI_PERF_INSTRUMENTATION__) {
     cellInstr.updateMaxCacheSize(width as 1 | 2, map.size);
   }
 
   if (map.size > MAX_CACHED_CELLS_PER_STYLE) {
-    if (PERF_INSTRUMENTATION_COMPILED) {
+    if (
+      typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ||
+      __VUE_TUI_PERF_INSTRUMENTATION__
+    ) {
       cellInstr.recordCacheClear(width as 1 | 2);
     }
     map.clear();
@@ -94,13 +96,16 @@ export function createBlankCell(style?: Style): Cell {
   const normalizedStyle = normalizeStyle(style);
   const cached = blankCellCache.get(normalizedStyle);
   if (cached) {
-    if (PERF_INSTRUMENTATION_COMPILED) {
+    if (
+      typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ||
+      __VUE_TUI_PERF_INSTRUMENTATION__
+    ) {
       cellInstr.recordBlankCacheHit();
     }
     return cached;
   }
 
-  if (PERF_INSTRUMENTATION_COMPILED) {
+  if (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" || __VUE_TUI_PERF_INSTRUMENTATION__) {
     cellInstr.recordBlankCacheMiss();
   }
 
@@ -117,13 +122,16 @@ export function createContinuationCell(style?: Style): Cell {
   const normalizedStyle = normalizeStyle(style);
   const cached = continuationCellCache.get(normalizedStyle);
   if (cached) {
-    if (PERF_INSTRUMENTATION_COMPILED) {
+    if (
+      typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ||
+      __VUE_TUI_PERF_INSTRUMENTATION__
+    ) {
       cellInstr.recordContinuationCacheHit();
     }
     return cached;
   }
 
-  if (PERF_INSTRUMENTATION_COMPILED) {
+  if (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" || __VUE_TUI_PERF_INSTRUMENTATION__) {
     cellInstr.recordContinuationCacheMiss();
   }
 

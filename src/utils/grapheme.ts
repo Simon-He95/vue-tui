@@ -1,9 +1,5 @@
 import { graphemeInstr } from "../core/perf/instrumentation.js";
 
-// Compile-time constant for instrumentation stripping in production builds
-const PERF_INSTRUMENTATION_COMPILED =
-  typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ? true : __VUE_TUI_PERF_INSTRUMENTATION__;
-
 export interface GraphemeSegment {
   segment: string;
   index: number;
@@ -144,19 +140,22 @@ function fallbackGraphemeSegments(text: string): readonly GraphemeSegment[] {
 export function segmentedGraphemes(text: string): Iterable<GraphemeSegment> | null {
   if (!needsGraphemeSegmentation(text)) return null;
 
-  if (PERF_INSTRUMENTATION_COMPILED) {
+  if (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" || __VUE_TUI_PERF_INSTRUMENTATION__) {
     graphemeInstr.recordSegmentedGraphemesCall();
     graphemeInstr.recordSegmentationRequiredInput();
   }
 
   if (graphemeSegmenter) {
-    if (PERF_INSTRUMENTATION_COMPILED) {
+    if (
+      typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ||
+      __VUE_TUI_PERF_INSTRUMENTATION__
+    ) {
       graphemeInstr.recordIntlSegmenterUsed();
     }
     return graphemeSegmenter.segment(text);
   }
 
-  if (PERF_INSTRUMENTATION_COMPILED) {
+  if (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" || __VUE_TUI_PERF_INSTRUMENTATION__) {
     graphemeInstr.recordFallbackSegmenterUsed();
   }
   return fallbackGraphemeSegments(text);

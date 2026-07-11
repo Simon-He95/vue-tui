@@ -16,9 +16,7 @@ import { join, resolve, normalize } from "node:path";
 import process from "node:process";
 
 const rootDir = process.cwd();
-const realInstrumentationPath = normalize(
-  resolve(rootDir, "src/core/perf/instrumentation.ts"),
-);
+const realInstrumentationPath = normalize(resolve(rootDir, "src/core/perf/instrumentation.ts"));
 const noopInstrumentationPath = normalize(
   resolve(rootDir, "src/core/perf/instrumentation-noop.ts"),
 );
@@ -49,8 +47,14 @@ async function main() {
     process.exit(1);
   }
 
+  const esmPath = join(metafileDir, "esm.json");
   const cjsBrowserPath = join(metafileDir, "cjs-browser.json");
   const cjsCliPath = join(metafileDir, "cjs-cli.json");
+
+  if (!existsSync(esmPath)) {
+    console.error("❌ Error: ESM metafile not found");
+    process.exit(1);
+  }
 
   if (!existsSync(cjsBrowserPath)) {
     console.error("❌ Error: CJS browser metafile not found");
@@ -63,6 +67,20 @@ async function main() {
   }
 
   let foundViolations = false;
+
+  // Check ESM
+  console.log("📦 Checking ESM builds...");
+  const esmMeta = JSON.parse(readFileSync(esmPath, "utf-8"));
+  const esmRealBytes = bytesInOutputs(esmMeta, (path) => path === realInstrumentationPath);
+  const esmNoopBytes = bytesInOutputs(esmMeta, (path) => path === noopInstrumentationPath);
+  console.log(`  Real instrumentation: ${esmRealBytes} bytes`);
+  console.log(`  No-op stub: ${esmNoopBytes} bytes`);
+  if (esmRealBytes > 0 || esmNoopBytes > 0) {
+    console.error("  ❌ FAIL: Instrumentation remains in ESM builds");
+    foundViolations = true;
+  } else {
+    console.log("  ✅ PASS: Both modules at 0 bytes");
+  }
 
   // Check CJS browser
   console.log("📦 Checking CJS browser builds...");
@@ -84,7 +102,8 @@ async function main() {
     console.error(`  ❌ FAIL: Real instrumentation in CJS browser builds`);
     foundViolations = true;
   } else if (browserNoopBytes > 0) {
-    console.warn(`  ⚠️  WARN: No-op stub ${browserNoopBytes} bytes (guards prevent execution)`);
+    console.error(`  ❌ FAIL: No-op stub in CJS browser builds (${browserNoopBytes} bytes)`);
+    foundViolations = true;
   } else {
     console.log(`  ✅ PASS: Both modules at 0 bytes`);
   }
@@ -93,14 +112,8 @@ async function main() {
   console.log("\n📦 Checking CJS CLI build...");
   const cjsCliMeta = JSON.parse(readFileSync(cjsCliPath, "utf-8"));
 
-  const cliRealBytes = bytesInOutputs(
-    cjsCliMeta,
-    (path) => path === realInstrumentationPath,
-  );
-  const cliNoopBytes = bytesInOutputs(
-    cjsCliMeta,
-    (path) => path === noopInstrumentationPath,
-  );
+  const cliRealBytes = bytesInOutputs(cjsCliMeta, (path) => path === realInstrumentationPath);
+  const cliNoopBytes = bytesInOutputs(cjsCliMeta, (path) => path === noopInstrumentationPath);
 
   console.log(`  Real instrumentation: ${cliRealBytes} bytes`);
   console.log(`  No-op stub: ${cliNoopBytes} bytes`);
@@ -109,7 +122,8 @@ async function main() {
     console.error(`  ❌ FAIL: Real instrumentation in CJS CLI build`);
     foundViolations = true;
   } else if (cliNoopBytes > 0) {
-    console.warn(`  ⚠️  WARN: No-op stub ${cliNoopBytes} bytes (guards prevent execution)`);
+    console.error(`  ❌ FAIL: No-op stub in CJS CLI build (${cliNoopBytes} bytes)`);
+    foundViolations = true;
   } else {
     console.log(`  ✅ PASS: Both modules at 0 bytes`);
   }

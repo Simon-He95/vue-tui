@@ -1,4 +1,5 @@
 import { builtinModules } from "node:module";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { defineConfig } from "tsdown";
@@ -32,6 +33,24 @@ const noopInstrumentationPath = resolve(rootDir, "src/core/perf/instrumentation-
 // Rollup plugin to replace instrumentation imports with no-op stub
 const instrumentationStripPlugin = {
   name: "instrumentation-strip",
+  generateBundle(_options, bundle) {
+    const outputs = {};
+    for (const [fileName, output] of Object.entries(bundle)) {
+      if (output.type !== "chunk") continue;
+      const inputs = {};
+      for (const moduleId of Object.keys(output.modules)) {
+        inputs[moduleId] = {
+          bytesInOutput: output.modules[moduleId].renderedLength ?? 0,
+        };
+      }
+      outputs[`dist/${fileName}`] = { inputs };
+    }
+    mkdirSync(resolve(rootDir, "dist/.metafiles"), { recursive: true });
+    writeFileSync(
+      resolve(rootDir, "dist/.metafiles/esm.json"),
+      JSON.stringify({ outputs }, null, 2),
+    );
+  },
   resolveId(source, importer) {
     // Handle relative imports with .js extension
     if (importer && source.includes("/perf/instrumentation")) {

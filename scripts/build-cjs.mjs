@@ -53,7 +53,7 @@ const instrumentationStripPlugin = {
         // Remove .js extension if present, add .ts
         const sourcePath = args.path.replace(/\.js$/, ".ts");
         const resolved = resolve(args.resolveDir, sourcePath);
-        
+
         // Compare with real instrumentation path
         if (resolved === realInstrumentationPath) {
           return { path: noopInstrumentationPath };
@@ -87,6 +87,7 @@ const cjsBrowserResult = await build({
   target: ["es2020"],
   sourcemap: false,
   treeShaking: true,
+  minifySyntax: true,
   metafile: true,
   // Keep dynamic import syntax in browser-facing CJS. The Mermaid bridge uses
   // import("beautiful-mermaid") so CJS consumers can load the optional ESM peer
@@ -128,6 +129,7 @@ const cjsCliResult = await build({
   target: ["node16"],
   sourcemap: false,
   treeShaking: true,
+  minifySyntax: true,
   metafile: true,
   external: ["vue"],
   define: productionDefine,
@@ -135,7 +137,4 @@ const cjsCliResult = await build({
 });
 
 // Save metafile for verification
-writeFileSync(
-  "dist/.metafiles/cjs-cli.json",
-  JSON.stringify(cjsCliResult.metafile, null, 2),
-);
+writeFileSync("dist/.metafiles/cjs-cli.json", JSON.stringify(cjsCliResult.metafile, null, 2));

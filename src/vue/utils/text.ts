@@ -2,10 +2,6 @@ import { charCellWidth, type WidthProvider } from "../../core/buffer/width.js";
 import { segmentedGraphemes } from "../../utils/grapheme.js";
 import { textInstr, isInstrumentationEnabled } from "../../core/perf/instrumentation.js";
 
-// Compile-time constant for instrumentation stripping in production builds
-const PERF_INSTRUMENTATION_COMPILED =
-  typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ? true : __VUE_TUI_PERF_INSTRUMENTATION__;
-
 export interface TextCellSegment {
   text: string;
   cells: number;
@@ -236,14 +232,21 @@ export function textCellWidth(
 
   // Fast path: ASCII is always single-cell and doesn't require grapheme segmentation.
   if (hasAsciiFastPath(provider) && isAscii(text)) {
-    if (PERF_INSTRUMENTATION_COMPILED && isInstrumentationEnabled()) {
+    if (
+      (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ||
+        __VUE_TUI_PERF_INSTRUMENTATION__) &&
+      isInstrumentationEnabled()
+    ) {
       textInstr.recordTextCellWidthCall(text.length, true);
     }
     return text.length;
   }
 
   // Instrumentation only when enabled (avoid extra isAscii check for non-ASCII)
-  if (PERF_INSTRUMENTATION_COMPILED && isInstrumentationEnabled()) {
+  if (
+    (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" || __VUE_TUI_PERF_INSTRUMENTATION__) &&
+    isInstrumentationEnabled()
+  ) {
     textInstr.recordTextCellWidthCall(text.length, false);
   }
 
@@ -251,21 +254,37 @@ export function textCellWidth(
   if (useCache && renderPassDepth > 0) {
     const cached = renderPassTextWidthCache.get(text);
     if (cached != null) {
-      if (PERF_INSTRUMENTATION_COMPILED && isInstrumentationEnabled())
+      if (
+        (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ||
+          __VUE_TUI_PERF_INSTRUMENTATION__) &&
+        isInstrumentationEnabled()
+      )
         textInstr.recordRenderPassCacheHit();
       return cached;
     }
-    if (PERF_INSTRUMENTATION_COMPILED && isInstrumentationEnabled())
+    if (
+      (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ||
+        __VUE_TUI_PERF_INSTRUMENTATION__) &&
+      isInstrumentationEnabled()
+    )
       textInstr.recordRenderPassCacheMiss();
   }
   if (useCache) {
     const cached = textWidthCacheGet(text);
     if (cached != null) {
-      if (PERF_INSTRUMENTATION_COMPILED && isInstrumentationEnabled())
+      if (
+        (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ||
+          __VUE_TUI_PERF_INSTRUMENTATION__) &&
+        isInstrumentationEnabled()
+      )
         textInstr.recordTextWidthCacheHit();
       return cached;
     }
-    if (PERF_INSTRUMENTATION_COMPILED && isInstrumentationEnabled())
+    if (
+      (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ||
+        __VUE_TUI_PERF_INSTRUMENTATION__) &&
+      isInstrumentationEnabled()
+    )
       textInstr.recordTextWidthCacheMiss();
   }
   let cells = 0;
@@ -448,7 +467,11 @@ function getWrapBucket(width: number): Map<string, readonly string[]> {
   if (bucket) return bucket;
   // Guard against terminals that resize through many widths (e.g. dragging window).
   if (wrapCacheByWidth.size >= MAX_WRAP_CACHE_BUCKETS) {
-    if (PERF_INSTRUMENTATION_COMPILED && isInstrumentationEnabled())
+    if (
+      (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ||
+        __VUE_TUI_PERF_INSTRUMENTATION__) &&
+      isInstrumentationEnabled()
+    )
       textInstr.recordWrapWidthBucketMapClear();
     wrapCacheByWidth.clear();
   }
@@ -470,12 +493,15 @@ function textWidthCacheGet(text: string): number | null {
 }
 
 function textWidthCacheSet(text: string, cells: number): void {
-  if (PERF_INSTRUMENTATION_COMPILED) {
+  if (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" || __VUE_TUI_PERF_INSTRUMENTATION__) {
     textInstr.recordTextWidthCacheSet();
   }
   textWidthCache.set(text, cells);
   if (textWidthCache.size > MAX_TEXT_WIDTH_CACHE) {
-    if (PERF_INSTRUMENTATION_COMPILED) {
+    if (
+      typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ||
+      __VUE_TUI_PERF_INSTRUMENTATION__
+    ) {
       textInstr.recordTextWidthCacheEvict();
     }
     const firstKey = textWidthCache.keys().next().value as string | undefined;
@@ -496,7 +522,7 @@ export function wrapByCells(
   width: number,
   provider: WidthProvider = currentTextWidthProvider(),
 ): readonly string[] {
-  if (PERF_INSTRUMENTATION_COMPILED) {
+  if (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" || __VUE_TUI_PERF_INSTRUMENTATION__) {
     textInstr.recordWrapByCellsCall();
   }
 
@@ -507,11 +533,19 @@ export function wrapByCells(
     if (bucket) {
       const cached = bucket.get(text);
       if (cached) {
-        if (PERF_INSTRUMENTATION_COMPILED && isInstrumentationEnabled())
+        if (
+          (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ||
+            __VUE_TUI_PERF_INSTRUMENTATION__) &&
+          isInstrumentationEnabled()
+        )
           textInstr.recordWrapCacheHit();
         return cached;
       }
-      if (PERF_INSTRUMENTATION_COMPILED && isInstrumentationEnabled())
+      if (
+        (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ||
+          __VUE_TUI_PERF_INSTRUMENTATION__) &&
+        isInstrumentationEnabled()
+      )
         textInstr.recordWrapCacheMiss();
     }
 
@@ -526,11 +560,19 @@ export function wrapByCells(
 
     if (bucket) {
       if (bucket.size >= MAX_WRAP_CACHE_PER_WIDTH) {
-        if (PERF_INSTRUMENTATION_COMPILED && isInstrumentationEnabled())
+        if (
+          (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ||
+            __VUE_TUI_PERF_INSTRUMENTATION__) &&
+          isInstrumentationEnabled()
+        )
           textInstr.recordWrapCacheClear();
         bucket.clear();
       }
-      if (PERF_INSTRUMENTATION_COMPILED && isInstrumentationEnabled())
+      if (
+        (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ||
+          __VUE_TUI_PERF_INSTRUMENTATION__) &&
+        isInstrumentationEnabled()
+      )
         textInstr.recordWrapCacheSet();
       bucket.set(text, out);
     }
@@ -540,11 +582,19 @@ export function wrapByCells(
   if (bucket) {
     const cached = bucket.get(text);
     if (cached) {
-      if (PERF_INSTRUMENTATION_COMPILED && isInstrumentationEnabled())
+      if (
+        (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ||
+          __VUE_TUI_PERF_INSTRUMENTATION__) &&
+        isInstrumentationEnabled()
+      )
         textInstr.recordWrapCacheHit();
       return cached;
     }
-    if (PERF_INSTRUMENTATION_COMPILED && isInstrumentationEnabled())
+    if (
+      (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ||
+        __VUE_TUI_PERF_INSTRUMENTATION__) &&
+      isInstrumentationEnabled()
+    )
       textInstr.recordWrapCacheMiss();
   }
 
@@ -606,11 +656,20 @@ export function wrapByCells(
   const res = out.length ? out : [""];
   if (bucket) {
     if (bucket.size >= MAX_WRAP_CACHE_PER_WIDTH) {
-      if (PERF_INSTRUMENTATION_COMPILED && isInstrumentationEnabled())
+      if (
+        (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ||
+          __VUE_TUI_PERF_INSTRUMENTATION__) &&
+        isInstrumentationEnabled()
+      )
         textInstr.recordWrapCacheClear();
       bucket.clear();
     }
-    if (PERF_INSTRUMENTATION_COMPILED && isInstrumentationEnabled()) textInstr.recordWrapCacheSet();
+    if (
+      (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ||
+        __VUE_TUI_PERF_INSTRUMENTATION__) &&
+      isInstrumentationEnabled()
+    )
+      textInstr.recordWrapCacheSet();
     bucket.set(text, res);
   }
   return res;
