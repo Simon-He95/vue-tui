@@ -28,6 +28,11 @@ const forbidNodeBuiltinsPlugin = {
   },
 };
 
+// Production builds: strip performance instrumentation via dead-code elimination
+const productionDefine = {
+  __VUE_TUI_PERF_INSTRUMENTATION__: "false",
+};
+
 // Keep CJS as a separate esbuild step so the package can publish named `.cjs`
 // files alongside tsdown's ESM and declaration output.
 await build({
@@ -59,6 +64,7 @@ await build({
   // load the optional ESM peer through dynamic import at render time.
   external: ["vue", "beautiful-mermaid"],
   plugins: [forbidNodeBuiltinsPlugin],
+  define: productionDefine,
 });
 
 mkdirSync("dist/agent", { recursive: true });
@@ -82,4 +88,5 @@ await build({
   target: ["node16"],
   sourcemap: false,
   external: ["vue"],
+  define: productionDefine,
 });

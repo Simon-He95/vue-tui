@@ -14,6 +14,11 @@ const nodeBuiltins = Array.from(
 
 const browserExternals = ["vue", "stream-markdown-parser", "beautiful-mermaid"];
 
+// Production builds: strip performance instrumentation via dead-code elimination
+const productionDefine = {
+  __VUE_TUI_PERF_INSTRUMENTATION__: "false",
+};
+
 export default defineConfig([
   {
     target: "es2020",
@@ -35,6 +40,7 @@ export default defineConfig([
     dts: false,
     platform: "neutral",
     external: browserExternals,
+    define: productionDefine,
   },
   {
     target: "node16",
@@ -46,5 +52,6 @@ export default defineConfig([
     dts: false,
     platform: "node",
     external: ["vue", ...nodeBuiltins],
+    define: productionDefine,
   },
 ]);
