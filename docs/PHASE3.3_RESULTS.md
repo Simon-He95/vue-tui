@@ -104,7 +104,7 @@ Formal attribution requires targeted ablation tests (A vs B vs C with built arti
 
 ## Overall Status Per #119
 
-**Conclusion**: Initial run complete; acceptance criteria not met; **#119 reopened** pending remediation and proper validation.
+**Historical conclusion (2026-07-10)**: The initial source-path run was inconclusive. **Final closure**: #122 compiled instrumentation out of production artifacts, built-dist and packed-consumer A/B/C passed, #119 closed, and #123 completed the production Agent Console workload profile.
 
 ---
 

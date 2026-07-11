@@ -229,38 +229,9 @@ The current synthetic measurements do not provide sufficient evidence to justify
 
 ---
 
-## Required Follow-up: Disabled-Path Instrumentation Overhead
+## Completed Follow-up: Production Instrumentation Overhead
 
-**This is mandatory** because Phase 3 instrumentation hooks are already present in production hot paths (`createCell`, `textCellWidth`, `wrapByCells`).
-
-### Problem
-
-The current "without instrumentation" arm disables metric collection, but still executes all instrumentation hook functions. Therefore, it does not measure the production cost of adding the instrumentation foundation itself (pre-Phase-3 vs post-Phase-3).
-
-### Required Validation
-
-Compare:
-
-- Commit immediately before Phase 3 instrumentation
-- Current main with instrumentation disabled
-
-**Requirements**:
-
-- Isolated processes or separate worktrees
-- Identical Node/V8/hardware
-- Alternating or randomized execution order
-- Warmup + multiple samples
-- p50/p95 comparison
-- Use Phase 2 baseline harness
-
-**Workloads**:
-
-- createCell hit/miss scenarios
-- Repeated CJK terminal.write
-- textCellWidth ASCII/non-ASCII
-- wrapByCells workloads
-
-**This validation is required independently of cache tuning decisions.**
+#122 compiled instrumentation out of standard ESM/CJS artifacts and validated built-dist plus packed-consumer A/B/C. #119 is closed. #123 then profiled the production Agent Console workload and found no measured justification for cache, long-text, provider, renderer-architecture, or virtual-scroll changes.
 
 ---
 

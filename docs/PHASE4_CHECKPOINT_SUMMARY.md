@@ -104,26 +104,9 @@ No per-style Cell cache capacity or eviction change is justified by the currentl
 
 ## Next Steps
 
-### Required: Phase 3 Disabled-Path Overhead Validation
+### Completed: Phase 3 Production Overhead Validation
 
-**This is mandatory** and independent of cache-tuning decisions.
-
-Phase 3 instrumentation hooks are in production hot paths (`createCell`, `textCellWidth`, `wrapByCells`). The disabled-path production overhead must be validated.
-
-**Compare**:
-
-- Pre-Phase-3 commit (before PR #116)
-- Current main with instrumentation disabled
-
-**Requirements**:
-
-- Isolated processes or separate worktrees
-- Randomized/alternating execution order
-- Warmup + multiple samples
-- p50/p95 comparison with confidence intervals
-- Use Phase 2 baseline harness
-
-**Tracked in #119**.
+#122 removed instrumentation from production artifacts and passed built-dist/consumer validation; #119 is closed. #123 completed the production Agent Console profile and accepted only the contained replay-history append optimization. Cache/long-text/provider/renderer-architecture/virtual-scroll remain no-change for the measured workload.
 
 ---
 

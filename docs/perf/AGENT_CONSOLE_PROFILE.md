@@ -4,7 +4,7 @@
 
 Decision-grade baseline complete. The profiler runs production artifacts, five fresh runs per runtime/scenario, and records frame, renderer/stdout, CPU, memory, retention, and input-latency evidence.
 
-The corrected CPU profile identified one application-level hotspot: `eventLog.value = [...eventLog.value, event]` repeatedly copied and deeply proxied the complete replay history. This PR replaces it with a shallow ref over a mutable backing array while preserving replay API behavior. On the same five-run CLI framed-burst workload, median elapsed time fell from 2,944 ms to 1,595 ms (about 46%), deep Vue reactivity frames disappeared from the top CPU samples, and median retained heap growth fell by roughly 3%. Frame p95 remained low and correctness passed.
+The corrected CPU profile identified one application-level hotspot: `eventLog.value = [...eventLog.value, event]` repeatedly copied and deeply proxied the complete replay history. This PR replaces it with a shallow ref over a mutable backing array while preserving replay API behavior. Using exact corrected-harness commits (`dc02b03` before, `e481e1c` after), the same five-run CLI framed-burst median fell from 2,358 ms to 1,202 ms (49.0%). Deep Vue reactivity samples disappeared from the top CPU functions. Frame, correctness, memory, DOM/stdout, and latency evidence is recorded in the generated schema-v2 audit; raw CPU profiles remain workflow artifacts.
 
 No remaining evidence supports changes to Cell cache capacity/eviction, text/wrap caches, renderer architecture, long-text admission, or virtual scrolling. This closes the current performance initiative after the contained Agent Console optimization.
 
@@ -43,17 +43,17 @@ Local environment: macOS arm64, Node 24.18.0, production package/example, headle
 
 | Runtime  | Scenario                      | Frame p95 median | Five-run range |   CV |
 | -------- | ----------------------------- | ---------------: | -------------: | ---: |
-| CLI      | tail-stream-steady            |          2.39 ms |      2.31–3.01 | 0.10 |
-| CLI      | tail-append-burst-framed      |          2.67 ms |      2.43–2.86 | 0.06 |
-| CLI      | tail-append-burst-single-task |          0.31 ms |      0.25–0.70 | 0.44 |
-| CLI      | detached-append               |          2.33 ms |      2.00–2.47 | 0.08 |
-| CLI      | search-large-history          |          3.47 ms |      3.27–3.53 | 0.03 |
-| CLI      | stream-scroll-interaction     |          2.45 ms |      2.28–2.64 | 0.06 |
-| Chromium | tail-stream-steady            |          0.90 ms |      0.80–0.90 | 0.06 |
-| Chromium | tail-append-burst-framed      |          1.00 ms |      1.00–1.10 | 0.05 |
-| Chromium | tail-append-burst-single-task |          1.10 ms |      1.10–1.20 | 0.04 |
-| Chromium | detached-append               |          0.90 ms |      0.90–0.90 | 0.00 |
-| Chromium | search-large-history          |          1.00 ms |      0.90–1.20 | 0.10 |
-| Chromium | stream-scroll-interaction     |          1.00 ms |      0.90–1.00 | 0.04 |
+| CLI      | tail-stream-steady            |          1.89 ms |      1.86–2.01 | 0.03 |
+| CLI      | tail-append-burst-framed      |          2.46 ms |      2.00–2.65 | 0.11 |
+| CLI      | tail-append-burst-single-task |          0.31 ms |      0.28–0.41 | 0.14 |
+| CLI      | detached-append               |          2.22 ms |      1.85–2.40 | 0.10 |
+| CLI      | search-large-history          |          3.46 ms |      3.16–4.79 | 0.17 |
+| CLI      | stream-scroll-interaction     |          2.06 ms |      1.86–2.71 | 0.15 |
+| Chromium | tail-stream-steady            |          0.80 ms |      0.80–0.90 | 0.05 |
+| Chromium | tail-append-burst-framed      |          1.00 ms |      0.90–1.00 | 0.05 |
+| Chromium | tail-append-burst-single-task |          0.30 ms |      0.30–0.60 | 0.31 |
+| Chromium | detached-append               |          0.90 ms |      0.80–0.90 | 0.05 |
+| Chromium | search-large-history          |          0.90 ms |      0.90–0.90 | 0.00 |
+| Chromium | stream-scroll-interaction     |          0.80 ms |      0.80–0.90 | 0.05 |
 
-The single-task FramePerf values exclude the synchronous blocking interval by design; its elapsed time, Long Task, CPU, and memory fields are authoritative for that stress scenario.
+The single-task FramePerf values exclude the synchronous blocking interval by design; its elapsed time, Long Task, CPU, and memory fields are authoritative for that stress scenario. Timing runs do not enable CPU or the extra TUI profiler; CPU attribution comes from separate diagnostic runs. Browser wheel input travels through native `WheelEvent` and the terminal EventManager: commit latency p95 was 8.7 ms, DOM-flush latency p95 was 17.1 ms, and the documented post-flush paint-opportunity upper bound p95 was 23.9 ms, with non-empty samples and all correctness checks passing.

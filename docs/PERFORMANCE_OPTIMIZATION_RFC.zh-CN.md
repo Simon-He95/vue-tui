@@ -39,7 +39,7 @@
 
 本 RFC 基于代码审查和多轮 review 反馈，提出 vue-tui 性能优化方向和实施建议。
 
-- ✅ **Phase 1-2 完成；Phase 3 实现已合并但验证未完成** - Unicode correctness, baseline, instrumentation
+- ✅ **Phase 1-3 完成** - Unicode correctness、baseline、instrumentation validation 与 production strip 均完成
 - ✅ **Phase 4.0 checkpoint 完成** - Cell-cache 决策：当前证据不足以支持调整，暂不改动
 - ⏳ **Phase 4.1+ 待实施** - 目标 cache 工作负载（若继续 cache 优化）
 - ⚠️ **Phase 3 overhead 验证必需** - 独立于 cache 工作
@@ -514,8 +514,8 @@ const useRenderPassCache =
 ---
 
 **文档状态**: ✅ Roadmap / 执行记录
-**实施状态**: Phase 1-2 完成；Phase 3 实现已合并但验证未完成（#119）；Phase 4.0 checkpoint 完成；Phase 4.1+ 推迟
+**实施状态**: Phase 1-3 完成；#119 已由 #122 关闭；Phase 4.0 checkpoint 维持 no-change；#123 完成真实 workload profile 与局部 Agent Console history 优化
 **验证方式**: 真实 baseline + profiler 数据驱动
 **Unicode 版本**: 17.0.0
 
-**最后更新**: 2026-07-10 (v5, Phase 1-4.0 执行完成，Phase 3.3 跟踪中)
+**最后更新**: 2026-07-11 (v6, #114–#123 当前性能专项完成)

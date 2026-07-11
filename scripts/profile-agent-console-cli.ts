@@ -41,7 +41,6 @@ for (const scenario of AGENT_CONSOLE_PROFILE_SCENARIOS) {
     );
   }
 }
-writeFileSync(resolve(outputDir, "all.json"), JSON.stringify(all, null, 2));
 if (!smoke) {
   for (const scenario of [
     "tail-append-burst-framed",
@@ -68,6 +67,7 @@ if (!smoke) {
     writeFileSync(resolve(outputDir, `${scenario}-cpu-diagnostic.json`), diagnostic);
   }
 }
+writeFileSync(resolve(outputDir, "all.json"), JSON.stringify(all, null, 2));
 writeFileSync(
   resolve(outputDir, "environment.json"),
   JSON.stringify(

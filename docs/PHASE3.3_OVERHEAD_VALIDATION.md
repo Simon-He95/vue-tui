@@ -133,7 +133,7 @@ Per #119, if runtime regression > 5% proven:
 
 ## Results
 
-> **Status**: ⚠️ Initial Run Complete; Acceptance Criteria Not Met
+> **Historical run status (2026-07-10)**: Inconclusive; acceptance criteria were not yet met.
 
 **Initial validation executed**: 2026-07-10
 
@@ -160,7 +160,7 @@ Per #119, if runtime regression > 5% proven:
 - Proper consumer bundle measurement
 - Integration workload benchmarks
 
-**Issue status**: #119 reopened pending remediation and proper validation
+**Issue status**: #119 closed after #122 production strip and built-artifact validation.
 
 ---
 
@@ -179,21 +179,21 @@ Per #119, if runtime regression > 5% proven:
 - [x] Framework validated
 - [x] Benchmarks executed
 - [x] Results analyzed
-- [ ] Decision made (acceptance criteria not met)
+- [x] Decision made (#122 production strip accepted; #123 real-workload closure complete)
 
 ---
 
 ## Conclusion
 
-**Status**: ⚠️ Initial Run Complete; Acceptance Criteria Not Met
+**Final status**: ✅ Complete — #122 removed production instrumentation overhead; #123 completed the production real-workload profile.
 
 - [x] ⚠️ INCONCLUSIVE - p95: 8/9 scenarios, bundle: measurement incomplete
 - [ ] ✅ PASS
 - [ ] ❌ FAIL
 
-**Decision**: Cannot proceed without remediation and proper validation
+**Decision**: Production strip accepted. No cache/long-text/provider/renderer-architecture/virtual-scroll change is justified by the measured workload.
 
-**Next Steps**: See `docs/PHASE3.3_RESULTS.md` for detailed recommendations
+**Closure**: Current performance initiative complete; retain the profiler for evidence-driven future regressions.
 
 ---
 

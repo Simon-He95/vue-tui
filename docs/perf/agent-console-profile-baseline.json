@@ -1,353 +1,5603 @@
 {
-  "schemaVersion": 1,
-  "generatedAt": "2026-07-11T13:16:05.008Z",
+  "schemaVersion": 2,
+  "generatedFrom": {
+    "beforeCommit": "dc02b031090fcc974a0c83bf641ebf477e0c965b",
+    "afterCommit": "e481e1c143216885817719731a071e33909ed1cf",
+    "runnerCommit": "e481e1c143216885817719731a071e33909ed1cf",
+    "dirty": false
+  },
   "environment": {
-    "note": "macOS arm64 local production-artifact baseline; see raw workflow artifacts for exact environment"
+    "cli": {
+      "commit": "e481e1c143216885817719731a071e33909ed1cf",
+      "dirty": false,
+      "node": "v24.18.0",
+      "v8": "13.6.233.17-node.50",
+      "os": {
+        "platform": "darwin",
+        "arch": "arm64",
+        "release": "23.5.0",
+        "totalMemory": 34359738368
+      },
+      "cpu": {
+        "model": "Apple M1 Pro",
+        "cores": 10
+      },
+      "artifactHashes": {
+        "dist/cli.js": "436a577571784f1bed6ff48729bb4c78f7c6207050c0c790a7dcaeb4dd1cab77",
+        "dist/vue.js": "37af89c8f2ebdd9877bc6212a314c2e47186479fc840406baf3e257b2769a0b7"
+      },
+      "runCount": 5,
+      "smoke": false
+    },
+    "browser": {
+      "commit": "e481e1c143216885817719731a071e33909ed1cf",
+      "dirty": false,
+      "node": "v24.18.0",
+      "v8": "13.6.233.17-node.50",
+      "os": {
+        "platform": "darwin",
+        "arch": "arm64",
+        "release": "23.5.0",
+        "totalMemory": 34359738368
+      },
+      "cpu": {
+        "model": "Apple M1 Pro",
+        "cores": 10
+      },
+      "artifactHashes": {
+        "dist/vue.js": "37af89c8f2ebdd9877bc6212a314c2e47186479fc840406baf3e257b2769a0b7",
+        "dist/cli.js": "436a577571784f1bed6ff48729bb4c78f7c6207050c0c790a7dcaeb4dd1cab77",
+        "examples/agent-console/dist/index.html": "695eecf7fa16d3753caf7fe9de7b5aa0bacd695edf0b04f0dc0e6a7ea0138017"
+      },
+      "browser": "149.0.7827.55",
+      "seedCount": 6000,
+      "appendCount": 1000,
+      "steadyCount": 500,
+      "runCount": 5
+    }
   },
   "optimization": {
-    "target": "examples/agent-console eventLog history publication",
-    "change": "shallow mutable backing array",
-    "cliFramedBurstElapsedMedianBeforeMs": 2944,
-    "cliFramedBurstElapsedMedianAfterMs": 1595,
-    "improvementPercent": 45.8,
-    "decision": "keep optimization; no evidence for vue-tui cache, long-text, renderer, or virtual-scroll changes"
+    "scenarios": {
+      "tail-append-burst-framed": {
+        "cli": {
+          "beforeRunsMs": [
+            2323.4532919999992, 2362.007834000001, 2342.111417, 2357.823291999999,
+            2498.2695830000002
+          ],
+          "afterRunsMs": [
+            1123.321, 1217.397959, 1213.9660840000006, 1201.5342500000002, 1155.8908330000004
+          ],
+          "beforeMedianMs": 2357.823291999999,
+          "afterMedianMs": 1201.5342500000002,
+          "improvementPercent": 49.04053013316315
+        },
+        "browser": {
+          "beforeRunsMs": [
+            2109.899999856949, 2061.7000000476837, 2061.7000000476837, 2161.0999999046326,
+            2037.7000000476837
+          ],
+          "afterRunsMs": [
+            1177.7999999523163, 1169.9000000953674, 1153.7999999523163, 1160.4000000953674,
+            1153.2000000476837
+          ],
+          "beforeMedianMs": 2061.7000000476837,
+          "afterMedianMs": 1160.4000000953674,
+          "improvementPercent": 43.7163505811452
+        }
+      },
+      "tail-append-burst-single-task": {
+        "cli": {
+          "beforeRunsMs": [
+            1974.4582499999997, 2028.44625, 2022.1715000000004, 1929.3240409999999,
+            1889.8244999999997
+          ],
+          "afterRunsMs": [
+            855.2423750000003, 721.8725419999996, 714.2095829999998, 719.2219580000001, 786.322541
+          ],
+          "beforeMedianMs": 1974.4582499999997,
+          "afterMedianMs": 721.8725419999996,
+          "improvementPercent": 63.43946285012612
+        },
+        "browser": {
+          "beforeRunsMs": [
+            1872.4000000953674, 1736.5999999046326, 1713.1000001430511, 1753.5, 1704.5
+          ],
+          "afterRunsMs": [
+            771.0999999046326, 778.6999998092651, 779.5999999046326, 795.0999999046326,
+            787.5999999046326
+          ],
+          "beforeMedianMs": 1736.5999999046326,
+          "afterMedianMs": 779.5999999046326,
+          "improvementPercent": 55.107681679866104
+        }
+      }
+    }
+  },
+  "cpuDiagnostics": {
+    "before": [
+      {
+        "functionName": "mergeGroups",
+        "url": "file:///Users/Simon/Github/vue-tui/src/vue/markdown/block-source.ts",
+        "selfTimeMs": 514.88,
+        "samples": 3757,
+        "share": 0.22042633968038
+      },
+      {
+        "functionName": "isReadonly",
+        "url": "file:///Users/Simon/Github/vue-tui/node_modules/.pnpm/@vue+reactivity@3.5.38/node_modules/@vue/reactivity/dist/reactivity.cjs.js",
+        "selfTimeMs": 365.407,
+        "samples": 2702,
+        "share": 0.1564351450893191
+      },
+      {
+        "functionName": "get",
+        "url": "file:///Users/Simon/Github/vue-tui/node_modules/.pnpm/@vue+reactivity@3.5.38/node_modules/@vue/reactivity/dist/reactivity.cjs.js",
+        "selfTimeMs": 294.696,
+        "samples": 2126,
+        "share": 0.1261629129087346
+      },
+      {
+        "functionName": "createReactiveObject",
+        "url": "file:///Users/Simon/Github/vue-tui/node_modules/.pnpm/@vue+reactivity@3.5.38/node_modules/@vue/reactivity/dist/reactivity.cjs.js",
+        "selfTimeMs": 212.06,
+        "samples": 1563,
+        "share": 0.09078544436105769
+      },
+      {
+        "functionName": "(program)",
+        "url": "(native)",
+        "selfTimeMs": 167.584,
+        "samples": 1229,
+        "share": 0.07174473218807645
+      },
+      {
+        "functionName": "iter.next",
+        "url": "file:///Users/Simon/Github/vue-tui/node_modules/.pnpm/@vue+reactivity@3.5.38/node_modules/@vue/reactivity/dist/reactivity.cjs.js",
+        "selfTimeMs": 162.373,
+        "samples": 1204,
+        "share": 0.06951384022087155
+      },
+      {
+        "functionName": "applyEvent",
+        "url": "file:///Users/Simon/Github/vue-tui/examples/agent-console/src/transcript-store.ts",
+        "selfTimeMs": 162.217,
+        "samples": 1193,
+        "share": 0.06944705473883664
+      },
+      {
+        "functionName": "(garbage collector)",
+        "url": "(native)",
+        "selfTimeMs": 128.87,
+        "samples": 847,
+        "share": 0.055170801729743965
+      },
+      {
+        "functionName": "get blocks",
+        "url": "file:///Users/Simon/Github/vue-tui/src/vue/markdown/block-source.ts",
+        "selfTimeMs": 87.572,
+        "samples": 642,
+        "share": 0.037490629697192045
+      },
+      {
+        "functionName": "post",
+        "url": "node:inspector",
+        "selfTimeMs": 56.875,
+        "samples": 2,
+        "share": 0.024348873658564352
+      },
+      {
+        "functionName": "(anonymous)",
+        "url": "file:///Users/Simon/Github/vue-tui/src/renderer/cli/stdout-renderer.ts",
+        "selfTimeMs": 41.087,
+        "samples": 305,
+        "share": 0.017589840386979052
+      },
+      {
+        "functionName": "rebuildFenwick",
+        "url": "file:///Users/Simon/Github/vue-tui/src/vue/components/TLogView.ts",
+        "selfTimeMs": 34.542,
+        "samples": 248,
+        "share": 0.014787846925962723
+      },
+      {
+        "functionName": "createCell",
+        "url": "file:///Users/Simon/Github/vue-tui/src/core/buffer/buffer.ts",
+        "selfTimeMs": 18.507,
+        "samples": 132,
+        "share": 0.0079230699744888
+      },
+      {
+        "functionName": "parseMarkdownToStructure",
+        "url": "file:///Users/Simon/Github/vue-tui/node_modules/.pnpm/stream-markdown-parser@1.0.7/node_modules/stream-markdown-parser/dist/index.js",
+        "selfTimeMs": 16.17,
+        "samples": 112,
+        "share": 0.006922572080157989
+      },
+      {
+        "functionName": "tokenize",
+        "url": "file:///Users/Simon/Github/vue-tui/node_modules/.pnpm/stream-markdown-parser@1.0.7/node_modules/stream-markdown-parser/dist/index.js",
+        "selfTimeMs": 13.706,
+        "samples": 99,
+        "share": 0.005867703953657722
+      },
+      {
+        "functionName": "cellTextId",
+        "url": "file:///Users/Simon/Github/vue-tui/src/renderer/cli/stdout-renderer.ts",
+        "selfTimeMs": 13.163,
+        "samples": 90,
+        "share": 0.005635239102728485
+      },
+      {
+        "functionName": "updateStats",
+        "url": "file:///Users/Simon/Github/vue-tui/examples/agent-console/src/transcript-store.ts",
+        "selfTimeMs": 12.085,
+        "samples": 92,
+        "share": 0.005173734297384619
+      },
+      {
+        "functionName": "doRender",
+        "url": "file:///Users/Simon/Github/vue-tui/src/renderer/cli/stdout-renderer.ts",
+        "selfTimeMs": 11.666,
+        "samples": 89,
+        "share": 0.004994355342431854
+      },
+      {
+        "functionName": "writeAtForPlane",
+        "url": "file:///Users/Simon/Github/vue-tui/src/core/terminal/create-terminal.ts",
+        "selfTimeMs": 11.46,
+        "samples": 83,
+        "share": 0.0049061642571806155
+      },
+      {
+        "functionName": "composeRows",
+        "url": "file:///Users/Simon/Github/vue-tui/src/core/terminal/create-terminal.ts",
+        "selfTimeMs": 10.917,
+        "samples": 75,
+        "share": 0.004673699406251376
+      }
+    ],
+    "after": [
+      {
+        "functionName": "mergeGroups",
+        "url": "file:///Users/Simon/Github/vue-tui/src/vue/markdown/block-source.ts",
+        "selfTimeMs": 464.926,
+        "samples": 3409,
+        "share": 0.45926691309682094
+      },
+      {
+        "functionName": "(garbage collector)",
+        "url": "(native)",
+        "selfTimeMs": 117.709,
+        "samples": 756,
+        "share": 0.11627624411995394
+      },
+      {
+        "functionName": "get blocks",
+        "url": "file:///Users/Simon/Github/vue-tui/src/vue/markdown/block-source.ts",
+        "selfTimeMs": 92.158,
+        "samples": 680,
+        "share": 0.09103625131134165
+      },
+      {
+        "functionName": "post",
+        "url": "node:inspector",
+        "selfTimeMs": 63.667,
+        "samples": 1,
+        "share": 0.0628920442309858
+      },
+      {
+        "functionName": "(anonymous)",
+        "url": "file:///Users/Simon/Github/vue-tui/src/renderer/cli/stdout-renderer.ts",
+        "selfTimeMs": 42.122,
+        "samples": 310,
+        "share": 0.04160929032462003
+      },
+      {
+        "functionName": "(program)",
+        "url": "(native)",
+        "selfTimeMs": 34.792,
+        "samples": 257,
+        "share": 0.03436851120493282
+      },
+      {
+        "functionName": "rebuildFenwick",
+        "url": "file:///Users/Simon/Github/vue-tui/src/vue/components/TLogView.ts",
+        "selfTimeMs": 33.954,
+        "samples": 248,
+        "share": 0.033540711354687544
+      },
+      {
+        "functionName": "get",
+        "url": "file:///Users/Simon/Github/vue-tui/node_modules/.pnpm/@vue+reactivity@3.5.38/node_modules/@vue/reactivity/dist/reactivity.cjs.js",
+        "selfTimeMs": 22.618,
+        "samples": 169,
+        "share": 0.022342693332753807
+      },
+      {
+        "functionName": "createCell",
+        "url": "file:///Users/Simon/Github/vue-tui/src/core/buffer/buffer.ts",
+        "selfTimeMs": 15.618,
+        "samples": 116,
+        "share": 0.015427897447650057
+      },
+      {
+        "functionName": "(anonymous)",
+        "url": "file:///Users/Simon/Github/vue-tui/src/core/terminal/create-terminal.ts",
+        "selfTimeMs": 15.17,
+        "samples": 111,
+        "share": 0.014985350511003416
+      },
+      {
+        "functionName": "cellTextId",
+        "url": "file:///Users/Simon/Github/vue-tui/src/renderer/cli/stdout-renderer.ts",
+        "selfTimeMs": 13.794,
+        "samples": 100,
+        "share": 0.013626099205588736
+      },
+      {
+        "functionName": "parseMarkdownToStructure",
+        "url": "file:///Users/Simon/Github/vue-tui/node_modules/.pnpm/stream-markdown-parser@1.0.7/node_modules/stream-markdown-parser/dist/index.js",
+        "selfTimeMs": 12.958,
+        "samples": 96,
+        "share": 0.012800275011310631
+      },
+      {
+        "functionName": "doRender",
+        "url": "file:///Users/Simon/Github/vue-tui/src/renderer/cli/stdout-renderer.ts",
+        "selfTimeMs": 12.212,
+        "samples": 90,
+        "share": 0.012063355335555288
+      },
+      {
+        "functionName": "tokenize",
+        "url": "file:///Users/Simon/Github/vue-tui/node_modules/.pnpm/stream-markdown-parser@1.0.7/node_modules/stream-markdown-parser/dist/index.js",
+        "selfTimeMs": 11.459,
+        "samples": 86,
+        "share": 0.01131952086391484
+      },
+      {
+        "functionName": "snapshotRowFingerprints",
+        "url": "file:///Users/Simon/Github/vue-tui/src/renderer/cli/stdout-renderer.ts",
+        "selfTimeMs": 10.789,
+        "samples": 77,
+        "share": 0.010657676114912053
+      },
+      {
+        "functionName": "writeAtForPlane",
+        "url": "file:///Users/Simon/Github/vue-tui/src/core/terminal/create-terminal.ts",
+        "selfTimeMs": 10.417,
+        "samples": 72,
+        "share": 0.010290204105017969
+      },
+      {
+        "functionName": "updateStats",
+        "url": "file:///Users/Simon/Github/vue-tui/examples/agent-console/src/transcript-store.ts",
+        "selfTimeMs": 9.831,
+        "samples": 66,
+        "share": 0.009711336906636425
+      },
+      {
+        "functionName": "putCell",
+        "url": "file:///Users/Simon/Github/vue-tui/src/core/buffer/buffer.ts",
+        "selfTimeMs": 9.75,
+        "samples": 70,
+        "share": 0.00963132283996594
+      },
+      {
+        "functionName": "(anonymous)",
+        "url": "file:///Users/Simon/Github/vue-tui/src/vue/components/TLogView.ts",
+        "selfTimeMs": 9.375,
+        "samples": 69,
+        "share": 0.009260887346121096
+      },
+      {
+        "functionName": "isRef",
+        "url": "file:///Users/Simon/Github/vue-tui/node_modules/.pnpm/@vue+reactivity@3.5.38/node_modules/@vue/reactivity/dist/reactivity.cjs.js",
+        "selfTimeMs": 9.003,
+        "samples": 68,
+        "share": 0.008893415336227012
+      }
+    ]
   },
   "scenarios": {
-    "cli/tail-stream-steady": {
-      "runCount": 5,
-      "frameP95": {
-        "runs": 5,
-        "median": 2.391082999999526,
-        "min": 2.306041999999252,
-        "max": 3.008750000000873,
-        "cv": 0.10255332516195965,
-        "range": [2.306041999999252, 3.008750000000873]
-      },
-      "frameMax": {
-        "runs": 5,
-        "median": 15.64654100000007,
-        "min": 8.636124999999993,
-        "max": 81.06487500000003,
-        "cv": 0.8778627810993558,
-        "range": [8.636124999999993, 81.06487500000003]
-      },
-      "elapsedMs": {
-        "runs": 5,
-        "median": 7102.9043329999995,
-        "min": 6917.37025,
-        "max": 7743.436208000001,
-        "cv": 0.042723850157527894,
-        "range": [6917.37025, 7743.436208000001]
-      },
-      "inputToPaintMs": null
-    },
-    "cli/tail-append-burst-framed": {
-      "runCount": 5,
-      "frameP95": {
-        "runs": 5,
-        "median": 2.6655000000000655,
-        "min": 2.434291000000485,
-        "max": 2.858166999999412,
-        "cv": 0.057617549983914586,
-        "range": [2.434291000000485, 2.858166999999412]
-      },
-      "frameMax": {
-        "runs": 5,
-        "median": 8.957499999999982,
-        "min": 5.769624999999905,
-        "max": 12.036833000000115,
-        "cv": 0.22092582788890658,
-        "range": [5.769624999999905, 12.036833000000115]
-      },
-      "elapsedMs": {
-        "runs": 5,
-        "median": 1594.589959,
-        "min": 1485.6909999999998,
-        "max": 1627.524042,
-        "cv": 0.03984267810465348,
-        "range": [1485.6909999999998, 1627.524042]
-      },
-      "inputToPaintMs": null
-    },
-    "cli/tail-append-burst-single-task": {
-      "runCount": 5,
-      "frameP95": {
-        "runs": 5,
-        "median": 0.31275000000005093,
-        "min": 0.24774999999999636,
-        "max": 0.7035000000005311,
-        "cv": 0.44046788710515317,
-        "range": [0.24774999999999636, 0.7035000000005311]
-      },
-      "frameMax": {
-        "runs": 5,
-        "median": 3.9120419999999285,
-        "min": 3.7119170000005397,
-        "max": 4.350625000000036,
-        "cv": 0.058326137006371744,
-        "range": [3.7119170000005397, 4.350625000000036]
-      },
-      "elapsedMs": {
-        "runs": 5,
-        "median": 855.3210830000003,
-        "min": 815.8851670000004,
-        "max": 907.1277919999998,
-        "cv": 0.03983535721250405,
-        "range": [815.8851670000004, 907.1277919999998]
-      },
-      "inputToPaintMs": null
-    },
     "cli/detached-append": {
       "runCount": 5,
-      "frameP95": {
-        "runs": 5,
-        "median": 2.3296250000003056,
-        "min": 1.9992080000001806,
-        "max": 2.472041999999874,
-        "cv": 0.08196982945370951,
-        "range": [1.9992080000001806, 2.472041999999874]
-      },
-      "frameMax": {
-        "runs": 5,
-        "median": 6.454458000000159,
-        "min": 5.123833999999988,
-        "max": 8.043083000000024,
-        "cv": 0.14504326804675405,
-        "range": [5.123833999999988, 8.043083000000024]
-      },
+      "correctnessPasses": 5,
       "elapsedMs": {
         "runs": 5,
-        "median": 1356.0060000000003,
-        "min": 1313.1632090000003,
-        "max": 1533.7648329999997,
-        "cv": 0.05655352943774636,
-        "range": [1313.1632090000003, 1533.7648329999997]
+        "values": [1184.6724169999998, 1207.315541, 1150.287958, 1117.5079580000001, 1117.785875],
+        "median": 1150.287958,
+        "min": 1117.5079580000001,
+        "max": 1207.315541,
+        "cv": 0.031031630597520485,
+        "range": [1117.5079580000001, 1207.315541]
       },
-      "inputToPaintMs": null
+      "frameP95Ms": {
+        "runs": 5,
+        "values": [
+          2.217666999999892, 2.295749999999771, 2.396374999999807, 1.9410000000002583,
+          1.854041000000052
+        ],
+        "median": 2.217666999999892,
+        "min": 1.854041000000052,
+        "max": 2.396374999999807,
+        "cv": 0.09739174204288427,
+        "range": [1.854041000000052, 2.396374999999807]
+      },
+      "frameMaxMs": {
+        "runs": 5,
+        "values": [
+          4.050125000000207, 2.9859160000000884, 3.690708000000086, 3.0508749999999054,
+          3.4565410000000156
+        ],
+        "median": 3.4565410000000156,
+        "min": 2.9859160000000884,
+        "max": 4.050125000000207,
+        "cv": 0.1155220786268735,
+        "range": [2.9859160000000884, 4.050125000000207]
+      },
+      "longFrames": [
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        }
+      ],
+      "inputLatency": {
+        "commitMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        "domFlushMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        "paintOpportunityMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        }
+      },
+      "corpus": [
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        }
+      ],
+      "memory": [
+        {
+          "before": {
+            "rss": 503054336,
+            "heapTotal": 281657344,
+            "heapUsed": 48289080,
+            "external": 7017870,
+            "arrayBuffers": 4537301
+          },
+          "after": {
+            "rss": 505380864,
+            "heapTotal": 304349184,
+            "heapUsed": 48979320,
+            "external": 7157404,
+            "arrayBuffers": 4532645
+          },
+          "heapUsedDelta": 690240,
+          "rssDelta": 2326528,
+          "heapBytesPerEvent": 690.24,
+          "rssBytesPerEvent": 2326.528
+        },
+        {
+          "before": {
+            "rss": 498139136,
+            "heapTotal": 290832384,
+            "heapUsed": 48282840,
+            "external": 7017870,
+            "arrayBuffers": 4537301
+          },
+          "after": {
+            "rss": 503431168,
+            "heapTotal": 304611328,
+            "heapUsed": 48985296,
+            "external": 7153156,
+            "arrayBuffers": 4532645
+          },
+          "heapUsedDelta": 702456,
+          "rssDelta": 5292032,
+          "heapBytesPerEvent": 702.456,
+          "rssBytesPerEvent": 5292.032
+        },
+        {
+          "before": {
+            "rss": 500580352,
+            "heapTotal": 282968064,
+            "heapUsed": 48090080,
+            "external": 6951910,
+            "arrayBuffers": 4536877
+          },
+          "after": {
+            "rss": 504217600,
+            "heapTotal": 303824896,
+            "heapUsed": 48971768,
+            "external": 7160236,
+            "arrayBuffers": 4532645
+          },
+          "heapUsedDelta": 881688,
+          "rssDelta": 3637248,
+          "heapBytesPerEvent": 881.688,
+          "rssBytesPerEvent": 3637.248
+        },
+        {
+          "before": {
+            "rss": 496025600,
+            "heapTotal": 291094528,
+            "heapUsed": 48291896,
+            "external": 7017870,
+            "arrayBuffers": 4537301
+          },
+          "after": {
+            "rss": 499531776,
+            "heapTotal": 303300608,
+            "heapUsed": 48974160,
+            "external": 7199884,
+            "arrayBuffers": 4532645
+          },
+          "heapUsedDelta": 682264,
+          "rssDelta": 3506176,
+          "heapBytesPerEvent": 682.264,
+          "rssBytesPerEvent": 3506.176
+        },
+        {
+          "before": {
+            "rss": 500285440,
+            "heapTotal": 287162368,
+            "heapUsed": 48279440,
+            "external": 7017870,
+            "arrayBuffers": 4537301
+          },
+          "after": {
+            "rss": 504659968,
+            "heapTotal": 304087040,
+            "heapUsed": 48971776,
+            "external": 7160236,
+            "arrayBuffers": 4532645
+          },
+          "heapUsedDelta": 692336,
+          "rssDelta": 4374528,
+          "heapBytesPerEvent": 692.336,
+          "rssBytesPerEvent": 4374.528
+        }
+      ],
+      "stdout": [
+        {
+          "writes": 207,
+          "bytes": 732140,
+          "maxBytes": 7096,
+          "cursorMoves": 309,
+          "bytesPerFrame": 3358.440366972477
+        },
+        {
+          "writes": 208,
+          "bytes": 732104,
+          "maxBytes": 7096,
+          "cursorMoves": 310,
+          "bytesPerFrame": 3327.7454545454543
+        },
+        {
+          "writes": 206,
+          "bytes": 732216,
+          "maxBytes": 7096,
+          "cursorMoves": 308,
+          "bytesPerFrame": 3389.8888888888887
+        },
+        {
+          "writes": 206,
+          "bytes": 732176,
+          "maxBytes": 7096,
+          "cursorMoves": 308,
+          "bytesPerFrame": 3389.703703703704
+        },
+        {
+          "writes": 206,
+          "bytes": 732216,
+          "maxBytes": 7096,
+          "cursorMoves": 308,
+          "bytesPerFrame": 3389.8888888888887
+        }
+      ],
+      "dom": {
+        "flush": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        "samples": 0,
+        "rendererDeltas": []
+      },
+      "raf": [],
+      "longTasks": [],
+      "cpuHotspots": [],
+      "renderManagerP95Ms": {
+        "runs": 5,
+        "values": [
+          1.121625000000222, 1.1004159999997682, 1.092167000000245, 1.0837910000000193,
+          1.0039999999999054
+        ],
+        "median": 1.092167000000245,
+        "min": 1.0039999999999054,
+        "max": 1.121625000000222,
+        "cv": 0.03722424435437999,
+        "range": [1.0039999999999054, 1.121625000000222]
+      },
+      "commitP95Ms": {
+        "runs": 5,
+        "values": [
+          1.1516249999999673, 1.0650829999999587, 0.9464579999998932, 0.9207919999998921,
+          0.9000419999997575
+        ],
+        "median": 0.9464579999998932,
+        "min": 0.9000419999997575,
+        "max": 1.1516249999999673,
+        "cv": 0.09654510417577115,
+        "range": [0.9000419999997575, 1.1516249999999673]
+      },
+      "dirtyRowsP95": {
+        "runs": 5,
+        "values": [26, 26, 26, 26, 26],
+        "median": 26,
+        "min": 26,
+        "max": 26,
+        "cv": 0,
+        "range": [26, 26]
+      },
+      "scannedNodesP95": {
+        "runs": 5,
+        "values": [12, 12, 12, 12, 12],
+        "median": 12,
+        "min": 12,
+        "max": 12,
+        "cv": 0,
+        "range": [12, 12]
+      },
+      "paintedNodesP95": {
+        "runs": 5,
+        "values": [12, 12, 12, 12, 12],
+        "median": 12,
+        "min": 12,
+        "max": 12,
+        "cv": 0,
+        "range": [12, 12]
+      }
     },
     "cli/search-large-history": {
       "runCount": 5,
-      "frameP95": {
-        "runs": 5,
-        "median": 3.471542000000227,
-        "min": 3.265542000000096,
-        "max": 3.5331249999999272,
-        "cv": 0.02704123067908925,
-        "range": [3.265542000000096, 3.5331249999999272]
-      },
-      "frameMax": {
-        "runs": 5,
-        "median": 6.50354200000038,
-        "min": 6.170208999999886,
-        "max": 6.5862090000000535,
-        "cv": 0.02312593556465885,
-        "range": [6.170208999999886, 6.5862090000000535]
-      },
+      "correctnessPasses": 5,
       "elapsedMs": {
         "runs": 5,
-        "median": 82.62062500000002,
-        "min": 80.41516700000011,
-        "max": 88.28141600000026,
-        "cv": 0.03590273454149888,
-        "range": [80.41516700000011, 88.28141600000026]
+        "values": [
+          76.02866700000004, 74.83383400000002, 75.69125000000031, 77.11275000000023,
+          104.18654199999992
+        ],
+        "median": 76.02866700000004,
+        "min": 74.83383400000002,
+        "max": 104.18654199999992,
+        "cv": 0.13891673811791863,
+        "range": [74.83383400000002, 104.18654199999992]
       },
-      "inputToPaintMs": null
+      "frameP95Ms": {
+        "runs": 5,
+        "values": [
+          3.159667000000354, 3.4618329999998423, 3.455790999999863, 3.179417000000285,
+          4.788250000000062
+        ],
+        "median": 3.455790999999863,
+        "min": 3.159667000000354,
+        "max": 4.788250000000062,
+        "cv": 0.16727365675108458,
+        "range": [3.159667000000354, 4.788250000000062]
+      },
+      "frameMaxMs": {
+        "runs": 5,
+        "values": [
+          6.124084000000039, 6.356959000000188, 6.67120900000009, 6.434375000000273,
+          10.672583999999915
+        ],
+        "median": 6.434375000000273,
+        "min": 6.124084000000039,
+        "max": 10.672583999999915,
+        "cv": 0.23708100843433094,
+        "range": [6.124084000000039, 10.672583999999915]
+      },
+      "longFrames": [
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        }
+      ],
+      "inputLatency": {
+        "commitMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        "domFlushMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        "paintOpportunityMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        }
+      },
+      "corpus": [
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 0,
+          "finalReplayTotal": 6003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 760
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 0,
+          "finalReplayTotal": 6003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 760
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 0,
+          "finalReplayTotal": 6003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 760
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 0,
+          "finalReplayTotal": 6003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 760
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 0,
+          "finalReplayTotal": 6003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 760
+        }
+      ],
+      "memory": [
+        {
+          "before": {
+            "rss": 499777536,
+            "heapTotal": 300269568,
+            "heapUsed": 48271640,
+            "external": 7017870,
+            "arrayBuffers": 4537301
+          },
+          "after": {
+            "rss": 500875264,
+            "heapTotal": 187170816,
+            "heapUsed": 49832352,
+            "external": 7175494,
+            "arrayBuffers": 4535477
+          },
+          "heapUsedDelta": 1560712,
+          "rssDelta": 1097728,
+          "heapBytesPerEvent": 0,
+          "rssBytesPerEvent": 0
+        },
+        {
+          "before": {
+            "rss": 499187712,
+            "heapTotal": 283492352,
+            "heapUsed": 48030280,
+            "external": 6951910,
+            "arrayBuffers": 4536877
+          },
+          "after": {
+            "rss": 500531200,
+            "heapTotal": 187432960,
+            "heapUsed": 49675504,
+            "external": 7175494,
+            "arrayBuffers": 4535477
+          },
+          "heapUsedDelta": 1645224,
+          "rssDelta": 1343488,
+          "heapBytesPerEvent": 0,
+          "rssBytesPerEvent": 0
+        },
+        {
+          "before": {
+            "rss": 500662272,
+            "heapTotal": 281395200,
+            "heapUsed": 48287640,
+            "external": 6951910,
+            "arrayBuffers": 4536877
+          },
+          "after": {
+            "rss": 502611968,
+            "heapTotal": 186908672,
+            "heapUsed": 49670552,
+            "external": 7175494,
+            "arrayBuffers": 4535477
+          },
+          "heapUsedDelta": 1382912,
+          "rssDelta": 1949696,
+          "heapBytesPerEvent": 0,
+          "rssBytesPerEvent": 0
+        },
+        {
+          "before": {
+            "rss": 498221056,
+            "heapTotal": 304988160,
+            "heapUsed": 48167904,
+            "external": 6951910,
+            "arrayBuffers": 4536877
+          },
+          "after": {
+            "rss": 499843072,
+            "heapTotal": 187432960,
+            "heapUsed": 49673096,
+            "external": 7175494,
+            "arrayBuffers": 4535477
+          },
+          "heapUsedDelta": 1505192,
+          "rssDelta": 1622016,
+          "heapBytesPerEvent": 0,
+          "rssBytesPerEvent": 0
+        },
+        {
+          "before": {
+            "rss": 497041408,
+            "heapTotal": 290570240,
+            "heapUsed": 48276912,
+            "external": 7017870,
+            "arrayBuffers": 4537301
+          },
+          "after": {
+            "rss": 498122752,
+            "heapTotal": 188219392,
+            "heapUsed": 49655648,
+            "external": 7175494,
+            "arrayBuffers": 4535477
+          },
+          "heapUsedDelta": 1378736,
+          "rssDelta": 1081344,
+          "heapBytesPerEvent": 0,
+          "rssBytesPerEvent": 0
+        }
+      ],
+      "stdout": [
+        {
+          "writes": 4,
+          "bytes": 11926,
+          "maxBytes": 5891,
+          "cursorMoves": 4,
+          "bytesPerFrame": 745.375
+        },
+        {
+          "writes": 4,
+          "bytes": 11926,
+          "maxBytes": 5891,
+          "cursorMoves": 4,
+          "bytesPerFrame": 745.375
+        },
+        {
+          "writes": 4,
+          "bytes": 11926,
+          "maxBytes": 5891,
+          "cursorMoves": 4,
+          "bytesPerFrame": 745.375
+        },
+        {
+          "writes": 4,
+          "bytes": 11926,
+          "maxBytes": 5891,
+          "cursorMoves": 4,
+          "bytesPerFrame": 795.0666666666667
+        },
+        {
+          "writes": 4,
+          "bytes": 11926,
+          "maxBytes": 5891,
+          "cursorMoves": 4,
+          "bytesPerFrame": 662.5555555555555
+        }
+      ],
+      "dom": {
+        "flush": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        "samples": 0,
+        "rendererDeltas": []
+      },
+      "raf": [],
+      "longTasks": [],
+      "cpuHotspots": [],
+      "renderManagerP95Ms": {
+        "runs": 5,
+        "values": [
+          1.074750000000222, 1.2035829999999805, 1.1777079999997113, 1.091874999999618,
+          1.0857919999998558
+        ],
+        "median": 1.091874999999618,
+        "min": 1.074750000000222,
+        "max": 1.2035829999999805,
+        "cv": 0.04712671001828742,
+        "range": [1.074750000000222, 1.2035829999999805]
+      },
+      "commitP95Ms": {
+        "runs": 5,
+        "values": [
+          2.082292000000052, 2.2557910000000447, 2.274582999999893, 2.0842499999998836,
+          3.698250000000371
+        ],
+        "median": 2.2557910000000447,
+        "min": 2.082292000000052,
+        "max": 3.698250000000371,
+        "cv": 0.24809756483901088,
+        "range": [2.082292000000052, 3.698250000000371]
+      },
+      "dirtyRowsP95": {
+        "runs": 5,
+        "values": [24, 24, 24, 24, 24],
+        "median": 24,
+        "min": 24,
+        "max": 24,
+        "cv": 0,
+        "range": [24, 24]
+      },
+      "scannedNodesP95": {
+        "runs": 5,
+        "values": [15, 15, 15, 15, 15],
+        "median": 15,
+        "min": 15,
+        "max": 15,
+        "cv": 0,
+        "range": [15, 15]
+      },
+      "paintedNodesP95": {
+        "runs": 5,
+        "values": [15, 15, 15, 15, 15],
+        "median": 15,
+        "min": 15,
+        "max": 15,
+        "cv": 0,
+        "range": [15, 15]
+      }
     },
     "cli/stream-scroll-interaction": {
       "runCount": 5,
-      "frameP95": {
-        "runs": 5,
-        "median": 2.452332999999271,
-        "min": 2.2842920000002778,
-        "max": 2.6432499999991705,
-        "cv": 0.06304943050807706,
-        "range": [2.2842920000002778, 2.6432499999991705]
-      },
-      "frameMax": {
-        "runs": 5,
-        "median": 18.008583000000726,
-        "min": 3.9493749999996908,
-        "max": 40.58050000000003,
-        "cv": 0.6705926769858493,
-        "range": [3.9493749999996908, 40.58050000000003]
-      },
+      "correctnessPasses": 5,
       "elapsedMs": {
         "runs": 5,
-        "median": 6571.374,
-        "min": 6474.736917,
-        "max": 6750.074041999999,
-        "cv": 0.014796652871409815,
-        "range": [6474.736917, 6750.074041999999]
+        "values": [4802.694041999999, 4803.65, 4802.418708, 4803.184708, 4803.194958],
+        "median": 4803.184708,
+        "min": 4802.418708,
+        "max": 4803.65,
+        "cv": 0.00008940959158625555,
+        "range": [4802.418708, 4803.65]
       },
-      "inputToPaintMs": null
+      "frameP95Ms": {
+        "runs": 5,
+        "values": [
+          2.7116669999995793, 1.8629590000000462, 1.9179999999996653, 2.3870829999996204,
+          2.061833000000206
+        ],
+        "median": 2.061833000000206,
+        "min": 1.8629590000000462,
+        "max": 2.7116669999995793,
+        "cv": 0.1457067044842084,
+        "range": [1.8629590000000462, 2.7116669999995793]
+      },
+      "frameMaxMs": {
+        "runs": 5,
+        "values": [
+          26.81508299999996, 3.319916999999805, 28.384791000000405, 13.78558299999986,
+          8.566332999999759
+        ],
+        "median": 13.78558299999986,
+        "min": 3.319916999999805,
+        "max": 28.384791000000405,
+        "cv": 0.612763798007732,
+        "range": [3.319916999999805, 28.384791000000405]
+      },
+      "longFrames": [
+        {
+          "over16_7": 1,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 1,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        }
+      ],
+      "inputLatency": {
+        "commitMs": {
+          "p50": 3.0609160000003612,
+          "p95": 6.194208000000344,
+          "p99": 9.877207999999882,
+          "max": 17.16070899999977,
+          "over16_7": 1,
+          "over33_3": 0,
+          "over50": 0
+        },
+        "domFlushMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        "paintOpportunityMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        }
+      },
+      "corpus": [
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 400,
+          "finalReplayTotal": 6403,
+          "finalLineCount": 8000,
+          "firstLineIndex": 1316
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 400,
+          "finalReplayTotal": 6403,
+          "finalLineCount": 8000,
+          "firstLineIndex": 1316
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 400,
+          "finalReplayTotal": 6403,
+          "finalLineCount": 8000,
+          "firstLineIndex": 1316
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 400,
+          "finalReplayTotal": 6403,
+          "finalLineCount": 8000,
+          "firstLineIndex": 1316
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 400,
+          "finalReplayTotal": 6403,
+          "finalLineCount": 8000,
+          "firstLineIndex": 1316
+        }
+      ],
+      "memory": [
+        {
+          "before": {
+            "rss": 500006912,
+            "heapTotal": 276414464,
+            "heapUsed": 48042736,
+            "external": 6951910,
+            "arrayBuffers": 4536877
+          },
+          "after": {
+            "rss": 514277376,
+            "heapTotal": 292290560,
+            "heapUsed": 52731552,
+            "external": 7282694,
+            "arrayBuffers": 4532645
+          },
+          "heapUsedDelta": 4688816,
+          "rssDelta": 14270464,
+          "heapBytesPerEvent": 11722.04,
+          "rssBytesPerEvent": 35676.16
+        },
+        {
+          "before": {
+            "rss": 500695040,
+            "heapTotal": 275890176,
+            "heapUsed": 48042600,
+            "external": 6951910,
+            "arrayBuffers": 4536877
+          },
+          "after": {
+            "rss": 509198336,
+            "heapTotal": 292552704,
+            "heapUsed": 52788952,
+            "external": 7282694,
+            "arrayBuffers": 4532645
+          },
+          "heapUsedDelta": 4746352,
+          "rssDelta": 8503296,
+          "heapBytesPerEvent": 11865.88,
+          "rssBytesPerEvent": 21258.24
+        },
+        {
+          "before": {
+            "rss": 502906880,
+            "heapTotal": 279560192,
+            "heapUsed": 48291648,
+            "external": 7017870,
+            "arrayBuffers": 4537301
+          },
+          "after": {
+            "rss": 514441216,
+            "heapTotal": 293076992,
+            "heapUsed": 52773528,
+            "external": 7282694,
+            "arrayBuffers": 4532645
+          },
+          "heapUsedDelta": 4481880,
+          "rssDelta": 11534336,
+          "heapBytesPerEvent": 11204.7,
+          "rssBytesPerEvent": 28835.84
+        },
+        {
+          "before": {
+            "rss": 497188864,
+            "heapTotal": 280084480,
+            "heapUsed": 48090680,
+            "external": 6951910,
+            "arrayBuffers": 4536877
+          },
+          "after": {
+            "rss": 512016384,
+            "heapTotal": 293339136,
+            "heapUsed": 52760344,
+            "external": 7163750,
+            "arrayBuffers": 4532645
+          },
+          "heapUsedDelta": 4669664,
+          "rssDelta": 14827520,
+          "heapBytesPerEvent": 11674.16,
+          "rssBytesPerEvent": 37068.8
+        },
+        {
+          "before": {
+            "rss": 499105792,
+            "heapTotal": 291094528,
+            "heapUsed": 48048616,
+            "external": 6951910,
+            "arrayBuffers": 4536877
+          },
+          "after": {
+            "rss": 510377984,
+            "heapTotal": 292552704,
+            "heapUsed": 52761960,
+            "external": 7325174,
+            "arrayBuffers": 4532645
+          },
+          "heapUsedDelta": 4713344,
+          "rssDelta": 11272192,
+          "heapBytesPerEvent": 11783.36,
+          "rssBytesPerEvent": 28180.48
+        }
+      ],
+      "stdout": [
+        {
+          "writes": 649,
+          "bytes": 2003428,
+          "maxBytes": 7342,
+          "cursorMoves": 1008,
+          "bytesPerFrame": 2794.181311018131
+        },
+        {
+          "writes": 660,
+          "bytes": 2039580,
+          "maxBytes": 7408,
+          "cursorMoves": 1019,
+          "bytesPerFrame": 2801.620879120879
+        },
+        {
+          "writes": 656,
+          "bytes": 2031439,
+          "maxBytes": 7342,
+          "cursorMoves": 1013,
+          "bytesPerFrame": 2805.8549723756905
+        },
+        {
+          "writes": 650,
+          "bytes": 1960455,
+          "maxBytes": 7408,
+          "cursorMoves": 1009,
+          "bytesPerFrame": 2730.438718662953
+        },
+        {
+          "writes": 657,
+          "bytes": 2052655,
+          "maxBytes": 7342,
+          "cursorMoves": 1014,
+          "bytesPerFrame": 2831.248275862069
+        }
+      ],
+      "dom": {
+        "flush": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        "samples": 0,
+        "rendererDeltas": []
+      },
+      "raf": [],
+      "longTasks": [],
+      "cpuHotspots": [
+        {
+          "functionName": "(idle)",
+          "url": "(native)",
+          "selfTimeMs": 2907.562,
+          "samples": 20475,
+          "share": 0.7330554967274782
+        },
+        {
+          "functionName": "mergeGroups",
+          "url": "file:///Users/Simon/Github/vue-tui/src/vue/markdown/block-source.ts",
+          "selfTimeMs": 235.455,
+          "samples": 1567,
+          "share": 0.05936299276918889
+        },
+        {
+          "functionName": "(anonymous)",
+          "url": "file:///Users/Simon/Github/vue-tui/src/renderer/cli/stdout-renderer.ts",
+          "selfTimeMs": 110.952,
+          "samples": 783,
+          "share": 0.027973255075182286
+        },
+        {
+          "functionName": "rebuildFenwick",
+          "url": "file:///Users/Simon/Github/vue-tui/src/vue/components/TLogView.ts",
+          "selfTimeMs": 97.627,
+          "samples": 650,
+          "share": 0.024613751651388176
+        },
+        {
+          "functionName": "post",
+          "url": "node:inspector",
+          "selfTimeMs": 69.084,
+          "samples": 1,
+          "share": 0.017417481015339003
+        },
+        {
+          "functionName": "get",
+          "url": "file:///Users/Simon/Github/vue-tui/node_modules/.pnpm/@vue+reactivity@3.5.38/node_modules/@vue/reactivity/dist/reactivity.cjs.js",
+          "selfTimeMs": 60.409,
+          "samples": 418,
+          "share": 0.01523033713530794
+        },
+        {
+          "functionName": "(garbage collector)",
+          "url": "(native)",
+          "selfTimeMs": 53.253,
+          "samples": 308,
+          "share": 0.013426164039572808
+        },
+        {
+          "functionName": "createCell",
+          "url": "file:///Users/Simon/Github/vue-tui/src/core/buffer/buffer.ts",
+          "selfTimeMs": 43.837,
+          "samples": 308,
+          "share": 0.011052198993535637
+        },
+        {
+          "functionName": "(anonymous)",
+          "url": "file:///Users/Simon/Github/vue-tui/src/core/terminal/create-terminal.ts",
+          "selfTimeMs": 43.752,
+          "samples": 307,
+          "share": 0.011030768765316312
+        },
+        {
+          "functionName": "writeAtForPlane",
+          "url": "file:///Users/Simon/Github/vue-tui/src/core/terminal/create-terminal.ts",
+          "selfTimeMs": 43.372,
+          "samples": 205,
+          "share": 0.010934963039159331
+        },
+        {
+          "functionName": "(program)",
+          "url": "(native)",
+          "selfTimeMs": 42.17,
+          "samples": 274,
+          "share": 0.010631914400104883
+        },
+        {
+          "functionName": "get blocks",
+          "url": "file:///Users/Simon/Github/vue-tui/src/vue/markdown/block-source.ts",
+          "selfTimeMs": 36.423,
+          "samples": 213,
+          "share": 0.009182978852146554
+        },
+        {
+          "functionName": "cellTextId",
+          "url": "file:///Users/Simon/Github/vue-tui/src/renderer/cli/stdout-renderer.ts",
+          "selfTimeMs": 31.127,
+          "samples": 229,
+          "share": 0.00784774957391664
+        },
+        {
+          "functionName": "doRender",
+          "url": "file:///Users/Simon/Github/vue-tui/src/renderer/cli/stdout-renderer.ts",
+          "selfTimeMs": 30.004,
+          "samples": 212,
+          "share": 0.0075646184410895646
+        },
+        {
+          "functionName": "composeRows",
+          "url": "file:///Users/Simon/Github/vue-tui/src/core/terminal/create-terminal.ts",
+          "selfTimeMs": 28.537,
+          "samples": 156,
+          "share": 0.007194757914057222
+        },
+        {
+          "functionName": "(anonymous)",
+          "url": "file:///Users/Simon/Github/vue-tui/src/vue/components/TLogView.ts",
+          "selfTimeMs": 28.164,
+          "samples": 191,
+          "share": 0.007100717030224186
+        },
+        {
+          "functionName": "putCell",
+          "url": "file:///Users/Simon/Github/vue-tui/src/core/buffer/buffer.ts",
+          "selfTimeMs": 27.92,
+          "samples": 204,
+          "share": 0.007039199669218126
+        },
+        {
+          "functionName": "setFullProps",
+          "url": "file:///Users/Simon/Github/vue-tui/node_modules/.pnpm/@vue+runtime-core@3.5.38/node_modules/@vue/runtime-core/dist/runtime-core.cjs.js",
+          "selfTimeMs": 25.924,
+          "samples": 159,
+          "share": 0.006535967486561987
+        },
+        {
+          "functionName": "set",
+          "url": "file:///Users/Simon/Github/vue-tui/node_modules/.pnpm/@vue+reactivity@3.5.38/node_modules/@vue/reactivity/dist/reactivity.cjs.js",
+          "selfTimeMs": 25.621,
+          "samples": 179,
+          "share": 0.0064595750259683945
+        },
+        {
+          "functionName": "snapshotRowFingerprints",
+          "url": "file:///Users/Simon/Github/vue-tui/src/renderer/cli/stdout-renderer.ts",
+          "selfTimeMs": 25.167,
+          "samples": 169,
+          "share": 0.006345112395244003
+        }
+      ],
+      "renderManagerP95Ms": {
+        "runs": 5,
+        "values": [
+          1.3982920000007653, 1.0352499999999054, 1.0782089999993332, 1.1685829999996713,
+          1.1422919999999976
+        ],
+        "median": 1.1422919999999976,
+        "min": 1.0352499999999054,
+        "max": 1.3982920000007653,
+        "cv": 0.10815788229208648,
+        "range": [1.0352499999999054, 1.3982920000007653]
+      },
+      "commitP95Ms": {
+        "runs": 5,
+        "values": [
+          1.1475000000000364, 0.8674160000000484, 0.8582500000002256, 0.9640420000005179,
+          0.9035839999996824
+        ],
+        "median": 0.9035839999996824,
+        "min": 0.8582500000002256,
+        "max": 1.1475000000000364,
+        "cv": 0.11219205393305562,
+        "range": [0.8582500000002256, 1.1475000000000364]
+      },
+      "dirtyRowsP95": {
+        "runs": 5,
+        "values": [26, 26, 26, 26, 26],
+        "median": 26,
+        "min": 26,
+        "max": 26,
+        "cv": 0,
+        "range": [26, 26]
+      },
+      "scannedNodesP95": {
+        "runs": 5,
+        "values": [13, 13, 13, 13, 13],
+        "median": 13,
+        "min": 13,
+        "max": 13,
+        "cv": 0,
+        "range": [13, 13]
+      },
+      "paintedNodesP95": {
+        "runs": 5,
+        "values": [13, 13, 13, 13, 13],
+        "median": 13,
+        "min": 13,
+        "max": 13,
+        "cv": 0,
+        "range": [13, 13]
+      }
+    },
+    "cli/tail-append-burst-framed": {
+      "runCount": 5,
+      "correctnessPasses": 5,
+      "elapsedMs": {
+        "runs": 5,
+        "values": [
+          1123.321, 1217.397959, 1213.9660840000006, 1201.5342500000002, 1155.8908330000004
+        ],
+        "median": 1201.5342500000002,
+        "min": 1123.321,
+        "max": 1217.397959,
+        "cv": 0.031143824269881635,
+        "range": [1123.321, 1217.397959]
+      },
+      "frameP95Ms": {
+        "runs": 5,
+        "values": [
+          1.9954999999999927, 2.65170900000021, 2.519333000000188, 2.458541999999852,
+          2.064332999999806
+        ],
+        "median": 2.458541999999852,
+        "min": 1.9954999999999927,
+        "max": 2.65170900000021,
+        "cv": 0.11121584720222887,
+        "range": [1.9954999999999927, 2.65170900000021]
+      },
+      "frameMaxMs": {
+        "runs": 5,
+        "values": [
+          3.124917000000096, 4.102832999999919, 4.1938749999999345, 3.9887910000002194,
+          4.091750000000047
+        ],
+        "median": 4.091750000000047,
+        "min": 3.124917000000096,
+        "max": 4.1938749999999345,
+        "cv": 0.10080130554391527,
+        "range": [3.124917000000096, 4.1938749999999345]
+      },
+      "longFrames": [
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        }
+      ],
+      "inputLatency": {
+        "commitMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        "domFlushMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        "paintOpportunityMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        }
+      },
+      "corpus": [
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        }
+      ],
+      "memory": [
+        {
+          "before": {
+            "rss": 500940800,
+            "heapTotal": 275890176,
+            "heapUsed": 48279424,
+            "external": 7017870,
+            "arrayBuffers": 4537301
+          },
+          "after": {
+            "rss": 506822656,
+            "heapTotal": 309329920,
+            "heapUsed": 53665384,
+            "external": 7198468,
+            "arrayBuffers": 4532645
+          },
+          "heapUsedDelta": 5385960,
+          "rssDelta": 5881856,
+          "heapBytesPerEvent": 5385.96,
+          "rssBytesPerEvent": 5881.856
+        },
+        {
+          "before": {
+            "rss": 550060032,
+            "heapTotal": 217694208,
+            "heapUsed": 48536496,
+            "external": 7017870,
+            "arrayBuffers": 4537301
+          },
+          "after": {
+            "rss": 556335104,
+            "heapTotal": 306708480,
+            "heapUsed": 53928600,
+            "external": 7201300,
+            "arrayBuffers": 4532645
+          },
+          "heapUsedDelta": 5392104,
+          "rssDelta": 6275072,
+          "heapBytesPerEvent": 5392.104,
+          "rssBytesPerEvent": 6275.072
+        },
+        {
+          "before": {
+            "rss": 496582656,
+            "heapTotal": 285327360,
+            "heapUsed": 48275656,
+            "external": 7017870,
+            "arrayBuffers": 4537301
+          },
+          "after": {
+            "rss": 502349824,
+            "heapTotal": 308805632,
+            "heapUsed": 53663544,
+            "external": 7201300,
+            "arrayBuffers": 4532645
+          },
+          "heapUsedDelta": 5387888,
+          "rssDelta": 5767168,
+          "heapBytesPerEvent": 5387.888,
+          "rssBytesPerEvent": 5767.168
+        },
+        {
+          "before": {
+            "rss": 498630656,
+            "heapTotal": 278511616,
+            "heapUsed": 48288968,
+            "external": 7017870,
+            "arrayBuffers": 4537301
+          },
+          "after": {
+            "rss": 503939072,
+            "heapTotal": 309854208,
+            "heapUsed": 53666856,
+            "external": 7238116,
+            "arrayBuffers": 4532645
+          },
+          "heapUsedDelta": 5377888,
+          "rssDelta": 5308416,
+          "heapBytesPerEvent": 5377.888,
+          "rssBytesPerEvent": 5308.416
+        },
+        {
+          "before": {
+            "rss": 501170176,
+            "heapTotal": 278773760,
+            "heapUsed": 48287800,
+            "external": 7017870,
+            "arrayBuffers": 4537301
+          },
+          "after": {
+            "rss": 506904576,
+            "heapTotal": 310116352,
+            "heapUsed": 53662080,
+            "external": 7238116,
+            "arrayBuffers": 4532645
+          },
+          "heapUsedDelta": 5374280,
+          "rssDelta": 5734400,
+          "heapBytesPerEvent": 5374.28,
+          "rssBytesPerEvent": 5734.4
+        }
+      ],
+      "stdout": [
+        {
+          "writes": 203,
+          "bytes": 731961,
+          "maxBytes": 7548,
+          "cursorMoves": 303,
+          "bytesPerFrame": 3502.2057416267944
+        },
+        {
+          "writes": 203,
+          "bytes": 731681,
+          "maxBytes": 7548,
+          "cursorMoves": 303,
+          "bytesPerFrame": 3484.195238095238
+        },
+        {
+          "writes": 203,
+          "bytes": 731801,
+          "maxBytes": 7548,
+          "cursorMoves": 303,
+          "bytesPerFrame": 3484.766666666667
+        },
+        {
+          "writes": 203,
+          "bytes": 731841,
+          "maxBytes": 7548,
+          "cursorMoves": 303,
+          "bytesPerFrame": 3484.957142857143
+        },
+        {
+          "writes": 203,
+          "bytes": 731961,
+          "maxBytes": 7548,
+          "cursorMoves": 303,
+          "bytesPerFrame": 3502.2057416267944
+        }
+      ],
+      "dom": {
+        "flush": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        "samples": 0,
+        "rendererDeltas": []
+      },
+      "raf": [],
+      "longTasks": [],
+      "cpuHotspots": [
+        {
+          "functionName": "mergeGroups",
+          "url": "file:///Users/Simon/Github/vue-tui/src/vue/markdown/block-source.ts",
+          "selfTimeMs": 464.926,
+          "samples": 3409,
+          "share": 0.45926691309682094
+        },
+        {
+          "functionName": "(garbage collector)",
+          "url": "(native)",
+          "selfTimeMs": 117.709,
+          "samples": 756,
+          "share": 0.11627624411995394
+        },
+        {
+          "functionName": "get blocks",
+          "url": "file:///Users/Simon/Github/vue-tui/src/vue/markdown/block-source.ts",
+          "selfTimeMs": 92.158,
+          "samples": 680,
+          "share": 0.09103625131134165
+        },
+        {
+          "functionName": "post",
+          "url": "node:inspector",
+          "selfTimeMs": 63.667,
+          "samples": 1,
+          "share": 0.0628920442309858
+        },
+        {
+          "functionName": "(anonymous)",
+          "url": "file:///Users/Simon/Github/vue-tui/src/renderer/cli/stdout-renderer.ts",
+          "selfTimeMs": 42.122,
+          "samples": 310,
+          "share": 0.04160929032462003
+        },
+        {
+          "functionName": "(program)",
+          "url": "(native)",
+          "selfTimeMs": 34.792,
+          "samples": 257,
+          "share": 0.03436851120493282
+        },
+        {
+          "functionName": "rebuildFenwick",
+          "url": "file:///Users/Simon/Github/vue-tui/src/vue/components/TLogView.ts",
+          "selfTimeMs": 33.954,
+          "samples": 248,
+          "share": 0.033540711354687544
+        },
+        {
+          "functionName": "get",
+          "url": "file:///Users/Simon/Github/vue-tui/node_modules/.pnpm/@vue+reactivity@3.5.38/node_modules/@vue/reactivity/dist/reactivity.cjs.js",
+          "selfTimeMs": 22.618,
+          "samples": 169,
+          "share": 0.022342693332753807
+        },
+        {
+          "functionName": "createCell",
+          "url": "file:///Users/Simon/Github/vue-tui/src/core/buffer/buffer.ts",
+          "selfTimeMs": 15.618,
+          "samples": 116,
+          "share": 0.015427897447650057
+        },
+        {
+          "functionName": "(anonymous)",
+          "url": "file:///Users/Simon/Github/vue-tui/src/core/terminal/create-terminal.ts",
+          "selfTimeMs": 15.17,
+          "samples": 111,
+          "share": 0.014985350511003416
+        },
+        {
+          "functionName": "cellTextId",
+          "url": "file:///Users/Simon/Github/vue-tui/src/renderer/cli/stdout-renderer.ts",
+          "selfTimeMs": 13.794,
+          "samples": 100,
+          "share": 0.013626099205588736
+        },
+        {
+          "functionName": "parseMarkdownToStructure",
+          "url": "file:///Users/Simon/Github/vue-tui/node_modules/.pnpm/stream-markdown-parser@1.0.7/node_modules/stream-markdown-parser/dist/index.js",
+          "selfTimeMs": 12.958,
+          "samples": 96,
+          "share": 0.012800275011310631
+        },
+        {
+          "functionName": "doRender",
+          "url": "file:///Users/Simon/Github/vue-tui/src/renderer/cli/stdout-renderer.ts",
+          "selfTimeMs": 12.212,
+          "samples": 90,
+          "share": 0.012063355335555288
+        },
+        {
+          "functionName": "tokenize",
+          "url": "file:///Users/Simon/Github/vue-tui/node_modules/.pnpm/stream-markdown-parser@1.0.7/node_modules/stream-markdown-parser/dist/index.js",
+          "selfTimeMs": 11.459,
+          "samples": 86,
+          "share": 0.01131952086391484
+        },
+        {
+          "functionName": "snapshotRowFingerprints",
+          "url": "file:///Users/Simon/Github/vue-tui/src/renderer/cli/stdout-renderer.ts",
+          "selfTimeMs": 10.789,
+          "samples": 77,
+          "share": 0.010657676114912053
+        },
+        {
+          "functionName": "writeAtForPlane",
+          "url": "file:///Users/Simon/Github/vue-tui/src/core/terminal/create-terminal.ts",
+          "selfTimeMs": 10.417,
+          "samples": 72,
+          "share": 0.010290204105017969
+        },
+        {
+          "functionName": "updateStats",
+          "url": "file:///Users/Simon/Github/vue-tui/examples/agent-console/src/transcript-store.ts",
+          "selfTimeMs": 9.831,
+          "samples": 66,
+          "share": 0.009711336906636425
+        },
+        {
+          "functionName": "putCell",
+          "url": "file:///Users/Simon/Github/vue-tui/src/core/buffer/buffer.ts",
+          "selfTimeMs": 9.75,
+          "samples": 70,
+          "share": 0.00963132283996594
+        },
+        {
+          "functionName": "(anonymous)",
+          "url": "file:///Users/Simon/Github/vue-tui/src/vue/components/TLogView.ts",
+          "selfTimeMs": 9.375,
+          "samples": 69,
+          "share": 0.009260887346121096
+        },
+        {
+          "functionName": "isRef",
+          "url": "file:///Users/Simon/Github/vue-tui/node_modules/.pnpm/@vue+reactivity@3.5.38/node_modules/@vue/reactivity/dist/reactivity.cjs.js",
+          "selfTimeMs": 9.003,
+          "samples": 68,
+          "share": 0.008893415336227012
+        }
+      ],
+      "renderManagerP95Ms": {
+        "runs": 5,
+        "values": [
+          1.1349170000003141, 1.2342920000000959, 1.1957919999995283, 1.3447919999998703,
+          1.1904170000002523
+        ],
+        "median": 1.1957919999995283,
+        "min": 1.1349170000003141,
+        "max": 1.3447919999998703,
+        "cv": 0.057348832048080396,
+        "range": [1.1349170000003141, 1.3447919999998703]
+      },
+      "commitP95Ms": {
+        "runs": 5,
+        "values": [
+          0.907832999999755, 1.1075840000003154, 1.0548330000001442, 1.2457910000002812,
+          0.9199579999999514
+        ],
+        "median": 1.0548330000001442,
+        "min": 0.907832999999755,
+        "max": 1.2457910000002812,
+        "cv": 0.11984745713184967,
+        "range": [0.907832999999755, 1.2457910000002812]
+      },
+      "dirtyRowsP95": {
+        "runs": 5,
+        "values": [26, 26, 26, 26, 26],
+        "median": 26,
+        "min": 26,
+        "max": 26,
+        "cv": 0,
+        "range": [26, 26]
+      },
+      "scannedNodesP95": {
+        "runs": 5,
+        "values": [12, 12, 12, 12, 12],
+        "median": 12,
+        "min": 12,
+        "max": 12,
+        "cv": 0,
+        "range": [12, 12]
+      },
+      "paintedNodesP95": {
+        "runs": 5,
+        "values": [12, 12, 12, 12, 12],
+        "median": 12,
+        "min": 12,
+        "max": 12,
+        "cv": 0,
+        "range": [12, 12]
+      }
+    },
+    "cli/tail-append-burst-single-task": {
+      "runCount": 5,
+      "correctnessPasses": 5,
+      "elapsedMs": {
+        "runs": 5,
+        "values": [
+          855.2423750000003, 721.8725419999996, 714.2095829999998, 719.2219580000001, 786.322541
+        ],
+        "median": 721.8725419999996,
+        "min": 714.2095829999998,
+        "max": 855.2423750000003,
+        "cv": 0.0720688726441441,
+        "range": [714.2095829999998, 855.2423750000003]
+      },
+      "frameP95Ms": {
+        "runs": 5,
+        "values": [
+          0.28670800000008967, 0.2821249999997235, 0.4070409999999356, 0.3074580000002243,
+          0.3154999999997017
+        ],
+        "median": 0.3074580000002243,
+        "min": 0.2821249999997235,
+        "max": 0.4070409999999356,
+        "cv": 0.1419131043657462,
+        "range": [0.2821249999997235, 0.4070409999999356]
+      },
+      "frameMaxMs": {
+        "runs": 5,
+        "values": [
+          3.9392499999999018, 3.614459000000352, 3.6692080000002534, 3.3560410000000047,
+          3.594166999999743
+        ],
+        "median": 3.614459000000352,
+        "min": 3.3560410000000047,
+        "max": 3.9392499999999018,
+        "cv": 0.05127273104066433,
+        "range": [3.3560410000000047, 3.9392499999999018]
+      },
+      "longFrames": [
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        }
+      ],
+      "inputLatency": {
+        "commitMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        "domFlushMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        "paintOpportunityMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        }
+      },
+      "corpus": [
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        }
+      ],
+      "memory": [
+        {
+          "before": {
+            "rss": 498270208,
+            "heapTotal": 286113792,
+            "heapUsed": 48288752,
+            "external": 7017870,
+            "arrayBuffers": 4537301
+          },
+          "after": {
+            "rss": 499482624,
+            "heapTotal": 248365056,
+            "heapUsed": 47987608,
+            "external": 7079940,
+            "arrayBuffers": 4537309
+          },
+          "heapUsedDelta": -301144,
+          "rssDelta": 1212416,
+          "heapBytesPerEvent": -301.144,
+          "rssBytesPerEvent": 1212.416
+        },
+        {
+          "before": {
+            "rss": 498728960,
+            "heapTotal": 285327360,
+            "heapUsed": 48288904,
+            "external": 7017870,
+            "arrayBuffers": 4537301
+          },
+          "after": {
+            "rss": 499400704,
+            "heapTotal": 245743616,
+            "heapUsed": 48007800,
+            "external": 7079940,
+            "arrayBuffers": 4537309
+          },
+          "heapUsedDelta": -281104,
+          "rssDelta": 671744,
+          "heapBytesPerEvent": -281.104,
+          "rssBytesPerEvent": 671.744
+        },
+        {
+          "before": {
+            "rss": 500547584,
+            "heapTotal": 285589504,
+            "heapUsed": 48289280,
+            "external": 7017870,
+            "arrayBuffers": 4537301
+          },
+          "after": {
+            "rss": 500973568,
+            "heapTotal": 247840768,
+            "heapUsed": 48011480,
+            "external": 7079940,
+            "arrayBuffers": 4537309
+          },
+          "heapUsedDelta": -277800,
+          "rssDelta": 425984,
+          "heapBytesPerEvent": -277.8,
+          "rssBytesPerEvent": 425.984
+        },
+        {
+          "before": {
+            "rss": 498843648,
+            "heapTotal": 270123008,
+            "heapUsed": 48044568,
+            "external": 6951910,
+            "arrayBuffers": 4536877
+          },
+          "after": {
+            "rss": 499924992,
+            "heapTotal": 243384320,
+            "heapUsed": 48208400,
+            "external": 7014396,
+            "arrayBuffers": 4537301
+          },
+          "heapUsedDelta": 163832,
+          "rssDelta": 1081344,
+          "heapBytesPerEvent": 163.832,
+          "rssBytesPerEvent": 1081.344
+        },
+        {
+          "before": {
+            "rss": 495468544,
+            "heapTotal": 287162368,
+            "heapUsed": 48295664,
+            "external": 7017870,
+            "arrayBuffers": 4537301
+          },
+          "after": {
+            "rss": 495796224,
+            "heapTotal": 250200064,
+            "heapUsed": 47992768,
+            "external": 7079940,
+            "arrayBuffers": 4537309
+          },
+          "heapUsedDelta": -302896,
+          "rssDelta": 327680,
+          "heapBytesPerEvent": -302.896,
+          "rssBytesPerEvent": 327.68
+        }
+      ],
+      "stdout": [
+        {
+          "writes": 3,
+          "bytes": 7314,
+          "maxBytes": 7184,
+          "cursorMoves": 3,
+          "bytesPerFrame": 731.4
+        },
+        {
+          "writes": 3,
+          "bytes": 7314,
+          "maxBytes": 7184,
+          "cursorMoves": 3,
+          "bytesPerFrame": 731.4
+        },
+        {
+          "writes": 3,
+          "bytes": 7314,
+          "maxBytes": 7184,
+          "cursorMoves": 3,
+          "bytesPerFrame": 731.4
+        },
+        {
+          "writes": 3,
+          "bytes": 7314,
+          "maxBytes": 7184,
+          "cursorMoves": 3,
+          "bytesPerFrame": 731.4
+        },
+        {
+          "writes": 3,
+          "bytes": 7314,
+          "maxBytes": 7184,
+          "cursorMoves": 3,
+          "bytesPerFrame": 731.4
+        }
+      ],
+      "dom": {
+        "flush": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        "samples": 0,
+        "rendererDeltas": []
+      },
+      "raf": [],
+      "longTasks": [],
+      "cpuHotspots": [],
+      "renderManagerP95Ms": {
+        "runs": 5,
+        "values": [
+          0.06858299999976225, 0.06420799999978044, 0.06791599999996834, 0.0812500000001819,
+          0.06887499999993452
+        ],
+        "median": 0.06858299999976225,
+        "min": 0.06420799999978044,
+        "max": 0.0812500000001819,
+        "cv": 0.08251010093848965,
+        "range": [0.06420799999978044, 0.0812500000001819]
+      },
+      "commitP95Ms": {
+        "runs": 5,
+        "values": [
+          0.21587499999986903, 0.21570799999972223, 0.3354159999998956, 0.22366599999986647,
+          0.24387500000011642
+        ],
+        "median": 0.22366599999986647,
+        "min": 0.21570799999972223,
+        "max": 0.3354159999998956,
+        "cv": 0.1839967129988663,
+        "range": [0.21570799999972223, 0.3354159999998956]
+      },
+      "dirtyRowsP95": {
+        "runs": 5,
+        "values": [2, 2, 2, 2, 2],
+        "median": 2,
+        "min": 2,
+        "max": 2,
+        "cv": 0,
+        "range": [2, 2]
+      },
+      "scannedNodesP95": {
+        "runs": 5,
+        "values": [0, 0, 0, 0, 0],
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "cv": 0,
+        "range": [0, 0]
+      },
+      "paintedNodesP95": {
+        "runs": 5,
+        "values": [0, 0, 0, 0, 0],
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "cv": 0,
+        "range": [0, 0]
+      }
+    },
+    "cli/tail-stream-steady": {
+      "runCount": 5,
+      "correctnessPasses": 5,
+      "elapsedMs": {
+        "runs": 5,
+        "values": [
+          4802.628667, 4801.796834000001, 4803.147666999999, 4804.549290999999, 4806.361834
+        ],
+        "median": 4803.147666999999,
+        "min": 4801.796834000001,
+        "max": 4806.361834,
+        "cv": 0.00033413515398658563,
+        "range": [4801.796834000001, 4806.361834]
+      },
+      "frameP95Ms": {
+        "runs": 5,
+        "values": [
+          1.8633339999996679, 1.8927079999998568, 1.8633749999999054, 1.898167000000285,
+          2.0122080000001006
+        ],
+        "median": 1.8927079999998568,
+        "min": 1.8633339999996679,
+        "max": 2.0122080000001006,
+        "cv": 0.028885898647772485,
+        "range": [1.8633339999996679, 2.0122080000001006]
+      },
+      "frameMaxMs": {
+        "runs": 5,
+        "values": [
+          4.5520830000004935, 3.7359999999998763, 4.476125000000138, 4.01391699999931,
+          3.9074170000003505
+        ],
+        "median": 4.01391699999931,
+        "min": 3.7359999999998763,
+        "max": 4.5520830000004935,
+        "cv": 0.07764713462027205,
+        "range": [3.7359999999998763, 4.5520830000004935]
+      },
+      "longFrames": [
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        }
+      ],
+      "inputLatency": {
+        "commitMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        "domFlushMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        "paintOpportunityMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        }
+      },
+      "corpus": [
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 400,
+          "finalReplayTotal": 6403,
+          "finalLineCount": 8000,
+          "firstLineIndex": 1316
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 400,
+          "finalReplayTotal": 6403,
+          "finalLineCount": 8000,
+          "firstLineIndex": 1316
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 400,
+          "finalReplayTotal": 6403,
+          "finalLineCount": 8000,
+          "firstLineIndex": 1316
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 400,
+          "finalReplayTotal": 6403,
+          "finalLineCount": 8000,
+          "firstLineIndex": 1316
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 400,
+          "finalReplayTotal": 6403,
+          "finalLineCount": 8000,
+          "firstLineIndex": 1316
+        }
+      ],
+      "memory": [
+        {
+          "before": {
+            "rss": 496386048,
+            "heapTotal": 289521664,
+            "heapUsed": 48120536,
+            "external": 6951910,
+            "arrayBuffers": 4536877
+          },
+          "after": {
+            "rss": 510017536,
+            "heapTotal": 293076992,
+            "heapUsed": 52486800,
+            "external": 7282694,
+            "arrayBuffers": 4532645
+          },
+          "heapUsedDelta": 4366264,
+          "rssDelta": 13631488,
+          "heapBytesPerEvent": 10915.66,
+          "rssBytesPerEvent": 34078.72
+        },
+        {
+          "before": {
+            "rss": 499204096,
+            "heapTotal": 284803072,
+            "heapUsed": 48289800,
+            "external": 7017870,
+            "arrayBuffers": 4537301
+          },
+          "after": {
+            "rss": 515112960,
+            "heapTotal": 292552704,
+            "heapUsed": 52490504,
+            "external": 7207646,
+            "arrayBuffers": 4532645
+          },
+          "heapUsedDelta": 4200704,
+          "rssDelta": 15908864,
+          "heapBytesPerEvent": 10501.76,
+          "rssBytesPerEvent": 39772.16
+        },
+        {
+          "before": {
+            "rss": 498991104,
+            "heapTotal": 291880960,
+            "heapUsed": 48062272,
+            "external": 6951910,
+            "arrayBuffers": 4536877
+          },
+          "after": {
+            "rss": 513490944,
+            "heapTotal": 293339136,
+            "heapUsed": 52491856,
+            "external": 7160918,
+            "arrayBuffers": 4532645
+          },
+          "heapUsedDelta": 4429584,
+          "rssDelta": 14499840,
+          "heapBytesPerEvent": 11073.96,
+          "rssBytesPerEvent": 36249.6
+        },
+        {
+          "before": {
+            "rss": 499122176,
+            "heapTotal": 300793856,
+            "heapUsed": 48286880,
+            "external": 7017870,
+            "arrayBuffers": 4537301
+          },
+          "after": {
+            "rss": 507789312,
+            "heapTotal": 293076992,
+            "heapUsed": 52495288,
+            "external": 7160918,
+            "arrayBuffers": 4532645
+          },
+          "heapUsedDelta": 4208408,
+          "rssDelta": 8667136,
+          "heapBytesPerEvent": 10521.02,
+          "rssBytesPerEvent": 21667.84
+        },
+        {
+          "before": {
+            "rss": 502759424,
+            "heapTotal": 285327360,
+            "heapUsed": 48284904,
+            "external": 7017870,
+            "arrayBuffers": 4537301
+          },
+          "after": {
+            "rss": 513212416,
+            "heapTotal": 293339136,
+            "heapUsed": 52501648,
+            "external": 7240214,
+            "arrayBuffers": 4532645
+          },
+          "heapUsedDelta": 4216744,
+          "rssDelta": 10452992,
+          "heapBytesPerEvent": 10541.86,
+          "rssBytesPerEvent": 26132.48
+        }
+      ],
+      "stdout": [
+        {
+          "writes": 686,
+          "bytes": 1908394,
+          "maxBytes": 7408,
+          "cursorMoves": 1081,
+          "bytesPerFrame": 2710.786931818182
+        },
+        {
+          "writes": 685,
+          "bytes": 1915861,
+          "maxBytes": 7408,
+          "cursorMoves": 1080,
+          "bytesPerFrame": 2725.2645803698433
+        },
+        {
+          "writes": 685,
+          "bytes": 1893892,
+          "maxBytes": 7366,
+          "cursorMoves": 1080,
+          "bytesPerFrame": 2694.0142247510666
+        },
+        {
+          "writes": 683,
+          "bytes": 1894571,
+          "maxBytes": 7408,
+          "cursorMoves": 1078,
+          "bytesPerFrame": 2706.53
+        },
+        {
+          "writes": 686,
+          "bytes": 1908100,
+          "maxBytes": 7408,
+          "cursorMoves": 1081,
+          "bytesPerFrame": 2714.2247510668562
+        }
+      ],
+      "dom": {
+        "flush": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        "samples": 0,
+        "rendererDeltas": []
+      },
+      "raf": [],
+      "longTasks": [],
+      "cpuHotspots": [],
+      "renderManagerP95Ms": {
+        "runs": 5,
+        "values": [
+          1.0088750000004438, 1.0483749999998508, 1.011916999999812, 1.0583750000005239,
+          1.0444580000003043
+        ],
+        "median": 1.0444580000003043,
+        "min": 1.0088750000004438,
+        "max": 1.0583750000005239,
+        "cv": 0.019471076421581007,
+        "range": [1.0088750000004438, 1.0583750000005239]
+      },
+      "commitP95Ms": {
+        "runs": 5,
+        "values": [
+          0.8607080000001588, 0.8467500000006112, 0.8206249999993815, 0.8683329999998932,
+          0.9569589999996424
+        ],
+        "median": 0.8607080000001588,
+        "min": 0.8206249999993815,
+        "max": 0.9569589999996424,
+        "cv": 0.05295019828679162,
+        "range": [0.8206249999993815, 0.9569589999996424]
+      },
+      "dirtyRowsP95": {
+        "runs": 5,
+        "values": [26, 26, 26, 26, 26],
+        "median": 26,
+        "min": 26,
+        "max": 26,
+        "cv": 0,
+        "range": [26, 26]
+      },
+      "scannedNodesP95": {
+        "runs": 5,
+        "values": [12, 12, 12, 12, 12],
+        "median": 12,
+        "min": 12,
+        "max": 12,
+        "cv": 0,
+        "range": [12, 12]
+      },
+      "paintedNodesP95": {
+        "runs": 5,
+        "values": [12, 12, 12, 12, 12],
+        "median": 12,
+        "min": 12,
+        "max": 12,
+        "cv": 0,
+        "range": [12, 12]
+      }
     },
     "browser/tail-stream-steady": {
       "runCount": 5,
-      "frameP95": {
-        "runs": 5,
-        "median": 0.8999998569488525,
-        "min": 0.8000001907348633,
-        "max": 0.8999998569488525,
-        "cv": 0.056964688230045635,
-        "range": [0.8000001907348633, 0.8999998569488525]
-      },
-      "frameMax": {
-        "runs": 5,
-        "median": 1.7000000476837158,
-        "min": 1.6000001430511475,
-        "max": 2,
-        "cv": 0.07707190439019243,
-        "range": [1.6000001430511475, 2]
-      },
+      "correctnessPasses": 5,
       "elapsedMs": {
         "runs": 5,
-        "median": 10679.5,
-        "min": 10665.699999809265,
-        "max": 10719.400000095367,
-        "cv": 0.0018867426111472238,
-        "range": [10665.699999809265, 10719.400000095367]
+        "values": [6127.400000095367, 6129, 6129.299999952316, 6129.5, 6129.800000190735],
+        "median": 6129.299999952316,
+        "min": 6127.400000095367,
+        "max": 6129.800000190735,
+        "cv": 0.00013728623842580538,
+        "range": [6127.400000095367, 6129.800000190735]
       },
-      "inputToPaintMs": null
+      "frameP95Ms": {
+        "runs": 5,
+        "values": [
+          0.8000001907348633, 0.8000001907348633, 0.8000001907348633, 0.8999998569488525,
+          0.8000001907348633
+        ],
+        "median": 0.8000001907348633,
+        "min": 0.8000001907348633,
+        "max": 0.8999998569488525,
+        "cv": 0.048780317607226856,
+        "range": [0.8000001907348633, 0.8999998569488525]
+      },
+      "frameMaxMs": {
+        "runs": 5,
+        "values": [
+          1.3999998569488525, 1.4000000953674316, 1.4000000953674316, 1.4000000953674316,
+          1.3999998569488525
+        ],
+        "median": 1.4000000953674316,
+        "min": 1.3999998569488525,
+        "max": 1.4000000953674316,
+        "cv": 8.342912342831674e-8,
+        "range": [1.3999998569488525, 1.4000000953674316]
+      },
+      "longFrames": [
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        }
+      ],
+      "inputLatency": {
+        "commitMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        "domFlushMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        "paintOpportunityMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        }
+      },
+      "corpus": [
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 500,
+          "finalReplayTotal": 6503,
+          "finalLineCount": 8000,
+          "firstLineIndex": 1469
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 500,
+          "finalReplayTotal": 6503,
+          "finalLineCount": 8000,
+          "firstLineIndex": 1469
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 500,
+          "finalReplayTotal": 6503,
+          "finalLineCount": 8000,
+          "firstLineIndex": 1469
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 500,
+          "finalReplayTotal": 6503,
+          "finalLineCount": 8000,
+          "firstLineIndex": 1469
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 500,
+          "finalReplayTotal": 6503,
+          "finalLineCount": 8000,
+          "firstLineIndex": 1469
+        }
+      ],
+      "memory": [
+        {
+          "beforeUsedSize": 12010736,
+          "afterUsedSize": 15469872,
+          "deltaUsedSize": 3459136,
+          "bytesPerEvent": 6918.272
+        },
+        {
+          "beforeUsedSize": 11998524,
+          "afterUsedSize": 15459152,
+          "deltaUsedSize": 3460628,
+          "bytesPerEvent": 6921.256
+        },
+        {
+          "beforeUsedSize": 12001464,
+          "afterUsedSize": 15459108,
+          "deltaUsedSize": 3457644,
+          "bytesPerEvent": 6915.288
+        },
+        {
+          "beforeUsedSize": 12003156,
+          "afterUsedSize": 15461748,
+          "deltaUsedSize": 3458592,
+          "bytesPerEvent": 6917.184
+        },
+        {
+          "beforeUsedSize": 12012908,
+          "afterUsedSize": 15479452,
+          "deltaUsedSize": 3466544,
+          "bytesPerEvent": 6933.088
+        }
+      ],
+      "stdout": [],
+      "dom": {
+        "flush": {
+          "p50": 1,
+          "p95": 1.3999998569488525,
+          "p99": 1.5,
+          "max": 2.200000047683716
+        },
+        "samples": 2563,
+        "rendererDeltas": [
+          {
+            "flushCount": 543,
+            "rowRender": {
+              "rows": 17936,
+              "cacheHits": 10951,
+              "rowKeyPrepassChecks": 17936,
+              "rowKeyPrepassHits": 10951,
+              "rowKeyPrepassMisses": 6985,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 4135,
+              "segmentReuseRows": 509,
+              "fragmentRows": 2341,
+              "spansCreated": 8452,
+              "spansReused": 7479,
+              "textNodeUpdates": 0,
+              "replaceChildren": 4037
+            }
+          },
+          {
+            "flushCount": 545,
+            "rowRender": {
+              "rows": 17942,
+              "cacheHits": 10778,
+              "rowKeyPrepassChecks": 17942,
+              "rowKeyPrepassHits": 10778,
+              "rowKeyPrepassMisses": 7164,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 4230,
+              "segmentReuseRows": 533,
+              "fragmentRows": 2401,
+              "spansCreated": 8652,
+              "spansReused": 7697,
+              "textNodeUpdates": 0,
+              "replaceChildren": 4119
+            }
+          },
+          {
+            "flushCount": 541,
+            "rowRender": {
+              "rows": 17384,
+              "cacheHits": 10440,
+              "rowKeyPrepassChecks": 17384,
+              "rowKeyPrepassHits": 10440,
+              "rowKeyPrepassMisses": 6944,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 4122,
+              "segmentReuseRows": 505,
+              "fragmentRows": 2317,
+              "spansCreated": 8402,
+              "spansReused": 7384,
+              "textNodeUpdates": 0,
+              "replaceChildren": 4037
+            }
+          },
+          {
+            "flushCount": 540,
+            "rowRender": {
+              "rows": 17750,
+              "cacheHits": 10672,
+              "rowKeyPrepassChecks": 17750,
+              "rowKeyPrepassHits": 10672,
+              "rowKeyPrepassMisses": 7078,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 4191,
+              "segmentReuseRows": 530,
+              "fragmentRows": 2357,
+              "spansCreated": 8518,
+              "spansReused": 7623,
+              "textNodeUpdates": 0,
+              "replaceChildren": 4080
+            }
+          },
+          {
+            "flushCount": 542,
+            "rowRender": {
+              "rows": 17738,
+              "cacheHits": 10714,
+              "rowKeyPrepassChecks": 17738,
+              "rowKeyPrepassHits": 10714,
+              "rowKeyPrepassMisses": 7024,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 4169,
+              "segmentReuseRows": 518,
+              "fragmentRows": 2337,
+              "spansCreated": 8458,
+              "spansReused": 7513,
+              "textNodeUpdates": 0,
+              "replaceChildren": 4061
+            }
+          }
+        ]
+      },
+      "raf": [
+        {
+          "p50": 8.300000000000182,
+          "p95": 9.299999999999272,
+          "p99": 9.399999999999636,
+          "max": 33.399999999999636
+        },
+        {
+          "p50": 8.300000000000182,
+          "p95": 9.299999999999272,
+          "p99": 9.399999999999636,
+          "max": 33.5
+        },
+        {
+          "p50": 8.300000000000182,
+          "p95": 9.299999999999272,
+          "p99": 9.399999999999636,
+          "max": 33.100000000000364
+        },
+        {
+          "p50": 8.300000000000182,
+          "p95": 9.200000000000273,
+          "p99": 9.399999999999636,
+          "max": 33.29999999999927
+        },
+        {
+          "p50": 8.300000000000182,
+          "p95": 9.199999999999818,
+          "p99": 9.399999999999636,
+          "max": 33.30000000000109
+        }
+      ],
+      "longTasks": [
+        {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        }
+      ],
+      "cpuHotspots": [],
+      "renderManagerP95Ms": {
+        "runs": 5,
+        "values": [
+          0.7999999523162842, 0.7999999523162842, 0.7999999523162842, 0.7999999523162842,
+          0.7999999523162842
+        ],
+        "median": 0.7999999523162842,
+        "min": 0.7999999523162842,
+        "max": 0.7999999523162842,
+        "cv": 0,
+        "range": [0.7999999523162842, 0.7999999523162842]
+      },
+      "commitP95Ms": {
+        "runs": 5,
+        "values": [
+          0.20000004768371582, 0.20000004768371582, 0.20000004768371582, 0.2999999523162842,
+          0.20000004768371582
+        ],
+        "median": 0.20000004768371582,
+        "min": 0.20000004768371582,
+        "max": 0.2999999523162842,
+        "cv": 0.18181798477805944,
+        "range": [0.20000004768371582, 0.2999999523162842]
+      },
+      "dirtyRowsP95": {
+        "runs": 5,
+        "values": [26, 26, 26, 26, 26],
+        "median": 26,
+        "min": 26,
+        "max": 26,
+        "cv": 0,
+        "range": [26, 26]
+      },
+      "scannedNodesP95": {
+        "runs": 5,
+        "values": [13, 13, 13, 13, 13],
+        "median": 13,
+        "min": 13,
+        "max": 13,
+        "cv": 0,
+        "range": [13, 13]
+      },
+      "paintedNodesP95": {
+        "runs": 5,
+        "values": [13, 13, 13, 13, 13],
+        "median": 13,
+        "min": 13,
+        "max": 13,
+        "cv": 0,
+        "range": [13, 13]
+      }
     },
     "browser/tail-append-burst-framed": {
       "runCount": 5,
-      "frameP95": {
-        "runs": 5,
-        "median": 1,
-        "min": 1,
-        "max": 1.0999999046325684,
-        "cv": 0.04710552878104592,
-        "range": [1, 1.0999999046325684]
-      },
-      "frameMax": {
-        "runs": 5,
-        "median": 1.5999999046325684,
-        "min": 1.5,
-        "max": 2.299999952316284,
-        "cv": 0.17279650768663998,
-        "range": [1.5, 2.299999952316284]
-      },
+      "correctnessPasses": 5,
       "elapsedMs": {
         "runs": 5,
-        "median": 3463.600000143051,
-        "min": 3411.5999999046326,
-        "max": 3517.2000000476837,
-        "cv": 0.009851732322088597,
-        "range": [3411.5999999046326, 3517.2000000476837]
+        "values": [
+          1177.7999999523163, 1169.9000000953674, 1153.7999999523163, 1160.4000000953674,
+          1153.2000000476837
+        ],
+        "median": 1160.4000000953674,
+        "min": 1153.2000000476837,
+        "max": 1177.7999999523163,
+        "cv": 0.00819403523057829,
+        "range": [1153.2000000476837, 1177.7999999523163]
       },
-      "inputToPaintMs": null
+      "frameP95Ms": {
+        "runs": 5,
+        "values": [0.9000000953674316, 1, 1, 1, 0.9000000953674316],
+        "median": 1,
+        "min": 0.9000000953674316,
+        "max": 1,
+        "cv": 0.05103098561320503,
+        "range": [0.9000000953674316, 1]
+      },
+      "frameMaxMs": {
+        "runs": 5,
+        "values": [1.5, 1.5, 1.5, 1.5, 1.3999998569488525],
+        "median": 1.5,
+        "min": 1.3999998569488525,
+        "max": 1.5,
+        "cv": 0.027027066211965912,
+        "range": [1.3999998569488525, 1.5]
+      },
+      "longFrames": [
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        }
+      ],
+      "inputLatency": {
+        "commitMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        "domFlushMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        "paintOpportunityMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        }
+      },
+      "corpus": [
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        }
+      ],
+      "memory": [
+        {
+          "beforeUsedSize": 12000888,
+          "afterUsedSize": 16080328,
+          "deltaUsedSize": 4079440,
+          "bytesPerEvent": 4079.44
+        },
+        {
+          "beforeUsedSize": 11998200,
+          "afterUsedSize": 16080644,
+          "deltaUsedSize": 4082444,
+          "bytesPerEvent": 4082.444
+        },
+        {
+          "beforeUsedSize": 11985068,
+          "afterUsedSize": 16053516,
+          "deltaUsedSize": 4068448,
+          "bytesPerEvent": 4068.448
+        },
+        {
+          "beforeUsedSize": 11989448,
+          "afterUsedSize": 16054052,
+          "deltaUsedSize": 4064604,
+          "bytesPerEvent": 4064.604
+        },
+        {
+          "beforeUsedSize": 12000932,
+          "afterUsedSize": 16086484,
+          "deltaUsedSize": 4085552,
+          "bytesPerEvent": 4085.552
+        }
+      ],
+      "stdout": [],
+      "dom": {
+        "flush": {
+          "p50": 1.2999999523162842,
+          "p95": 1.7999999523162842,
+          "p99": 2.9000000953674316,
+          "max": 3.8999998569488525
+        },
+        "samples": 329,
+        "rendererDeltas": [
+          {
+            "flushCount": 67,
+            "rowRender": {
+              "rows": 5381,
+              "cacheHits": 3689,
+              "rowKeyPrepassChecks": 5381,
+              "rowKeyPrepassHits": 3689,
+              "rowKeyPrepassMisses": 1692,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 991,
+              "segmentReuseRows": 175,
+              "fragmentRows": 526,
+              "spansCreated": 1881,
+              "spansReused": 1909,
+              "textNodeUpdates": 0,
+              "replaceChildren": 899
+            }
+          },
+          {
+            "flushCount": 66,
+            "rowRender": {
+              "rows": 5325,
+              "cacheHits": 3672,
+              "rowKeyPrepassChecks": 5325,
+              "rowKeyPrepassHits": 3672,
+              "rowKeyPrepassMisses": 1653,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 959,
+              "segmentReuseRows": 168,
+              "fragmentRows": 526,
+              "spansCreated": 1883,
+              "spansReused": 1850,
+              "textNodeUpdates": 0,
+              "replaceChildren": 901
+            }
+          },
+          {
+            "flushCount": 66,
+            "rowRender": {
+              "rows": 5325,
+              "cacheHits": 3672,
+              "rowKeyPrepassChecks": 5325,
+              "rowKeyPrepassHits": 3672,
+              "rowKeyPrepassMisses": 1653,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 959,
+              "segmentReuseRows": 168,
+              "fragmentRows": 526,
+              "spansCreated": 1883,
+              "spansReused": 1850,
+              "textNodeUpdates": 0,
+              "replaceChildren": 901
+            }
+          },
+          {
+            "flushCount": 62,
+            "rowRender": {
+              "rows": 5293,
+              "cacheHits": 3734,
+              "rowKeyPrepassChecks": 5293,
+              "rowKeyPrepassHits": 3734,
+              "rowKeyPrepassMisses": 1559,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 910,
+              "segmentReuseRows": 152,
+              "fragmentRows": 497,
+              "spansCreated": 1785,
+              "spansReused": 1723,
+              "textNodeUpdates": 0,
+              "replaceChildren": 858
+            }
+          },
+          {
+            "flushCount": 68,
+            "rowRender": {
+              "rows": 5389,
+              "cacheHits": 3673,
+              "rowKeyPrepassChecks": 5389,
+              "rowKeyPrepassHits": 3673,
+              "rowKeyPrepassMisses": 1716,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 1004,
+              "segmentReuseRows": 176,
+              "fragmentRows": 536,
+              "spansCreated": 1918,
+              "spansReused": 1930,
+              "textNodeUpdates": 0,
+              "replaceChildren": 916
+            }
+          }
+        ]
+      },
+      "raf": [
+        {
+          "p50": 8.400000000000091,
+          "p95": 16.90000000000009,
+          "p99": 17.59999999999991,
+          "max": 25.09999999999991
+        },
+        {
+          "p50": 8.400000000000091,
+          "p95": 16.700000000000273,
+          "p99": 17.5,
+          "max": 17.59999999999991
+        },
+        {
+          "p50": 8.400000000000091,
+          "p95": 16.700000000000273,
+          "p99": 17.5,
+          "max": 17.5
+        },
+        {
+          "p50": 8.400000000000091,
+          "p95": 16.700000000000273,
+          "p99": 17.59999999999991,
+          "max": 25
+        },
+        {
+          "p50": 8.300000000000182,
+          "p95": 16.700000000000273,
+          "p99": 17.59999999999991,
+          "max": 17.699999999999818
+        }
+      ],
+      "longTasks": [
+        {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        }
+      ],
+      "cpuHotspots": [
+        {
+          "functionName": "WP",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 410.677,
+          "samples": 3037,
+          "share": 0.3957436146993212
+        },
+        {
+          "functionName": "(program)",
+          "url": "(native)",
+          "selfTimeMs": 195.672,
+          "samples": 1036,
+          "share": 0.18855680881920722
+        },
+        {
+          "functionName": "(idle)",
+          "url": "(native)",
+          "selfTimeMs": 92.468,
+          "samples": 676,
+          "share": 0.08910560017730924
+        },
+        {
+          "functionName": "get blocks",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 92.112,
+          "samples": 676,
+          "share": 0.08876254535117348
+        },
+        {
+          "functionName": "(garbage collector)",
+          "url": "(native)",
+          "selfTimeMs": 67.202,
+          "samples": 268,
+          "share": 0.06475834389319046
+        },
+        {
+          "functionName": "K3",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 30.058,
+          "samples": 192,
+          "share": 0.028965005516822698
+        },
+        {
+          "functionName": "J0",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 28.43,
+          "samples": 198,
+          "share": 0.02739620423325801
+        },
+        {
+          "functionName": "Yp",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 20.751,
+          "samples": 155,
+          "share": 0.019996434542537356
+        },
+        {
+          "functionName": "c9",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 18.166,
+          "samples": 55,
+          "share": 0.01750543250444478
+        },
+        {
+          "functionName": "(anonymous)",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 17.381,
+          "samples": 120,
+          "share": 0.01674897734007237
+        },
+        {
+          "functionName": "p9",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 7.922,
+          "samples": 58,
+          "share": 0.00763393351867288
+        },
+        {
+          "functionName": "tokenize",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 7.654,
+          "samples": 48,
+          "share": 0.007375678761918988
+        },
+        {
+          "functionName": "ab",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 6.937,
+          "samples": 51,
+          "share": 0.00668475092388712
+        },
+        {
+          "functionName": "p",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 6.919,
+          "samples": 51,
+          "share": 0.006667405455149918
+        },
+        {
+          "functionName": "get",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 6.453,
+          "samples": 47,
+          "share": 0.006218350542286808
+        },
+        {
+          "functionName": "f",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 6.36,
+          "samples": 44,
+          "share": 0.006128732287144599
+        },
+        {
+          "functionName": "I8",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 6.236,
+          "samples": 41,
+          "share": 0.006009241280288321
+        },
+        {
+          "functionName": "Kh",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 5.649,
+          "samples": 38,
+          "share": 0.005443586272025132
+        },
+        {
+          "functionName": "g3",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 5.393,
+          "samples": 39,
+          "share": 0.005196895161096041
+        },
+        {
+          "functionName": "parse",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 5.295,
+          "samples": 39,
+          "share": 0.005102458720193498
+        }
+      ],
+      "renderManagerP95Ms": {
+        "runs": 5,
+        "values": [
+          0.9000000953674316, 0.9000000953674316, 0.8999998569488525, 0.9000000953674316,
+          0.8000001907348633
+        ],
+        "median": 0.9000000953674316,
+        "min": 0.8000001907348633,
+        "max": 0.9000000953674316,
+        "cv": 0.04545447156461667,
+        "range": [0.8000001907348633, 0.9000000953674316]
+      },
+      "commitP95Ms": {
+        "runs": 5,
+        "values": [
+          0.10000014305114746, 0.10000014305114746, 0.10000014305114746, 0.10000014305114746,
+          0.10000014305114746
+        ],
+        "median": 0.10000014305114746,
+        "min": 0.10000014305114746,
+        "max": 0.10000014305114746,
+        "cv": 0,
+        "range": [0.10000014305114746, 0.10000014305114746]
+      },
+      "dirtyRowsP95": {
+        "runs": 5,
+        "values": [26, 26, 26, 26, 26],
+        "median": 26,
+        "min": 26,
+        "max": 26,
+        "cv": 0,
+        "range": [26, 26]
+      },
+      "scannedNodesP95": {
+        "runs": 5,
+        "values": [13, 13, 13, 13, 13],
+        "median": 13,
+        "min": 13,
+        "max": 13,
+        "cv": 0,
+        "range": [13, 13]
+      },
+      "paintedNodesP95": {
+        "runs": 5,
+        "values": [13, 13, 13, 13, 13],
+        "median": 13,
+        "min": 13,
+        "max": 13,
+        "cv": 0,
+        "range": [13, 13]
+      }
     },
     "browser/tail-append-burst-single-task": {
       "runCount": 5,
-      "frameP95": {
-        "runs": 5,
-        "median": 1.1000001430511475,
-        "min": 1.0999999046325684,
-        "max": 1.2000000476837158,
-        "cv": 0.04297344584111196,
-        "range": [1.0999999046325684, 1.2000000476837158]
-      },
-      "frameMax": {
-        "runs": 5,
-        "median": 1.8999998569488525,
-        "min": 1.8000001907348633,
-        "max": 2.200000047683716,
-        "cv": 0.08366600835272596,
-        "range": [1.8000001907348633, 2.200000047683716]
-      },
+      "correctnessPasses": 5,
       "elapsedMs": {
         "runs": 5,
-        "median": 3043.2000000476837,
-        "min": 3019.5,
-        "max": 3095.7999999523163,
-        "cv": 0.00968480278109613,
-        "range": [3019.5, 3095.7999999523163]
+        "values": [
+          771.0999999046326, 778.6999998092651, 779.5999999046326, 795.0999999046326,
+          787.5999999046326
+        ],
+        "median": 779.5999999046326,
+        "min": 771.0999999046326,
+        "max": 795.0999999046326,
+        "cv": 0.01050129417581106,
+        "range": [771.0999999046326, 795.0999999046326]
       },
-      "inputToPaintMs": null
+      "frameP95Ms": {
+        "runs": 5,
+        "values": [
+          0.3000001907348633, 0.2999999523162842, 0.40000009536743164, 0.2999999523162842,
+          0.6000001430511475
+        ],
+        "median": 0.3000001907348633,
+        "min": 0.2999999523162842,
+        "max": 0.6000001430511475,
+        "cv": 0.30689226728735464,
+        "range": [0.2999999523162842, 0.6000001430511475]
+      },
+      "frameMaxMs": {
+        "runs": 5,
+        "values": [1.5, 1.3999998569488525, 1.5, 1.5, 1.6999998092651367],
+        "median": 1.5,
+        "min": 1.3999998569488525,
+        "max": 1.6999998092651367,
+        "cv": 0.06446023616730875,
+        "range": [1.3999998569488525, 1.6999998092651367]
+      },
+      "longFrames": [
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        }
+      ],
+      "inputLatency": {
+        "commitMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        "domFlushMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        "paintOpportunityMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        }
+      },
+      "corpus": [
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        }
+      ],
+      "memory": [
+        {
+          "beforeUsedSize": 11999604,
+          "afterUsedSize": 12835828,
+          "deltaUsedSize": 836224,
+          "bytesPerEvent": 836.224
+        },
+        {
+          "beforeUsedSize": 11999924,
+          "afterUsedSize": 12837464,
+          "deltaUsedSize": 837540,
+          "bytesPerEvent": 837.54
+        },
+        {
+          "beforeUsedSize": 11986416,
+          "afterUsedSize": 12805368,
+          "deltaUsedSize": 818952,
+          "bytesPerEvent": 818.952
+        },
+        {
+          "beforeUsedSize": 11999536,
+          "afterUsedSize": 12837012,
+          "deltaUsedSize": 837476,
+          "bytesPerEvent": 837.476
+        },
+        {
+          "beforeUsedSize": 11992428,
+          "afterUsedSize": 12805336,
+          "deltaUsedSize": 812908,
+          "bytesPerEvent": 812.908
+        }
+      ],
+      "stdout": [],
+      "dom": {
+        "flush": {
+          "p50": 0.20000004768371582,
+          "p95": 1.3999998569488525,
+          "p99": 1.3999998569488525,
+          "max": 1.4000000953674316
+        },
+        "samples": 10,
+        "rendererDeltas": [
+          {
+            "flushCount": 2,
+            "rowRender": {
+              "rows": 59,
+              "cacheHits": 33,
+              "rowKeyPrepassChecks": 59,
+              "rowKeyPrepassHits": 33,
+              "rowKeyPrepassMisses": 26,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 17,
+              "segmentReuseRows": 1,
+              "fragmentRows": 8,
+              "spansCreated": 27,
+              "spansReused": 27,
+              "textNodeUpdates": 0,
+              "replaceChildren": 13
+            }
+          },
+          {
+            "flushCount": 2,
+            "rowRender": {
+              "rows": 59,
+              "cacheHits": 33,
+              "rowKeyPrepassChecks": 59,
+              "rowKeyPrepassHits": 33,
+              "rowKeyPrepassMisses": 26,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 17,
+              "segmentReuseRows": 1,
+              "fragmentRows": 8,
+              "spansCreated": 27,
+              "spansReused": 27,
+              "textNodeUpdates": 0,
+              "replaceChildren": 13
+            }
+          },
+          {
+            "flushCount": 2,
+            "rowRender": {
+              "rows": 59,
+              "cacheHits": 33,
+              "rowKeyPrepassChecks": 59,
+              "rowKeyPrepassHits": 33,
+              "rowKeyPrepassMisses": 26,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 16,
+              "segmentReuseRows": 1,
+              "fragmentRows": 9,
+              "spansCreated": 29,
+              "spansReused": 27,
+              "textNodeUpdates": 0,
+              "replaceChildren": 13
+            }
+          },
+          {
+            "flushCount": 2,
+            "rowRender": {
+              "rows": 59,
+              "cacheHits": 33,
+              "rowKeyPrepassChecks": 59,
+              "rowKeyPrepassHits": 33,
+              "rowKeyPrepassMisses": 26,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 17,
+              "segmentReuseRows": 1,
+              "fragmentRows": 8,
+              "spansCreated": 27,
+              "spansReused": 27,
+              "textNodeUpdates": 0,
+              "replaceChildren": 13
+            }
+          },
+          {
+            "flushCount": 2,
+            "rowRender": {
+              "rows": 59,
+              "cacheHits": 33,
+              "rowKeyPrepassChecks": 59,
+              "rowKeyPrepassHits": 33,
+              "rowKeyPrepassMisses": 26,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 16,
+              "segmentReuseRows": 1,
+              "fragmentRows": 9,
+              "spansCreated": 29,
+              "spansReused": 27,
+              "textNodeUpdates": 0,
+              "replaceChildren": 13
+            }
+          }
+        ]
+      },
+      "raf": [
+        {
+          "p50": 8.300000000000182,
+          "p95": 9.299999999999727,
+          "p99": 9.299999999999727,
+          "max": 650
+        },
+        {
+          "p50": 8.300000000000182,
+          "p95": 8.400000000000091,
+          "p99": 8.400000000000091,
+          "max": 658.3000000000002
+        },
+        {
+          "p50": 8.300000000000182,
+          "p95": 9.400000000000091,
+          "p99": 9.400000000000091,
+          "max": 658.2999999999997
+        },
+        {
+          "p50": 8.300000000000182,
+          "p95": 9.200000000000273,
+          "p99": 9.200000000000273,
+          "max": 675
+        },
+        {
+          "p50": 8.299999999999727,
+          "p95": 9.400000000000091,
+          "p99": 9.400000000000091,
+          "max": 666.6999999999998
+        }
+      ],
+      "longTasks": [
+        {
+          "p50": 659,
+          "p95": 659,
+          "p99": 659,
+          "max": 659
+        },
+        {
+          "p50": 665,
+          "p95": 665,
+          "p99": 665,
+          "max": 665
+        },
+        {
+          "p50": 663,
+          "p95": 663,
+          "p99": 663,
+          "max": 663
+        },
+        {
+          "p50": 676,
+          "p95": 676,
+          "p99": 676,
+          "max": 676
+        },
+        {
+          "p50": 670,
+          "p95": 670,
+          "p99": 670,
+          "max": 670
+        }
+      ],
+      "cpuHotspots": [
+        {
+          "functionName": "WP",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 411.299,
+          "samples": 3071,
+          "share": 0.5129695684709404
+        },
+        {
+          "functionName": "(idle)",
+          "url": "(native)",
+          "selfTimeMs": 114.598,
+          "samples": 458,
+          "share": 0.14292591668745325
+        },
+        {
+          "functionName": "get blocks",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 83.184,
+          "samples": 622,
+          "share": 0.10374657021701172
+        },
+        {
+          "functionName": "(program)",
+          "url": "(native)",
+          "selfTimeMs": 77.972,
+          "samples": 166,
+          "share": 0.09724619605886754
+        },
+        {
+          "functionName": "(garbage collector)",
+          "url": "(native)",
+          "selfTimeMs": 57.733,
+          "samples": 267,
+          "share": 0.07200424045896732
+        },
+        {
+          "functionName": "tokenize",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 7.263,
+          "samples": 50,
+          "share": 0.009058368670491394
+        },
+        {
+          "functionName": "ab",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 6.917,
+          "samples": 52,
+          "share": 0.00862683961087553
+        },
+        {
+          "functionName": "p",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 6.374,
+          "samples": 48,
+          "share": 0.007949613369917684
+        },
+        {
+          "functionName": "parse",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 5.46,
+          "samples": 41,
+          "share": 0.00680967822399601
+        },
+        {
+          "functionName": "(anonymous)",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 5.274,
+          "samples": 38,
+          "share": 0.006577700174607134
+        },
+        {
+          "functionName": "f",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 3.46,
+          "samples": 26,
+          "share": 0.0043152905961586436
+        },
+        {
+          "functionName": "S",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 3.344,
+          "samples": 23,
+          "share": 0.004170616113744076
+        },
+        {
+          "functionName": "process",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 3.034,
+          "samples": 18,
+          "share": 0.003783986031429284
+        },
+        {
+          "functionName": "r",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 2.836,
+          "samples": 21,
+          "share": 0.003537041656273385
+        },
+        {
+          "functionName": "P",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 2.554,
+          "samples": 19,
+          "share": 0.003185333000748316
+        },
+        {
+          "functionName": "d",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 2.275,
+          "samples": 18,
+          "share": 0.002837365926665004
+        },
+        {
+          "functionName": "push",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 2.203,
+          "samples": 16,
+          "share": 0.0027475679720628584
+        },
+        {
+          "functionName": "fy",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 2.134,
+          "samples": 16,
+          "share": 0.0026615115989024694
+        },
+        {
+          "functionName": "c6",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 2.019,
+          "samples": 15,
+          "share": 0.002518084310301821
+        },
+        {
+          "functionName": "q6",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 1.867,
+          "samples": 14,
+          "share": 0.002328510850586181
+        }
+      ],
+      "renderManagerP95Ms": {
+        "runs": 5,
+        "values": [
+          0.3000001907348633, 0.2999999523162842, 0.40000009536743164, 0.19999980926513672,
+          0.6000001430511475
+        ],
+        "median": 0.3000001907348633,
+        "min": 0.19999980926513672,
+        "max": 0.6000001430511475,
+        "cv": 0.3767963163172824,
+        "range": [0.19999980926513672, 0.6000001430511475]
+      },
+      "commitP95Ms": {
+        "runs": 5,
+        "values": [0, 0, 0.09999990463256836, 0.09999990463256836, 0.09999990463256836],
+        "median": 0.09999990463256836,
+        "min": 0,
+        "max": 0.09999990463256836,
+        "cv": 0.816496580927726,
+        "range": [0, 0.09999990463256836]
+      },
+      "dirtyRowsP95": {
+        "runs": 5,
+        "values": [3, 3, 3, 3, 3],
+        "median": 3,
+        "min": 3,
+        "max": 3,
+        "cv": 0,
+        "range": [3, 3]
+      },
+      "scannedNodesP95": {
+        "runs": 5,
+        "values": [3, 3, 3, 3, 3],
+        "median": 3,
+        "min": 3,
+        "max": 3,
+        "cv": 0,
+        "range": [3, 3]
+      },
+      "paintedNodesP95": {
+        "runs": 5,
+        "values": [3, 3, 3, 3, 3],
+        "median": 3,
+        "min": 3,
+        "max": 3,
+        "cv": 0,
+        "range": [3, 3]
+      }
     },
     "browser/detached-append": {
       "runCount": 5,
-      "frameP95": {
+      "correctnessPasses": 5,
+      "elapsedMs": {
         "runs": 5,
+        "values": [
+          1162.2000000476837, 1170.7000000476837, 1164.2999999523163, 1179.4000000953674,
+          1154.2999999523163
+        ],
+        "median": 1164.2999999523163,
+        "min": 1154.2999999523163,
+        "max": 1179.4000000953674,
+        "cv": 0.0072326296524051654,
+        "range": [1154.2999999523163, 1179.4000000953674]
+      },
+      "frameP95Ms": {
+        "runs": 5,
+        "values": [
+          0.8000001907348633, 0.9000000953674316, 0.8999998569488525, 0.9000000953674316,
+          0.8999998569488525
+        ],
+        "median": 0.8999998569488525,
+        "min": 0.8000001907348633,
+        "max": 0.9000000953674316,
+        "cv": 0.04545444693463507,
+        "range": [0.8000001907348633, 0.9000000953674316]
+      },
+      "frameMaxMs": {
+        "runs": 5,
+        "values": [
+          2.6000001430511475, 2.700000047683716, 2.700000047683716, 2.700000047683716,
+          2.700000047683716
+        ],
+        "median": 2.700000047683716,
+        "min": 2.6000001430511475,
+        "max": 2.700000047683716,
+        "cv": 0.014925358528601555,
+        "range": [2.6000001430511475, 2.700000047683716]
+      },
+      "longFrames": [
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        }
+      ],
+      "inputLatency": {
+        "commitMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        "domFlushMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        "paintOpportunityMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        }
+      },
+      "corpus": [
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 1000,
+          "finalReplayTotal": 7003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 2212
+        }
+      ],
+      "memory": [
+        {
+          "beforeUsedSize": 12002748,
+          "afterUsedSize": 13493044,
+          "deltaUsedSize": 1490296,
+          "bytesPerEvent": 1490.296
+        },
+        {
+          "beforeUsedSize": 11987184,
+          "afterUsedSize": 13463048,
+          "deltaUsedSize": 1475864,
+          "bytesPerEvent": 1475.864
+        },
+        {
+          "beforeUsedSize": 12002420,
+          "afterUsedSize": 13494396,
+          "deltaUsedSize": 1491976,
+          "bytesPerEvent": 1491.976
+        },
+        {
+          "beforeUsedSize": 11988460,
+          "afterUsedSize": 13464816,
+          "deltaUsedSize": 1476356,
+          "bytesPerEvent": 1476.356
+        },
+        {
+          "beforeUsedSize": 11987324,
+          "afterUsedSize": 13466748,
+          "deltaUsedSize": 1479424,
+          "bytesPerEvent": 1479.424
+        }
+      ],
+      "stdout": [],
+      "dom": {
+        "flush": {
+          "p50": 0.7000000476837158,
+          "p95": 0.9000000953674316,
+          "p99": 1.5,
+          "max": 2.799999952316284
+        },
+        "samples": 515,
+        "rendererDeltas": [
+          {
+            "flushCount": 103,
+            "rowRender": {
+              "rows": 10350,
+              "cacheHits": 10125,
+              "rowKeyPrepassChecks": 10350,
+              "rowKeyPrepassHits": 10125,
+              "rowKeyPrepassMisses": 225,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 114,
+              "segmentReuseRows": 100,
+              "fragmentRows": 11,
+              "spansCreated": 33,
+              "spansReused": 1598,
+              "textNodeUpdates": 0,
+              "replaceChildren": 14
+            }
+          },
+          {
+            "flushCount": 103,
+            "rowRender": {
+              "rows": 10350,
+              "cacheHits": 10125,
+              "rowKeyPrepassChecks": 10350,
+              "rowKeyPrepassHits": 10125,
+              "rowKeyPrepassMisses": 225,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 114,
+              "segmentReuseRows": 100,
+              "fragmentRows": 11,
+              "spansCreated": 33,
+              "spansReused": 1598,
+              "textNodeUpdates": 0,
+              "replaceChildren": 14
+            }
+          },
+          {
+            "flushCount": 103,
+            "rowRender": {
+              "rows": 10350,
+              "cacheHits": 10125,
+              "rowKeyPrepassChecks": 10350,
+              "rowKeyPrepassHits": 10125,
+              "rowKeyPrepassMisses": 225,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 114,
+              "segmentReuseRows": 100,
+              "fragmentRows": 11,
+              "spansCreated": 33,
+              "spansReused": 1598,
+              "textNodeUpdates": 0,
+              "replaceChildren": 14
+            }
+          },
+          {
+            "flushCount": 103,
+            "rowRender": {
+              "rows": 10350,
+              "cacheHits": 10125,
+              "rowKeyPrepassChecks": 10350,
+              "rowKeyPrepassHits": 10125,
+              "rowKeyPrepassMisses": 225,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 114,
+              "segmentReuseRows": 100,
+              "fragmentRows": 11,
+              "spansCreated": 33,
+              "spansReused": 1598,
+              "textNodeUpdates": 0,
+              "replaceChildren": 14
+            }
+          },
+          {
+            "flushCount": 103,
+            "rowRender": {
+              "rows": 10350,
+              "cacheHits": 10125,
+              "rowKeyPrepassChecks": 10350,
+              "rowKeyPrepassHits": 10125,
+              "rowKeyPrepassMisses": 225,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 114,
+              "segmentReuseRows": 100,
+              "fragmentRows": 11,
+              "spansCreated": 33,
+              "spansReused": 1598,
+              "textNodeUpdates": 0,
+              "replaceChildren": 14
+            }
+          }
+        ]
+      },
+      "raf": [
+        {
+          "p50": 8.300000000000182,
+          "p95": 16.700000000000273,
+          "p99": 16.700000000000273,
+          "max": 17.5
+        },
+        {
+          "p50": 8.300000000000182,
+          "p95": 16.700000000000273,
+          "p99": 16.800000000000182,
+          "max": 17.59999999999991
+        },
+        {
+          "p50": 8.399999999999636,
+          "p95": 16.699999999999818,
+          "p99": 16.700000000000273,
+          "max": 17.40000000000009
+        },
+        {
+          "p50": 8.399999999999636,
+          "p95": 16.699999999999818,
+          "p99": 16.800000000000182,
+          "max": 17
+        },
+        {
+          "p50": 8.400000000000091,
+          "p95": 16.700000000000273,
+          "p99": 16.800000000000182,
+          "max": 17.59999999999991
+        }
+      ],
+      "longTasks": [
+        {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        }
+      ],
+      "cpuHotspots": [],
+      "renderManagerP95Ms": {
+        "runs": 5,
+        "values": [
+          0.7999999523162842, 0.8000001907348633, 0.7999999523162842, 0.8000001907348633,
+          0.7999999523162842
+        ],
+        "median": 0.7999999523162842,
+        "min": 0.7999999523162842,
+        "max": 0.8000001907348633,
+        "cv": 1.4600095729721908e-7,
+        "range": [0.7999999523162842, 0.8000001907348633]
+      },
+      "commitP95Ms": {
+        "runs": 5,
+        "values": [
+          0.10000014305114746, 0.10000014305114746, 0.10000014305114746, 0.10000014305114746,
+          0.10000014305114746
+        ],
+        "median": 0.10000014305114746,
+        "min": 0.10000014305114746,
+        "max": 0.10000014305114746,
+        "cv": 0,
+        "range": [0.10000014305114746, 0.10000014305114746]
+      },
+      "dirtyRowsP95": {
+        "runs": 5,
+        "values": [26, 26, 26, 26, 26],
+        "median": 26,
+        "min": 26,
+        "max": 26,
+        "cv": 0,
+        "range": [26, 26]
+      },
+      "scannedNodesP95": {
+        "runs": 5,
+        "values": [13, 13, 13, 13, 13],
+        "median": 13,
+        "min": 13,
+        "max": 13,
+        "cv": 0,
+        "range": [13, 13]
+      },
+      "paintedNodesP95": {
+        "runs": 5,
+        "values": [13, 13, 13, 13, 13],
+        "median": 13,
+        "min": 13,
+        "max": 13,
+        "cv": 0,
+        "range": [13, 13]
+      }
+    },
+    "browser/search-large-history": {
+      "runCount": 5,
+      "correctnessPasses": 5,
+      "elapsedMs": {
+        "runs": 5,
+        "values": [
+          125.5, 121.79999995231628, 119.39999985694885, 119.79999995231628, 124.60000014305115
+        ],
+        "median": 121.79999995231628,
+        "min": 119.39999985694885,
+        "max": 125.5,
+        "cv": 0.020177467635271323,
+        "range": [119.39999985694885, 125.5]
+      },
+      "frameP95Ms": {
+        "runs": 5,
+        "values": [
+          0.8999998569488525, 0.9000000953674316, 0.9000000953674316, 0.8999998569488525,
+          0.9000000953674316
+        ],
         "median": 0.9000000953674316,
         "min": 0.8999998569488525,
         "max": 0.9000000953674316,
         "cv": 1.2977863644404825e-7,
         "range": [0.8999998569488525, 0.9000000953674316]
       },
-      "frameMax": {
+      "frameMaxMs": {
         "runs": 5,
-        "median": 2.6000001430511475,
-        "min": 2.3999998569488525,
-        "max": 2.9000000953674316,
-        "cv": 0.06154577328067635,
-        "range": [2.3999998569488525, 2.9000000953674316]
+        "values": [
+          2.9000000953674316, 3.1000001430511475, 3.0999999046325684, 3.3000001907348633,
+          3.799999952316284
+        ],
+        "median": 3.1000001430511475,
+        "min": 2.9000000953674316,
+        "max": 3.799999952316284,
+        "cv": 0.09482894725420597,
+        "range": [2.9000000953674316, 3.799999952316284]
       },
-      "elapsedMs": {
+      "longFrames": [
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        }
+      ],
+      "inputLatency": {
+        "commitMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        "domFlushMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        "paintOpportunityMs": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        }
+      },
+      "corpus": [
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 0,
+          "finalReplayTotal": 6003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 760
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 0,
+          "finalReplayTotal": 6003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 760
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 0,
+          "finalReplayTotal": 6003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 760
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 0,
+          "finalReplayTotal": 6003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 760
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 0,
+          "finalReplayTotal": 6003,
+          "finalLineCount": 8000,
+          "firstLineIndex": 760
+        }
+      ],
+      "memory": [
+        {
+          "beforeUsedSize": 11992696,
+          "afterUsedSize": 13260848,
+          "deltaUsedSize": 1268152,
+          "bytesPerEvent": 0
+        },
+        {
+          "beforeUsedSize": 11865588,
+          "afterUsedSize": 13132860,
+          "deltaUsedSize": 1267272,
+          "bytesPerEvent": 0
+        },
+        {
+          "beforeUsedSize": 11991980,
+          "afterUsedSize": 13259004,
+          "deltaUsedSize": 1267024,
+          "bytesPerEvent": 0
+        },
+        {
+          "beforeUsedSize": 11988952,
+          "afterUsedSize": 13255952,
+          "deltaUsedSize": 1267000,
+          "bytesPerEvent": 0
+        },
+        {
+          "beforeUsedSize": 12002260,
+          "afterUsedSize": 13284252,
+          "deltaUsedSize": 1281992,
+          "bytesPerEvent": 0
+        }
+      ],
+      "stdout": [],
+      "dom": {
+        "flush": {
+          "p50": 0.39999985694885254,
+          "p95": 2.4000000953674316,
+          "p99": 2.4000000953674316,
+          "max": 2.700000047683716
+        },
+        "samples": 20,
+        "rendererDeltas": [
+          {
+            "flushCount": 4,
+            "rowRender": {
+              "rows": 184,
+              "cacheHits": 139,
+              "rowKeyPrepassChecks": 184,
+              "rowKeyPrepassHits": 139,
+              "rowKeyPrepassMisses": 45,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 30,
+              "segmentReuseRows": 3,
+              "fragmentRows": 12,
+              "spansCreated": 93,
+              "spansReused": 34,
+              "textNodeUpdates": 0,
+              "replaceChildren": 40
+            }
+          },
+          {
+            "flushCount": 4,
+            "rowRender": {
+              "rows": 184,
+              "cacheHits": 139,
+              "rowKeyPrepassChecks": 184,
+              "rowKeyPrepassHits": 139,
+              "rowKeyPrepassMisses": 45,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 30,
+              "segmentReuseRows": 3,
+              "fragmentRows": 12,
+              "spansCreated": 93,
+              "spansReused": 34,
+              "textNodeUpdates": 0,
+              "replaceChildren": 40
+            }
+          },
+          {
+            "flushCount": 4,
+            "rowRender": {
+              "rows": 184,
+              "cacheHits": 139,
+              "rowKeyPrepassChecks": 184,
+              "rowKeyPrepassHits": 139,
+              "rowKeyPrepassMisses": 45,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 30,
+              "segmentReuseRows": 3,
+              "fragmentRows": 12,
+              "spansCreated": 93,
+              "spansReused": 34,
+              "textNodeUpdates": 0,
+              "replaceChildren": 40
+            }
+          },
+          {
+            "flushCount": 4,
+            "rowRender": {
+              "rows": 184,
+              "cacheHits": 139,
+              "rowKeyPrepassChecks": 184,
+              "rowKeyPrepassHits": 139,
+              "rowKeyPrepassMisses": 45,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 30,
+              "segmentReuseRows": 3,
+              "fragmentRows": 12,
+              "spansCreated": 93,
+              "spansReused": 34,
+              "textNodeUpdates": 0,
+              "replaceChildren": 40
+            }
+          },
+          {
+            "flushCount": 4,
+            "rowRender": {
+              "rows": 184,
+              "cacheHits": 139,
+              "rowKeyPrepassChecks": 184,
+              "rowKeyPrepassHits": 139,
+              "rowKeyPrepassMisses": 45,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 30,
+              "segmentReuseRows": 4,
+              "fragmentRows": 11,
+              "spansCreated": 90,
+              "spansReused": 37,
+              "textNodeUpdates": 0,
+              "replaceChildren": 39
+            }
+          }
+        ]
+      },
+      "raf": [
+        {
+          "p50": 8.300000000000182,
+          "p95": 9.200000000000273,
+          "p99": 9.200000000000273,
+          "max": 16.700000000000273
+        },
+        {
+          "p50": 8.300000000000182,
+          "p95": 8.400000000000091,
+          "p99": 8.400000000000091,
+          "max": 9.200000000000273
+        },
+        {
+          "p50": 8.300000000000182,
+          "p95": 8.400000000000091,
+          "p99": 8.400000000000091,
+          "max": 9.299999999999727
+        },
+        {
+          "p50": 8.300000000000182,
+          "p95": 8.5,
+          "p99": 8.5,
+          "max": 9.100000000000364
+        },
+        {
+          "p50": 8.300000000000182,
+          "p95": 9.299999999999727,
+          "p99": 9.299999999999727,
+          "max": 16.600000000000364
+        }
+      ],
+      "longTasks": [
+        {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        }
+      ],
+      "cpuHotspots": [],
+      "renderManagerP95Ms": {
         "runs": 5,
-        "median": 3316.9000000953674,
-        "min": 3266.7000000476837,
-        "max": 3411.5999999046326,
-        "cv": 0.015386795886370846,
-        "range": [3266.7000000476837, 3411.5999999046326]
+        "values": [
+          0.7999999523162842, 0.9000000953674316, 0.8000001907348633, 0.8999998569488525,
+          0.7999999523162842
+        ],
+        "median": 0.8000001907348633,
+        "min": 0.7999999523162842,
+        "max": 0.9000000953674316,
+        "cv": 0.05832115124534695,
+        "range": [0.7999999523162842, 0.9000000953674316]
       },
-      "inputToPaintMs": null
-    },
-    "browser/search-large-history": {
-      "runCount": 5,
-      "frameP95": {
+      "commitP95Ms": {
         "runs": 5,
-        "median": 1,
-        "min": 0.9000000953674316,
-        "max": 1.2000000476837158,
-        "cv": 0.0980580450894307,
-        "range": [0.9000000953674316, 1.2000000476837158]
+        "values": [
+          0.09999990463256836, 0.09999990463256836, 0, 0.09999990463256836, 0.10000014305114746
+        ],
+        "median": 0.09999990463256836,
+        "min": 0,
+        "max": 0.10000014305114746,
+        "cv": 0.5000000000013323,
+        "range": [0, 0.10000014305114746]
       },
-      "frameMax": {
+      "dirtyRowsP95": {
         "runs": 5,
-        "median": 3.4000000953674316,
-        "min": 3.0999999046325684,
-        "max": 3.6000001430511475,
-        "cv": 0.050901347351528355,
-        "range": [3.0999999046325684, 3.6000001430511475]
+        "values": [24, 24, 24, 24, 24],
+        "median": 24,
+        "min": 24,
+        "max": 24,
+        "cv": 0,
+        "range": [24, 24]
       },
-      "elapsedMs": {
+      "scannedNodesP95": {
         "runs": 5,
-        "median": 2310,
-        "min": 2260.100000143051,
-        "max": 2485.100000143051,
-        "cv": 0.03474051956064647,
-        "range": [2260.100000143051, 2485.100000143051]
+        "values": [20, 20, 20, 20, 20],
+        "median": 20,
+        "min": 20,
+        "max": 20,
+        "cv": 0,
+        "range": [20, 20]
       },
-      "inputToPaintMs": null
+      "paintedNodesP95": {
+        "runs": 5,
+        "values": [16, 16, 16, 16, 16],
+        "median": 16,
+        "min": 16,
+        "max": 16,
+        "cv": 0,
+        "range": [16, 16]
+      }
     },
     "browser/stream-scroll-interaction": {
       "runCount": 5,
-      "frameP95": {
-        "runs": 5,
-        "median": 1,
-        "min": 0.9000000953674316,
-        "max": 1,
-        "cv": 0.04081628681073312,
-        "range": [0.9000000953674316, 1]
-      },
-      "frameMax": {
-        "runs": 5,
-        "median": 2.6000001430511475,
-        "min": 2.5,
-        "max": 2.700000047683716,
-        "cv": 0.0285622712419755,
-        "range": [2.5, 2.700000047683716]
-      },
+      "correctnessPasses": 5,
       "elapsedMs": {
         "runs": 5,
-        "median": 11355.700000047684,
-        "min": 11349,
-        "max": 11430.799999952316,
-        "cv": 0.0027602094419533177,
-        "range": [11349, 11430.799999952316]
+        "values": [
+          6128.599999904633, 6128.099999904633, 6129, 6126.700000047684, 6129.099999904633
+        ],
+        "median": 6128.599999904633,
+        "min": 6126.700000047684,
+        "max": 6129.099999904633,
+        "cv": 0.00014262860797396355,
+        "range": [6126.700000047684, 6129.099999904633]
       },
-      "inputToPaintMs": null
+      "frameP95Ms": {
+        "runs": 5,
+        "values": [
+          0.8000001907348633, 0.8999998569488525, 0.8000001907348633, 0.8000001907348633,
+          0.8000001907348633
+        ],
+        "median": 0.8000001907348633,
+        "min": 0.8000001907348633,
+        "max": 0.8999998569488525,
+        "cv": 0.048780317607226856,
+        "range": [0.8000001907348633, 0.8999998569488525]
+      },
+      "frameMaxMs": {
+        "runs": 5,
+        "values": [1.5, 1.4000000953674316, 1.4000000953674316, 1.4000000953674316, 1.5],
+        "median": 1.4000000953674316,
+        "min": 1.4000000953674316,
+        "max": 1.5,
+        "cv": 0.03402065707547002,
+        "range": [1.4000000953674316, 1.5]
+      },
+      "longFrames": [
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        {
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        }
+      ],
+      "inputLatency": {
+        "commitMs": {
+          "p50": 5.5,
+          "p95": 8.700000047683716,
+          "p99": 9.099999904632568,
+          "max": 9.700000047683716,
+          "over16_7": 0,
+          "over33_3": 0,
+          "over50": 0
+        },
+        "domFlushMs": {
+          "p50": 6.1000001430511475,
+          "p95": 17.09999990463257,
+          "p99": 17.5,
+          "max": 17.90000009536743,
+          "over16_7": 31,
+          "over33_3": 0,
+          "over50": 0
+        },
+        "paintOpportunityMs": {
+          "p50": 12.200000047683716,
+          "p95": 23.90000009536743,
+          "p99": 24.200000047683716,
+          "max": 24.5,
+          "over16_7": 115,
+          "over33_3": 0,
+          "over50": 0
+        }
+      },
+      "corpus": [
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 500,
+          "finalReplayTotal": 6503,
+          "finalLineCount": 8000,
+          "firstLineIndex": 1469
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 500,
+          "finalReplayTotal": 6503,
+          "finalLineCount": 8000,
+          "firstLineIndex": 1469
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 500,
+          "finalReplayTotal": 6503,
+          "finalLineCount": 8000,
+          "firstLineIndex": 1469
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 500,
+          "finalReplayTotal": 6503,
+          "finalLineCount": 8000,
+          "firstLineIndex": 1469
+        },
+        {
+          "version": 1,
+          "seed": 0,
+          "seedCount": 6000,
+          "appendStartIndex": 6003,
+          "eventsAdded": 500,
+          "finalReplayTotal": 6503,
+          "finalLineCount": 8000,
+          "firstLineIndex": 1469
+        }
+      ],
+      "memory": [
+        {
+          "beforeUsedSize": 12008464,
+          "afterUsedSize": 15523400,
+          "deltaUsedSize": 3514936,
+          "bytesPerEvent": 7029.872
+        },
+        {
+          "beforeUsedSize": 11995156,
+          "afterUsedSize": 15498176,
+          "deltaUsedSize": 3503020,
+          "bytesPerEvent": 7006.04
+        },
+        {
+          "beforeUsedSize": 11993536,
+          "afterUsedSize": 15498988,
+          "deltaUsedSize": 3505452,
+          "bytesPerEvent": 7010.904
+        },
+        {
+          "beforeUsedSize": 12219016,
+          "afterUsedSize": 15563332,
+          "deltaUsedSize": 3344316,
+          "bytesPerEvent": 6688.632
+        },
+        {
+          "beforeUsedSize": 11985964,
+          "afterUsedSize": 15499820,
+          "deltaUsedSize": 3513856,
+          "bytesPerEvent": 7027.712
+        }
+      ],
+      "stdout": [],
+      "dom": {
+        "flush": {
+          "p50": 1.0999999046325684,
+          "p95": 1.4000000953674316,
+          "p99": 1.5999999046325684,
+          "max": 2.0999999046325684
+        },
+        "samples": 2329,
+        "rendererDeltas": [
+          {
+            "flushCount": 487,
+            "rowRender": {
+              "rows": 18578,
+              "cacheHits": 11613,
+              "rowKeyPrepassChecks": 18578,
+              "rowKeyPrepassHits": 11613,
+              "rowKeyPrepassMisses": 6965,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 4120,
+              "segmentReuseRows": 547,
+              "fragmentRows": 2298,
+              "spansCreated": 8280,
+              "spansReused": 7591,
+              "textNodeUpdates": 0,
+              "replaceChildren": 3932
+            }
+          },
+          {
+            "flushCount": 497,
+            "rowRender": {
+              "rows": 18733,
+              "cacheHits": 11646,
+              "rowKeyPrepassChecks": 18733,
+              "rowKeyPrepassHits": 11646,
+              "rowKeyPrepassMisses": 7087,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 4196,
+              "segmentReuseRows": 531,
+              "fragmentRows": 2360,
+              "spansCreated": 8505,
+              "spansReused": 7575,
+              "textNodeUpdates": 0,
+              "replaceChildren": 4046
+            }
+          },
+          {
+            "flushCount": 494,
+            "rowRender": {
+              "rows": 18740,
+              "cacheHits": 11677,
+              "rowKeyPrepassChecks": 18740,
+              "rowKeyPrepassHits": 11677,
+              "rowKeyPrepassMisses": 7063,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 4175,
+              "segmentReuseRows": 536,
+              "fragmentRows": 2352,
+              "spansCreated": 8467,
+              "spansReused": 7558,
+              "textNodeUpdates": 0,
+              "replaceChildren": 4021
+            }
+          },
+          {
+            "flushCount": 483,
+            "rowRender": {
+              "rows": 19266,
+              "cacheHits": 12151,
+              "rowKeyPrepassChecks": 19266,
+              "rowKeyPrepassHits": 12151,
+              "rowKeyPrepassMisses": 7115,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 4218,
+              "segmentReuseRows": 523,
+              "fragmentRows": 2374,
+              "spansCreated": 8516,
+              "spansReused": 7592,
+              "textNodeUpdates": 0,
+              "replaceChildren": 4024
+            }
+          },
+          {
+            "flushCount": 497,
+            "rowRender": {
+              "rows": 18681,
+              "cacheHits": 11691,
+              "rowKeyPrepassChecks": 18681,
+              "rowKeyPrepassHits": 11691,
+              "rowKeyPrepassMisses": 6990,
+              "transparentBlankRows": 0,
+              "plainTextRows": 0,
+              "singleStyledRows": 4144,
+              "segmentReuseRows": 533,
+              "fragmentRows": 2313,
+              "spansCreated": 8332,
+              "spansReused": 7501,
+              "textNodeUpdates": 0,
+              "replaceChildren": 3973
+            }
+          }
+        ]
+      },
+      "raf": [
+        {
+          "p50": 8.300000000000182,
+          "p95": 9.199999999999818,
+          "p99": 9.300000000000182,
+          "max": 25
+        },
+        {
+          "p50": 8.300000000000182,
+          "p95": 9.199999999999818,
+          "p99": 9.300000000000182,
+          "max": 33.399999999999636
+        },
+        {
+          "p50": 8.300000000000182,
+          "p95": 9.200000000000273,
+          "p99": 9.400000000000091,
+          "max": 33.400000000001455
+        },
+        {
+          "p50": 8.300000000000182,
+          "p95": 9.299999999999272,
+          "p99": 9.399999999999636,
+          "max": 33.399999999999636
+        },
+        {
+          "p50": 8.300000000000182,
+          "p95": 9.199999999999818,
+          "p99": 9.300000000000182,
+          "max": 33.29999999999927
+        }
+      ],
+      "longTasks": [
+        {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        }
+      ],
+      "cpuHotspots": [
+        {
+          "functionName": "(idle)",
+          "url": "(native)",
+          "selfTimeMs": 4220.567,
+          "samples": 30871,
+          "share": 0.728345001394369
+        },
+        {
+          "functionName": "(program)",
+          "url": "(native)",
+          "selfTimeMs": 618.228,
+          "samples": 4204,
+          "share": 0.10668786291558408
+        },
+        {
+          "functionName": "WP",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 230.493,
+          "samples": 1720,
+          "share": 0.03977627281035754
+        },
+        {
+          "functionName": "K3",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 114.391,
+          "samples": 862,
+          "share": 0.019740502414605256
+        },
+        {
+          "functionName": "J0",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 112.041,
+          "samples": 819,
+          "share": 0.019334961937869127
+        },
+        {
+          "functionName": "Yp",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 97.898,
+          "samples": 737,
+          "share": 0.01689429854958017
+        },
+        {
+          "functionName": "(garbage collector)",
+          "url": "(native)",
+          "selfTimeMs": 77.061,
+          "samples": 440,
+          "share": 0.013298448799047966
+        },
+        {
+          "functionName": "(anonymous)",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 53.93,
+          "samples": 394,
+          "share": 0.009306722515055044
+        },
+        {
+          "functionName": "get blocks",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 30.97,
+          "samples": 231,
+          "share": 0.005344505772135262
+        },
+        {
+          "functionName": "p9",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 29.363,
+          "samples": 222,
+          "share": 0.005067185114214004
+        },
+        {
+          "functionName": "Gh",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 26.91,
+          "samples": 200,
+          "share": 0.00464386988466774
+        },
+        {
+          "functionName": "replaceChildren",
+          "url": "(native)",
+          "selfTimeMs": 23.99,
+          "samples": 177,
+          "share": 0.004139964271021148
+        },
+        {
+          "functionName": "tu",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 21.276,
+          "samples": 159,
+          "share": 0.0036716081629948284
+        },
+        {
+          "functionName": "I8",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 20.601,
+          "samples": 154,
+          "share": 0.003555123132442962
+        },
+        {
+          "functionName": "get",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 20.357,
+          "samples": 144,
+          "share": 0.0035130159510286577
+        },
+        {
+          "functionName": "he",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 20.262,
+          "samples": 153,
+          "share": 0.0034966217615435805
+        },
+        {
+          "functionName": "c9",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 19.961,
+          "samples": 150,
+          "share": 0.003444678066438229
+        },
+        {
+          "functionName": "p1",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 19.451,
+          "samples": 143,
+          "share": 0.0033566671544657083
+        },
+        {
+          "functionName": "g3",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 18.521,
+          "samples": 139,
+          "share": 0.0031961766679275815
+        },
+        {
+          "functionName": "g",
+          "url": "http://127.0.0.1:4178/assets/index-C_hXKno-.js",
+          "selfTimeMs": 18.465,
+          "samples": 136,
+          "share": 0.003186512724652167
+        }
+      ],
+      "renderManagerP95Ms": {
+        "runs": 5,
+        "values": [
+          0.7999999523162842, 0.7999999523162842, 0.7999999523162842, 0.7999999523162842,
+          0.7999999523162842
+        ],
+        "median": 0.7999999523162842,
+        "min": 0.7999999523162842,
+        "max": 0.7999999523162842,
+        "cv": 0,
+        "range": [0.7999999523162842, 0.7999999523162842]
+      },
+      "commitP95Ms": {
+        "runs": 5,
+        "values": [
+          0.20000004768371582, 0.20000004768371582, 0.20000004768371582, 0.20000004768371582,
+          0.20000004768371582
+        ],
+        "median": 0.20000004768371582,
+        "min": 0.20000004768371582,
+        "max": 0.20000004768371582,
+        "cv": 0,
+        "range": [0.20000004768371582, 0.20000004768371582]
+      },
+      "dirtyRowsP95": {
+        "runs": 5,
+        "values": [26, 26, 26, 26, 26],
+        "median": 26,
+        "min": 26,
+        "max": 26,
+        "cv": 0,
+        "range": [26, 26]
+      },
+      "scannedNodesP95": {
+        "runs": 5,
+        "values": [13, 13, 13, 13, 13],
+        "median": 13,
+        "min": 13,
+        "max": 13,
+        "cv": 0,
+        "range": [13, 13]
+      },
+      "paintedNodesP95": {
+        "runs": 5,
+        "values": [13, 13, 13, 13, 13],
+        "median": 13,
+        "min": 13,
+        "max": 13,
+        "cv": 0,
+        "range": [13, 13]
+      }
     }
   }
 }

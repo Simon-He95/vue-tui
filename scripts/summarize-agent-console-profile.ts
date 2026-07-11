@@ -94,15 +94,25 @@ function summarizeRoot(root: string) {
     }
   const scenarios: Record<string, any> = {};
   for (const [key, runs] of Object.entries(grouped)) {
-    const frames = runs.map((r) => summarizeFrameSamples(samplesOf(r)));
-    const latency = runs.flatMap(
-      (r) =>
-        r.diagnostics?.inputToCommitMs ??
-        r.profileResult?.diagnostics?.inputToCommitMs ??
-        r.diagnostics?.inputToPaintMs ??
-        r.profileResult?.diagnostics?.inputToPaintMs ??
-        [],
+    const [runtime, scenarioName] = key.split("/");
+    const diagnostic = readJson(
+      resolve(
+        root,
+        runtime === "cli"
+          ? `cli/${scenarioName}-cpu-diagnostic.json`
+          : `${scenarioName}-cpu-diagnostic.json`,
+      ),
+      null,
     );
+    const frames = runs.map((r) => summarizeFrameSamples(samplesOf(r)));
+    const latencyValues = (name: string) =>
+      runs.flatMap((r) => r.diagnostics?.[name] ?? r.profileResult?.diagnostics?.[name] ?? []);
+    const latencySummary = (values: number[]) => ({
+      ...metric(values),
+      over16_7: values.filter((value) => value > 16.7).length,
+      over33_3: values.filter((value) => value > 33.3).length,
+      over50: values.filter((value) => value > 50).length,
+    });
     const dom = runs.flatMap((r) => r.snapshot?.domFlushSamples ?? []);
     scenarios[key] = {
       runCount: runs.length,
@@ -115,12 +125,16 @@ function summarizeRoot(root: string) {
       elapsedMs: summarizeRunStability(runs.map(elapsedOf)),
       frameP95Ms: summarizeRunStability(frames.map((f) => f.durationMs.p95)),
       frameMaxMs: summarizeRunStability(frames.map((f) => f.durationMs.max)),
+      renderManagerP95Ms: summarizeRunStability(frames.map((f) => f.renderManagerMs.p95)),
+      commitP95Ms: summarizeRunStability(frames.map((f) => f.commitMs.p95)),
+      dirtyRowsP95: summarizeRunStability(frames.map((f) => f.dirtyRows.p95)),
+      scannedNodesP95: summarizeRunStability(frames.map((f) => f.scannedNodes.p95)),
+      paintedNodesP95: summarizeRunStability(frames.map((f) => f.paintedNodes.p95)),
       longFrames: frames.map((f) => f.longFrames),
-      inputLatencyMs: {
-        ...metric(latency),
-        over16_7: latency.filter((v) => v > 16.7).length,
-        over33_3: latency.filter((v) => v > 33.3).length,
-        over50: latency.filter((v) => v > 50).length,
+      inputLatency: {
+        commitMs: latencySummary(latencyValues("inputToCommitMs")),
+        domFlushMs: latencySummary(latencyValues("inputToDomFlushMs")),
+        paintOpportunityMs: latencySummary(latencyValues("inputToPaintOpportunityMs")),
       },
       corpus: runs.map((r) => r.corpus ?? r.profileResult?.corpus).filter(Boolean),
       memory: runs.map((r) => r.memory).filter(Boolean),
@@ -138,8 +152,7 @@ function summarizeRoot(root: string) {
       longTasks: runs
         .map((r) => (r.timing?.longTasks ? metric(r.timing.longTasks) : null))
         .filter(Boolean),
-      cpuHotspots: cpuSummary(runs),
-      frames,
+      cpuHotspots: diagnostic ? cpuSummary([diagnostic]) : [],
     };
   }
   return {
@@ -167,10 +180,20 @@ function main() {
   const beforeRoot = arg("--before-root");
   const before = beforeRoot ? summarizeRoot(resolve(process.cwd(), beforeRoot)) : null;
   const target = "cli/tail-append-burst-framed";
-  const beforeRuns = before?.scenarios[target]?.elapsedMs?.values ?? [];
-  const afterRuns = after.scenarios[target]?.elapsedMs?.values ?? [];
-  const beforeMedian = percentile(beforeRuns, 0.5),
-    afterMedian = percentile(afterRuns, 0.5);
+  const comparison = (runtime: "cli" | "browser", scenario: string) => {
+    const key = `${runtime}/${scenario}`;
+    const beforeRunsMs = before?.scenarios[key]?.elapsedMs?.values ?? [];
+    const afterRunsMs = after.scenarios[key]?.elapsedMs?.values ?? [];
+    const beforeMedianMs = percentile(beforeRunsMs, 0.5);
+    const afterMedianMs = percentile(afterRunsMs, 0.5);
+    return {
+      beforeRunsMs,
+      afterRunsMs,
+      beforeMedianMs,
+      afterMedianMs,
+      improvementPercent: beforeMedianMs ? (1 - afterMedianMs / beforeMedianMs) * 100 : null,
+    };
+  };
   const audit = {
     schemaVersion: 2,
     generatedFrom: {
@@ -181,13 +204,15 @@ function main() {
     },
     environment: after.environment,
     optimization: {
-      scenario: target,
-      cli: {
-        beforeRunsMs: beforeRuns,
-        afterRunsMs: afterRuns,
-        beforeMedianMs: beforeMedian,
-        afterMedianMs: afterMedian,
-        improvementPercent: beforeMedian ? (1 - afterMedian / beforeMedian) * 100 : null,
+      scenarios: {
+        "tail-append-burst-framed": {
+          cli: comparison("cli", "tail-append-burst-framed"),
+          browser: comparison("browser", "tail-append-burst-framed"),
+        },
+        "tail-append-burst-single-task": {
+          cli: comparison("cli", "tail-append-burst-single-task"),
+          browser: comparison("browser", "tail-append-burst-single-task"),
+        },
       },
     },
     cpuDiagnostics: {
