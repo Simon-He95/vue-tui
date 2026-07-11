@@ -39,24 +39,30 @@ const productionDefine = {
   __VUE_TUI_PERF_INSTRUMENTATION__: "false",
 };
 
+// Module paths for precise instrumentation replacement
+const realInstrumentationPath = resolve(
+  rootDir,
+  "src/core/perf/instrumentation.ts",
+);
+const noopInstrumentationPath = resolve(
+  rootDir,
+  "src/core/perf/instrumentation-noop.ts",
+);
+
 // Plugin to replace instrumentation imports with no-op stub
 const instrumentationStripPlugin = {
   name: "instrumentation-strip",
   setup(build) {
-    // Use namespace to redirect to no-op stub file
-    build.onResolve({ filter: /.*/ }, (args) => {
-      // Intercept instrumentation imports
-      if (
-        args.path.endsWith("/perf/instrumentation.js") ||
-        args.path.endsWith("/perf/instrumentation.ts") ||
-        args.path === "../perf/instrumentation.js" ||
-        args.path === "./perf/instrumentation.js" ||
-        args.path === "../../core/perf/instrumentation.js"
-      ) {
-        return {
-          path: resolve(rootDir, "src/core/perf/instrumentation-noop.ts"),
-        };
+    build.onResolve({ filter: /instrumentation/ }, (args) => {
+      // Resolve to absolute path
+      if (args.resolveDir) {
+        const resolved = resolve(args.resolveDir, args.path);
+        // Normalize and compare precisely
+        if (resolve(resolved) === realInstrumentationPath) {
+          return { path: noopInstrumentationPath };
+        }
       }
+      return null;
     });
   },
 };

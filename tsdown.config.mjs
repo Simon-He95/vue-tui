@@ -25,13 +25,32 @@ const productionDefine = {
   __VUE_TUI_PERF_INSTRUMENTATION__: "false",
 };
 
-// Rollup plugin to replace instrumentation imports with no-op stub
+// Module paths for instrumentation replacement
+const realInstrumentationPath = resolve(
+  rootDir,
+  "src/core/perf/instrumentation.ts",
+);
+const noopInstrumentationPath = resolve(
+  rootDir,
+  "src/core/perf/instrumentation-noop.ts",
+);
+
+// Rollup plugin to replace instrumentation imports with no-op stub  
 const instrumentationStripPlugin = {
   name: "instrumentation-strip",
-  resolveId(id) {
-    if (id.includes("/perf/instrumentation")) {
-      return resolve(rootDir, "src/core/perf/instrumentation-noop.ts");
+  resolveId(source, importer) {
+    // Handle relative imports with .js extension
+    if (importer && source.includes("/perf/instrumentation")) {
+      const importerDir = dirname(importer);
+      // Remove .js if present for resolution
+      const sourceWithoutExt = source.replace(/\.js$/, "");
+      const resolved = resolve(importerDir, sourceWithoutExt + ".ts");
+
+      if (resolved === realInstrumentationPath) {
+        return noopInstrumentationPath;
+      }
     }
+
     return null;
   },
 };
