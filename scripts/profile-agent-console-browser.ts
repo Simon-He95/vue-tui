@@ -1,9 +1,10 @@
 #!/usr/bin/env tsx
 
-import { spawn, type ChildProcess } from "node:child_process";
+import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { chromium, type Browser, type Page } from "@playwright/test";
+import { chromium, type Browser, type CDPSession, type Page } from "@playwright/test";
+import { summarizeCpuProfile } from "./agent-console-cpu-profile.js";
 
 const root = process.cwd();
 const outputDir = resolve(
@@ -17,18 +18,42 @@ const seedCount = Number(process.env.VUE_TUI_AGENT_CONSOLE_SEED ?? (smoke ? 120 
 const appendCount = Number(process.env.VUE_TUI_AGENT_CONSOLE_APPEND ?? (smoke ? 30 : 1_000));
 const steadyCount = Number(process.env.VUE_TUI_AGENT_CONSOLE_STEADY ?? (smoke ? 20 : 500));
 const cadenceMs = smoke ? 0 : 12;
+const runCount = smoke ? 1 : 5;
 
 type BrowserTiming = Readonly<{
   elapsedMs: number;
   longTasks: readonly number[];
   rafIntervals: readonly number[];
 }>;
-type ScenarioResult = Readonly<{ name: string; timing: BrowserTiming; snapshot: unknown }>;
+type ScenarioResult = Readonly<{
+  name: string;
+  run: number;
+  timing: BrowserTiming;
+  snapshot: unknown;
+  memory: Readonly<{ beforeUsedSize: number; afterUsedSize: number; deltaUsedSize: number }>;
+  cpuProfilePath?: string;
+  cpuHotspots?: ReturnType<typeof summarizeCpuProfile>;
+}>;
+
+const cpuProfileScenarios = new Set([
+  "tail-append-burst-framed",
+  "tail-append-burst-single-task",
+  "stream-scroll-interaction",
+]);
 
 function startServer(): ChildProcess {
   return spawn(
     "pnpm",
-    ["-C", "examples/agent-console", "exec", "vite", "--host", "127.0.0.1", "--port", String(port)],
+    [
+      "-C",
+      "examples/agent-console",
+      "preview",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      String(port),
+      "--strictPort",
+    ],
     {
       cwd: root,
       stdio: ["ignore", "pipe", "pipe"],
@@ -58,9 +83,19 @@ async function prepare(page: Page): Promise<void> {
 }
 async function measure(
   page: Page,
+  session: CDPSession,
   name: string,
+  run: number,
   action: () => Promise<void>,
 ): Promise<ScenarioResult> {
+  await session.send("HeapProfiler.collectGarbage");
+  const memoryBefore = await session.send("Runtime.getHeapUsage");
+  const profileCpu = !smoke && cpuProfileScenarios.has(name);
+  if (profileCpu) {
+    await session.send("Profiler.enable");
+    await session.send("Profiler.setSamplingInterval", { interval: 100 });
+    await session.send("Profiler.start");
+  }
   await page.evaluate(() => {
     (window as any).__agentPerfLongTasks = [];
     (window as any).__agentPerfRafs = [];
@@ -83,76 +118,90 @@ async function measure(
     (window as any).__agentPerfStarted = performance.now();
   });
   await action();
-  return page.evaluate((scenarioName) => {
-    cancelAnimationFrame((window as any).__agentPerfRaf);
-    (window as any).__agentPerfObserver?.disconnect();
-    return {
-      name: scenarioName,
-      timing: {
-        elapsedMs: performance.now() - (window as any).__agentPerfStarted,
-        longTasks: (window as any).__agentPerfLongTasks,
-        rafIntervals: (window as any).__agentPerfRafs,
-      },
-      snapshot: (window as any).__AGENT_CONSOLE_PERF__.snapshot(),
-    };
-  }, name);
+  const measured = await page.evaluate(
+    (scenarioName) => {
+      cancelAnimationFrame((window as any).__agentPerfRaf);
+      (window as any).__agentPerfObserver?.disconnect();
+      return {
+        name: scenarioName.name,
+        run: scenarioName.run,
+        timing: {
+          elapsedMs: performance.now() - (window as any).__agentPerfStarted,
+          longTasks: (window as any).__agentPerfLongTasks,
+          rafIntervals: (window as any).__agentPerfRafs,
+        },
+        snapshot: (window as any).__AGENT_CONSOLE_PERF__.snapshot(),
+      };
+    },
+    { name, run },
+  );
+  let cpuProfilePath: string | undefined;
+  let cpuHotspots: ReturnType<typeof summarizeCpuProfile> | undefined;
+  if (profileCpu) {
+    const { profile } = await session.send("Profiler.stop");
+    cpuProfilePath = join(outputDir, `${name}.browser.cpuprofile`);
+    writeFileSync(cpuProfilePath, JSON.stringify(profile));
+    cpuHotspots = summarizeCpuProfile(profile);
+    await session.send("Profiler.disable");
+  }
+  await session.send("HeapProfiler.collectGarbage");
+  const memoryAfter = await session.send("Runtime.getHeapUsage");
+  return {
+    ...measured,
+    memory: {
+      beforeUsedSize: memoryBefore.usedSize,
+      afterUsedSize: memoryAfter.usedSize,
+      deltaUsedSize: memoryAfter.usedSize - memoryBefore.usedSize,
+    },
+    cpuProfilePath,
+    cpuHotspots,
+  };
 }
 async function main(): Promise<void> {
   mkdirSync(outputDir, { recursive: true });
+  execFileSync("pnpm", ["run", "build:checked"], { cwd: root, stdio: "inherit" });
+  execFileSync("pnpm", ["-C", "examples/agent-console", "build"], {
+    cwd: root,
+    stdio: "inherit",
+    env: { ...process.env, VUE_TUI_PROFILE_DIST: "1" },
+  });
   const server = startServer();
   let browser: Browser | null = null;
   try {
     await waitForServer();
     browser = await chromium.launch();
-    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-    // tsx may preserve its function-name helper in callbacks serialized by Playwright.
-    await page.addInitScript({ content: "globalThis.__name = (target) => target;" });
     const results: ScenarioResult[] = [];
+    for (let run = 0; run < runCount; run++) {
+      const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+      const page = await context.newPage();
+      const session = await context.newCDPSession(page);
+      await page.addInitScript({ content: "globalThis.__name = (target) => target;" });
 
-    await prepare(page);
-    results.push(
-      await measure(page, "tail-stream-steady", () =>
-        page.evaluate(
-          `globalThis.__AGENT_CONSOLE_PERF__.appendSteady(${steadyCount}, ${cadenceMs})`,
-        ),
-      ),
-    );
-
-    await prepare(page);
-    results.push(
-      await measure(page, "tail-append-burst", () =>
-        page.evaluate(`globalThis.__AGENT_CONSOLE_PERF__.appendBatched(${appendCount}, 10)`),
-      ),
-    );
-
-    await prepare(page);
-    await page.evaluate("globalThis.__AGENT_CONSOLE_PERF__.scrollBy(-200)");
-    results.push(
-      await measure(page, "detached-append", () =>
-        page.evaluate(`globalThis.__AGENT_CONSOLE_PERF__.appendBatched(${appendCount}, 10)`),
-      ),
-    );
-
-    await prepare(page);
-    results.push(
-      await measure(page, "search-large-history", () =>
-        page.evaluate('globalThis.__AGENT_CONSOLE_PERF__.search("ERROR")'),
-      ),
-    );
-
-    await prepare(page);
-    results.push(
-      await measure(page, "stream-scroll-interaction", async () => {
-        const streaming = page.evaluate(
-          `globalThis.__AGENT_CONSOLE_PERF__.appendSteady(${steadyCount}, ${cadenceMs})`,
+      const scenarios = [
+        "tail-stream-steady",
+        "tail-append-burst-framed",
+        "tail-append-burst-single-task",
+        "detached-append",
+        "search-large-history",
+        "stream-scroll-interaction",
+      ];
+      for (const scenario of scenarios) {
+        await prepare(page);
+        results.push(
+          await measure(page, session, scenario, run, () =>
+            page.evaluate(
+              ({ name, options }) => globalThis.__AGENT_CONSOLE_PERF__.runScenario(name, options),
+              {
+                name: scenario,
+                options: { seedCount, appendCount, steadyCount, cadenceMs },
+              },
+            ),
+          ),
         );
-        for (let i = 0; i < 30; i++) {
-          await page.mouse.wheel(0, i % 2 ? 360 : -360);
-          await page.waitForTimeout(24);
-        }
-        await streaming;
-      }),
-    );
+      }
+
+      await context.close();
+    }
 
     for (const result of results) {
       const snapshot = result.snapshot as {
@@ -164,7 +213,11 @@ async function main(): Promise<void> {
       if (result.name !== "search-large-history" && !snapshot.inputVisible) {
         throw new Error(`${result.name}: input area is not visible`);
       }
-      if (result.name === "tail-stream-steady" || result.name === "tail-append-burst") {
+      if (
+        result.name === "tail-stream-steady" ||
+        result.name === "tail-append-burst-framed" ||
+        result.name === "tail-append-burst-single-task"
+      ) {
         if (snapshot.metrics?.atBottom !== true)
           throw new Error(`${result.name}: tail following was lost`);
       }

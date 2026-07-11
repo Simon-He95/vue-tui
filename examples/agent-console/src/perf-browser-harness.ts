@@ -1,5 +1,11 @@
 import type { FramePerfSample } from "@simon_he/vue-tui/observability";
 import type { AgentConsoleApi } from "./AgentConsoleSurface";
+import type {
+  AgentConsoleProfileOptions,
+  AgentConsoleProfileResult,
+  AgentConsoleProfileScenario,
+} from "./perf-harness";
+import { runAgentConsoleProfileScenario } from "./perf-harness";
 import { nextTick } from "vue";
 
 export type AgentConsoleBrowserPerfApi = Readonly<{
@@ -10,12 +16,18 @@ export type AgentConsoleBrowserPerfApi = Readonly<{
   appendSteady: (count: number, cadenceMs?: number) => Promise<void>;
   scrollBy: (delta: number) => Promise<void>;
   search: (query: string) => Promise<void>;
+  runScenario: (
+    scenario: AgentConsoleProfileScenario,
+    options?: AgentConsoleProfileOptions,
+  ) => Promise<AgentConsoleProfileResult>;
   snapshot: () => Readonly<{
     samples: readonly FramePerfSample[];
     metrics: AgentConsoleApi["metrics"]["value"];
     search: AgentConsoleApi["searchState"]["value"];
     replayTotal: number;
     inputVisible: boolean;
+    rendererDebugStats: ReturnType<AgentConsoleApi["getRendererDebugStats"]>;
+    domFlushSamples: readonly { startedAt: number; durationMs: number; planeRows: number }[];
   }>;
 }>;
 
@@ -34,11 +46,30 @@ async function settle(turns = 4): Promise<void> {
 
 export function installAgentConsoleBrowserPerf(api: AgentConsoleApi): () => void {
   let samples: FramePerfSample[] = [];
+  let domFlushSamples: { startedAt: number; durationMs: number; planeRows: number }[] = [];
+  let lastFlushStartedAt = Number.NEGATIVE_INFINITY;
+  let polling = true;
+  const pollRenderer = () => {
+    if (!polling) return;
+    const flush = api.getRendererDebugStats()?.flush.last;
+    if (flush && flush.startedAt > lastFlushStartedAt) {
+      lastFlushStartedAt = flush.startedAt;
+      domFlushSamples.push({
+        startedAt: flush.startedAt,
+        durationMs: flush.durationMs,
+        planeRows: flush.planeRows,
+      });
+    }
+    requestAnimationFrame(pollRenderer);
+  };
+  requestAnimationFrame(pollRenderer);
   const unsubscribeFramePerf = api.subscribeFramePerf((sample) => samples.push(sample));
   const harness: AgentConsoleBrowserPerfApi = {
     api,
     reset() {
       samples = [];
+      domFlushSamples = [];
+      lastFlushStartedAt = Number.NEGATIVE_INFINITY;
       api.clearFramePerf();
       performance.clearMarks();
       performance.clearMeasures();
@@ -74,12 +105,42 @@ export function installAgentConsoleBrowserPerf(api: AgentConsoleApi): () => void
         if (api.searchState.value.status !== "scanning") break;
       }
     },
+    runScenario(scenario, options) {
+      return runAgentConsoleProfileScenario(
+        {
+          api,
+          now: () => performance.now(),
+          append: (index) => api.appendSyntheticChunk(index),
+          async yieldTask() {
+            await new Promise<void>((done) => setTimeout(done, 0));
+          },
+          async yieldFrame() {
+            await nextTick();
+            await new Promise<void>((done) => requestAnimationFrame(() => done()));
+          },
+          async dispatchWheel(delta) {
+            const started = performance.now();
+            api.scrollBy(delta);
+            await nextTick();
+            await new Promise<void>((done) => requestAnimationFrame(() => done()));
+            return performance.now() - started;
+          },
+          async waitUntilSettled() {
+            await settle(8);
+          },
+        },
+        scenario,
+        options,
+      );
+    },
     snapshot() {
       return {
         samples: samples.slice(),
         metrics: api.metrics.value,
         search: api.searchState.value,
         replayTotal: api.replayTotal.value,
+        rendererDebugStats: api.getRendererDebugStats(),
+        domFlushSamples: domFlushSamples.slice(),
         inputVisible: api
           .getTerminalSnapshot()
           .slice(-8)
@@ -89,6 +150,7 @@ export function installAgentConsoleBrowserPerf(api: AgentConsoleApi): () => void
   };
   window.__AGENT_CONSOLE_PERF__ = harness;
   return () => {
+    polling = false;
     unsubscribeFramePerf();
     if (window.__AGENT_CONSOLE_PERF__ === harness) delete window.__AGENT_CONSOLE_PERF__;
   };

@@ -1,11 +1,9 @@
 #!/usr/bin/env tsx
-
 import type { FramePerfSample } from "../src/observability/frame-perf.js";
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { basename, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 
-const percentile = (values: number[], q: number) => {
+const percentile = (values: readonly number[], q: number) => {
   if (!values.length) return 0;
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * q))]!;
@@ -58,83 +56,75 @@ export const summarizeFrameSamples = (samples: readonly FramePerfSample[]) => ({
     samples.map((s) => s.paintedNodes),
     0.95,
   ),
-  coalescedInvalidates: samples.reduce((sum, s) => sum + s.coalescedInvalidates, 0),
-  coalescedFrameTasks: samples.reduce((sum, s) => sum + s.coalescedFrameTasks, 0),
-  droppedUpdates: samples.reduce((sum, s) => sum + s.droppedUpdates, 0),
+  coalescedInvalidates: samples.reduce((n, s) => n + s.coalescedInvalidates, 0),
+  coalescedFrameTasks: samples.reduce((n, s) => n + s.coalescedFrameTasks, 0),
+  droppedUpdates: samples.reduce((n, s) => n + s.droppedUpdates, 0),
   maxQueueDepth: Math.max(0, ...samples.map((s) => s.queueDepth)),
 });
+export function summarizeRunStability(values: readonly number[]) {
+  if (!values.length) return { runs: 0, median: 0, min: 0, max: 0, cv: 0, range: [0, 0] as const };
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  const variance = values.reduce((n, v) => n + (v - mean) ** 2, 0) / values.length;
+  return {
+    runs: values.length,
+    median: percentile(values, 0.5),
+    min: Math.min(...values),
+    max: Math.max(...values),
+    cv: mean === 0 ? 0 : Math.sqrt(variance) / mean,
+    range: [Math.min(...values), Math.max(...values)] as const,
+  };
+}
 export function summarizeAgentConsoleRun(run: {
   runtime: string;
   generatedAt: string;
   environment: Record<string, unknown>;
-  scenarios: readonly {
-    name: string;
-    elapsedMs: number;
-    samples: readonly FramePerfSample[];
-    correctness?: Record<string, unknown>;
-    diagnostics?: Record<string, unknown>;
-  }[];
+  scenarios: readonly { name: string; elapsedMs: number; samples: readonly FramePerfSample[] }[];
 }) {
   return {
     ...run,
-    scenarios: run.scenarios.map((scenario) => ({
-      ...scenario,
+    scenarios: run.scenarios.map((s) => ({
+      ...s,
       samples: undefined,
-      ...summarizeFrameSamples(scenario.samples),
+      ...summarizeFrameSamples(s.samples),
     })),
   };
 }
 function main() {
-  const root = resolve(process.cwd(), process.argv[2] ?? ".tmp/perf/agent-console");
-  const output = resolve(process.cwd(), process.argv[3] ?? ".tmp/perf/agent-console/summary.json");
-  const files: string[] = [];
-  for (const target of [resolve(root, "cli"), resolve(root, "browser")]) {
-    try {
-      files.push(
-        ...readdirSync(target)
-          .filter((name) => name.endsWith(".json") && name !== "all.json")
-          .map((name) => resolve(target, name)),
-      );
-    } catch {
-      /* target not recorded */
-    }
-  }
-  const result: Record<string, unknown> = {};
-  for (const file of files) {
-    const value = JSON.parse(readFileSync(file, "utf8"));
-    result[`${basename(resolve(file, ".."))}/${basename(file, ".json")}`] = {
-      elapsedMs: value.elapsedMs ?? value.timing?.elapsedMs,
-      eventsAdded: value.eventsAdded,
-      correctness: value.correctness,
-      ...summarizeFrameSamples(value.frameSamples ?? value.snapshot?.samples ?? []),
-    };
-  }
+  const root = resolve(process.cwd(), process.argv[2] ?? ".tmp/perf/agent-console"),
+    output = resolve(process.cwd(), process.argv[3] ?? ".tmp/perf/agent-console/summary.json");
+  const cli = JSON.parse(readFileSync(resolve(root, "cli/all.json"), "utf8"));
+  let browser: { results?: any[] } = {};
   try {
-    const browser = JSON.parse(readFileSync(resolve(root, "browser-raw.json"), "utf8"));
-    for (const scenario of browser.results ?? []) {
-      const longTasks = scenario.timing?.longTasks ?? [];
-      const rafIntervals = scenario.timing?.rafIntervals ?? [];
-      result[`browser/${scenario.name}`] = {
-        elapsedMs: scenario.timing?.elapsedMs,
-        longTasks: {
-          count: longTasks.length,
-          p95: percentile(longTasks, 0.95),
-          max: Math.max(0, ...longTasks),
-        },
-        rafIntervalMs: {
-          p50: percentile(rafIntervals, 0.5),
-          p95: percentile(rafIntervals, 0.95),
-          p99: percentile(rafIntervals, 0.99),
-          max: Math.max(0, ...rafIntervals),
-        },
-        ...summarizeFrameSamples(scenario.snapshot?.samples ?? []),
-      };
+    browser = JSON.parse(readFileSync(resolve(root, "browser-raw.json"), "utf8"));
+  } catch {}
+  const grouped: Record<string, any[]> = {};
+  for (const [runtime, runs] of [
+    ["cli", cli],
+    ["browser", browser.results ?? []],
+  ] as const)
+    for (const run of runs) {
+      const key = `${runtime}/${run.scenario ?? run.name}`;
+      (grouped[key] ??= []).push(run);
     }
-  } catch {
-    /* browser run not recorded */
+  const result: Record<string, unknown> = {};
+  for (const [key, runs] of Object.entries(grouped)) {
+    const summaries = runs.map((r) =>
+      summarizeFrameSamples(r.frameSamples ?? r.snapshot?.samples ?? []),
+    );
+    result[key] = {
+      runCount: runs.length,
+      frameP95: summarizeRunStability(summaries.map((s) => s.durationMs.p95)),
+      frameMax: summarizeRunStability(summaries.map((s) => s.durationMs.max)),
+      runs: summaries,
+      stdout: runs.map((r) => r.stdout).filter(Boolean),
+      memory: runs.map((r) => r.memory).filter(Boolean),
+      cpuHotspots: runs.flatMap((r) => r.cpuHotspots ?? []),
+      renderer: runs.map((r) => r.snapshot?.rendererDebugStats).filter(Boolean),
+      domFlushSamples: runs.flatMap((r) => r.snapshot?.domFlushSamples ?? []),
+    };
   }
   mkdirSync(resolve(output, ".."), { recursive: true });
   writeFileSync(output, JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result, null, 2));
 }
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) main();
+if (process.argv[1]?.endsWith("summarize-agent-console-profile.ts")) main();

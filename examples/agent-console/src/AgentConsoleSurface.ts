@@ -1,5 +1,6 @@
 import type { TerminalRenderPlane } from "@simon_he/vue-tui/core";
 import type { FramePerfSample } from "@simon_he/vue-tui/observability";
+import type { DomRendererDebugStats } from "../../../src/renderer/dom/dom-renderer.js";
 import type { TerminalKeyboardEvent } from "@simon_he/vue-tui/runtime";
 import type {
   TLogViewHandle,
@@ -89,6 +90,7 @@ export type AgentConsoleApi = Readonly<{
   focusNextLink: () => boolean;
   getVisibleLinks: () => readonly TLogViewVisibleLink[];
   getFramePerfSamples: () => readonly FramePerfSample[];
+  getRendererDebugStats: () => DomRendererDebugStats | null;
   subscribeFramePerf: (listener: (sample: FramePerfSample) => void) => () => void;
   clearFramePerf: () => void;
   getCommandRows: () => readonly string[];
@@ -1114,6 +1116,8 @@ export const AgentConsoleSurface = defineComponent({
       focusNextLink,
       getVisibleLinks: () => logView.value?.getVisibleLinks() ?? [],
       getFramePerfSamples: () => terminalContext.observability.framePerf.list(),
+      getRendererDebugStats: () =>
+        (terminalContext.renderer.value?.debugStats as DomRendererDebugStats | undefined) ?? null,
       subscribeFramePerf: (listener) =>
         terminalContext.observability.framePerf.addSink({ onFramePerf: listener }),
       clearFramePerf: () => terminalContext.observability.framePerf.clear(),

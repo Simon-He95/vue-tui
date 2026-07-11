@@ -81,6 +81,8 @@ jobs:
 
       - run: pnpm exec playwright install --with-deps chromium firefox webkit
 
+      - run: pnpm run profile:agent-console:smoke
+
       - run: pnpm run e2e:charts
 
       - run: pnpm run e2e:component-terminal-charts

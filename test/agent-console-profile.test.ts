@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { AGENT_CONSOLE_PROFILE_SCENARIOS } from "../examples/agent-console/src/perf-harness.js";
-import { summarizeAgentConsoleRun } from "../scripts/summarize-agent-console-profile.js";
+import {
+  summarizeAgentConsoleRun,
+  summarizeRunStability,
+} from "../scripts/summarize-agent-console-profile.js";
 
 const sample = {
   frameId: 1,
@@ -25,14 +28,25 @@ const sample = {
 };
 
 describe("Agent Console profile harness", () => {
-  it("keeps the initial workload intentionally focused", () => {
+  it("distinguishes framed and single-task burst semantics", () => {
     expect(AGENT_CONSOLE_PROFILE_SCENARIOS).toEqual([
       "tail-stream-steady",
-      "tail-append-burst",
+      "tail-append-burst-framed",
+      "tail-append-burst-single-task",
       "detached-append",
       "search-large-history",
       "stream-scroll-interaction",
     ]);
+  });
+
+  it("summarizes run-level stability without pooling frames", () => {
+    expect(summarizeRunStability([2, 4, 6, 8, 10])).toMatchObject({
+      runs: 5,
+      median: 6,
+      min: 2,
+      max: 10,
+      range: [2, 10],
+    });
   });
 
   it("summarizes frame distributions and coalescing", () => {
