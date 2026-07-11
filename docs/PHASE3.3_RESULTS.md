@@ -15,7 +15,7 @@
 
 ### Secondary Exploratory Findings (Post-Hoc)
 
-**Two stable Node/tsx source-path p50 signals detected**:
+**Two repeatable paired-p50 signals in Node/tsx source-path harness**:
 
 1. **ASCII fast path**: `textCellWidth_ascii_long_fast_path`
    - Median ratio: 1.1451 (+14.51%)
@@ -85,9 +85,20 @@ Formal attribution requires targeted ablation tests (A vs B vs C with built arti
 
 **Observed**: Aggregate dist +9,278 bytes gzip (+0.55%)
 
-**Interpretation**: Instrumentation has non-zero artifact cost, but cannot determine consumer bundle impact without transitive analysis.
+**Important notes**:
 
-**Required**: Consumer bundle per export (tree-shake + minify), bundler metafile, npm pack tarball.
+1. This is the sum of individually compressed emitted ESM/CJS artifacts, NOT a consumer payload
+2. Per-file comparisons include content-hash renames (e.g., `width-GqllnV8C.js` → `width-DnZjDPPc.js`) treated as remove/add pairs
+
+**Representative entry deltas**:
+
+- core.cjs: +774 bytes gzip
+- index.cjs: +1,352 bytes gzip
+- vue.cjs: +1,327 bytes gzip
+
+**Interpretation**: Instrumentation has confirmed non-zero artifact cost (~0.7-1.4 KB per relevant entry), but consumer bundle impact requires transitive analysis.
+
+**Required**: Consumer bundle per export (tree-shake + minify), bundler metafile for logical chunk matching, npm pack tarball.
 
 ---
 
