@@ -183,6 +183,11 @@ async function main(): Promise<void> {
       console.log(`  C package closure: ${c.packageInputs.join(", ")}`);
     }
 
+    mkdirSync(join(process.cwd(), "docs", "perf"), { recursive: true });
+    writeFileSync(
+      join(process.cwd(), "docs", "perf", "phase3.4-consumer-abc.json"),
+      JSON.stringify({ commits: VERSIONS, measurements }, null, 2),
+    );
     if (failed) throw new Error("Packed consumer A/B/C gate failed");
     console.log("\n✅ Packed consumer A/B/C gate passed");
   } finally {
