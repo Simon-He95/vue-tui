@@ -41,6 +41,7 @@ export default defineConfig([
     platform: "neutral",
     external: browserExternals,
     define: productionDefine,
+    treeshake: true,
   },
   {
     target: "node16",
@@ -53,5 +54,6 @@ export default defineConfig([
     platform: "node",
     external: ["vue", ...nodeBuiltins],
     define: productionDefine,
+    treeshake: true,
   },
 ]);

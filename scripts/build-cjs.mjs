@@ -55,6 +55,7 @@ await build({
   platform: "neutral",
   target: ["es2020"],
   sourcemap: false,
+  treeShaking: true,
   // Keep dynamic import syntax in browser-facing CJS. The Mermaid bridge uses
   // import("beautiful-mermaid") so CJS consumers can load the optional ESM peer
   // lazily at render time instead of requiring it during entrypoint import.
@@ -87,6 +88,7 @@ await build({
   platform: "node",
   target: ["node16"],
   sourcemap: false,
+  treeShaking: true,
   external: ["vue"],
   define: productionDefine,
 });
