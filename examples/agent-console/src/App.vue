@@ -1,7 +1,18 @@
 <script setup lang="ts">
+import type { AgentConsoleApi } from "./AgentConsoleSurface";
+import { onBeforeUnmount } from "vue";
 import { TerminalProvider } from "@simon_he/vue-tui";
 import { AgentConsoleSurface, AGENT_CONSOLE_LAYOUT } from "./AgentConsoleSurface";
+import { installAgentConsoleBrowserPerf } from "./perf-browser-harness";
 import { consoleDefaultStyle, domPalette } from "./theme";
+
+let removePerfHarness: (() => void) | null = null;
+function handleReady(api: AgentConsoleApi): void {
+  if (!new URLSearchParams(window.location.search).has("profile")) return;
+  removePerfHarness?.();
+  removePerfHarness = installAgentConsoleBrowserPerf(api);
+}
+onBeforeUnmount(() => removePerfHarness?.());
 </script>
 
 <template>
@@ -14,7 +25,7 @@ import { consoleDefaultStyle, domPalette } from "./theme";
         :dom-renderer-options="{ palette: domPalette }"
         :selection="{ autoCopy: true, copyOnMouseUp: true }"
       >
-        <AgentConsoleSurface />
+        <AgentConsoleSurface :on-ready="handleReady" />
       </TerminalProvider>
     </div>
   </main>

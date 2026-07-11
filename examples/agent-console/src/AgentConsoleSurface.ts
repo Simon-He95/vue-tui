@@ -78,6 +78,7 @@ export type AgentConsoleApi = Readonly<{
   loadReplayLog: (log: AgentReplayLog, eventIndex?: number) => void;
   seekReplay: (eventIndex: number) => void;
   jumpToBottom: () => void;
+  scrollBy: (delta: number) => void;
   openSearch: (query?: string) => void;
   openLinks: () => void;
   openPalette: (query?: string) => void;
@@ -88,6 +89,7 @@ export type AgentConsoleApi = Readonly<{
   focusNextLink: () => boolean;
   getVisibleLinks: () => readonly TLogViewVisibleLink[];
   getFramePerfSamples: () => readonly FramePerfSample[];
+  subscribeFramePerf: (listener: (sample: FramePerfSample) => void) => () => void;
   clearFramePerf: () => void;
   getCommandRows: () => readonly string[];
   getCopiedText: () => string;
@@ -1098,6 +1100,10 @@ export const AgentConsoleSurface = defineComponent({
       loadReplayLog,
       seekReplay,
       jumpToBottom,
+      scrollBy: (delta) => {
+        logView.value?.scrollBy(delta);
+        refreshMetrics();
+      },
       openSearch,
       openLinks,
       openPalette,
@@ -1108,6 +1114,8 @@ export const AgentConsoleSurface = defineComponent({
       focusNextLink,
       getVisibleLinks: () => logView.value?.getVisibleLinks() ?? [],
       getFramePerfSamples: () => terminalContext.observability.framePerf.list(),
+      subscribeFramePerf: (listener) =>
+        terminalContext.observability.framePerf.addSink({ onFramePerf: listener }),
       clearFramePerf: () => terminalContext.observability.framePerf.clear(),
       getCommandRows: () => filteredCommandRows().map((row) => `${row.command} ${row.label}`),
       getCopiedText: () => copiedText.value,
