@@ -45,9 +45,9 @@ const instrumentationStripPlugin = (metafileName) => ({
       }
       outputs[`dist/${fileName}`] = { inputs };
     }
-    mkdirSync(resolve(rootDir, "dist/.metafiles"), { recursive: true });
+    mkdirSync(resolve(rootDir, ".tmp/build-metafiles"), { recursive: true });
     writeFileSync(
-      resolve(rootDir, `dist/.metafiles/${metafileName}.json`),
+      resolve(rootDir, `.tmp/build-metafiles/${metafileName}.json`),
       JSON.stringify({ outputs }, null, 2),
     );
   },

@@ -39,10 +39,10 @@ function bytesInOutputs(metafile, inputMatcher) {
 async function main() {
   console.log("🔍 Production Strip Verification (First-Build Metafiles)\n");
 
-  const metafileDir = join(rootDir, "dist", ".metafiles");
+  const metafileDir = join(rootDir, ".tmp", "build-metafiles");
 
   if (!existsSync(metafileDir)) {
-    console.error("❌ Error: dist/.metafiles/ not found.");
+    console.error("❌ Error: .tmp/build-metafiles/ not found.");
     console.error("Build scripts must output metafiles for verification.");
     process.exit(1);
   }

@@ -31,6 +31,13 @@ try {
   const filename = Array.isArray(pack) ? pack[0]?.filename : pack.filename;
   if (!filename) throw new Error("pnpm pack did not report a tarball");
   const tarball = filename.startsWith("/") ? filename : resolve(packDir, basename(filename));
+  const entries = run("tar", ["-tzf", tarball]).split("\n").filter(Boolean);
+  const forbiddenPackedFiles = entries.filter(
+    (entry) => entry.includes("/dist/.metafiles/") || entry.includes("/.tmp/"),
+  );
+  if (forbiddenPackedFiles.length) {
+    throw new Error(`Unexpected packed files:\n${forbiddenPackedFiles.join("\n")}`);
+  }
   writeFileSync(
     join(consumer, "package.json"),
     JSON.stringify({ name: "consumer-check", private: true, type: "module" }),

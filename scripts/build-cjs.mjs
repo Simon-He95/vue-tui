@@ -102,9 +102,9 @@ const cjsBrowserResult = await build({
 });
 
 // Save metafile for verification
-mkdirSync("dist/.metafiles", { recursive: true });
+mkdirSync(".tmp/build-metafiles", { recursive: true });
 writeFileSync(
-  "dist/.metafiles/cjs-browser.json",
+  ".tmp/build-metafiles/cjs-browser.json",
   JSON.stringify(cjsBrowserResult.metafile, null, 2),
 );
 
@@ -137,4 +137,4 @@ const cjsCliResult = await build({
 });
 
 // Save metafile for verification
-writeFileSync("dist/.metafiles/cjs-cli.json", JSON.stringify(cjsCliResult.metafile, null, 2));
+writeFileSync(".tmp/build-metafiles/cjs-cli.json", JSON.stringify(cjsCliResult.metafile, null, 2));
