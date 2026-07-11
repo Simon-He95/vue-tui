@@ -1,7 +1,7 @@
 # Phase 3.3: Instrumentation Overhead Validation
 
-**Status**: ✅ Framework Complete (v5)  
-**Related**: #119 (remains open until results collected)  
+**Status**: ⚠️ Initial Run Complete; Acceptance Criteria Not Met  
+**Related**: #119 (reopened)  
 **Type**: Performance validation (required)
 
 ---
@@ -133,45 +133,67 @@ Per #119, if runtime regression > 5% proven:
 
 ## Results
 
-> **Status**: Pending execution
+> **Status**: ⚠️ Initial Run Complete; Acceptance Criteria Not Met
 
-See: `docs/perf/phase3.3-overhead-results.json`  
-See: `docs/perf/phase3.3-bundle-sizes.json`
+**Initial validation executed**: 2026-07-10
+
+**Formal result**: INCONCLUSIVE
+
+- p95 gate: 8/9 scenarios INCONCLUSIVE (wide CIs), 1 PASS, 0 FAIL
+- Bundle: INCONCLUSIVE (transitive closure not measured)
+
+**Exploratory findings** (post-hoc):
+
+- Two stable Node/tsx source-path p50 signals detected
+- ASCII fast path: +14.5% / ~38 ns/op (workload-dependent)
+- Wrap hot path: +3.8%
+
+**Critical limitation**: Measured tsx executing `src/*`, NOT published dist or real workloads.
+
+**Detailed analysis**: See `docs/PHASE3.3_RESULTS.md`  
+**Raw data**: `docs/perf/phase3.3-overhead-results.json`, `docs/perf/phase3.3-bundle-sizes.json`
+
+**Next required**:
+
+- Remediate instrumentation overhead
+- Validate built dist artifacts
+- Proper consumer bundle measurement
+- Integration workload benchmarks
+
+**Issue status**: #119 reopened pending remediation and proper validation
 
 ---
 
 ## Execution Log
 
-### Environment
+### Environment (Initial Run)
 
-- **Node**: TBD
-- **V8**: TBD
-- **OS**: TBD
-- **CPU**: TBD
-- **Date**: TBD
+- **Node**: v24.18.0
+- **V8**: 13.6
+- **OS**: macOS arm64
+- **CPU**: Apple M1 Pro
+- **Date**: 2026-07-10
 
 ### Steps
 
-- [ ] Framework validated
-- [ ] Benchmarks executed
-- [ ] Results analyzed
-- [ ] Decision made
+- [x] Framework validated
+- [x] Benchmarks executed
+- [x] Results analyzed
+- [ ] Decision made (acceptance criteria not met)
 
 ---
 
 ## Conclusion
 
-> **To be determined after benchmarks complete**
+**Status**: ⚠️ Initial Run Complete; Acceptance Criteria Not Met
 
-**Status**: TBD
+- [x] ⚠️ INCONCLUSIVE - p95: 8/9 scenarios, bundle: measurement incomplete
+- [ ] ✅ PASS
+- [ ] ❌ FAIL
 
-- [ ] ✅ PASS - Proven regression <= 5% (all gating)
-- [ ] ⚠️ INCONCLUSIVE - CI crosses threshold, more samples needed
-- [ ] ❌ FAIL - Proven regression > 5%, remediation required
+**Decision**: Cannot proceed without remediation and proper validation
 
-**Decision**: TBD
-
-**Next Steps**: TBD
+**Next Steps**: See `docs/PHASE3.3_RESULTS.md` for detailed recommendations
 
 ---
 

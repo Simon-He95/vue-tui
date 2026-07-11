@@ -1,0 +1,1029 @@
+{
+  "config": {
+    "commitA": "697472b0cc5c000fb46baf16e85c60d84ee22471",
+    "commitB": "4d543ff7042f9c2400fa50a9dff921a0f36f77a3",
+    "warnThreshold": 2048,
+    "failThreshold": 5120
+  },
+  "timestamp": "2026-07-10T17:33:07.952Z",
+  "files": [
+    {
+      "file": "TMermaidText-BFdof_v4.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 25760,
+        "gzip": 6668
+      },
+      "commitB": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "delta": {
+        "raw": -25760,
+        "gzip": -6668
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "TMermaidText-DFIVZ2_g.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "commitB": {
+        "raw": 25760,
+        "gzip": 6668
+      },
+      "delta": {
+        "raw": 25760,
+        "gzip": 6668
+      },
+      "status": "fail"
+    },
+    {
+      "file": "TSelect-BAUufHmY.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 186497,
+        "gzip": 38279
+      },
+      "commitB": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "delta": {
+        "raw": -186497,
+        "gzip": -38279
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "TSelect-DWDeDEbf.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "commitB": {
+        "raw": 186497,
+        "gzip": 38281
+      },
+      "delta": {
+        "raw": 186497,
+        "gzip": 38281
+      },
+      "status": "fail"
+    },
+    {
+      "file": "TTree-DKMSDXkm.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 198485,
+        "gzip": 41563
+      },
+      "commitB": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "delta": {
+        "raw": -198485,
+        "gzip": -41563
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "TTree-_2jM75BK.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "commitB": {
+        "raw": 198485,
+        "gzip": 41566
+      },
+      "delta": {
+        "raw": 198485,
+        "gzip": 41566
+      },
+      "status": "fail"
+    },
+    {
+      "file": "agent.cjs",
+      "kind": "export",
+      "commitA": {
+        "raw": 2096602,
+        "gzip": 430653
+      },
+      "commitB": {
+        "raw": 2101688,
+        "gzip": 431404
+      },
+      "delta": {
+        "raw": 5086,
+        "gzip": 751
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "agent.js",
+      "kind": "export",
+      "commitA": {
+        "raw": 78851,
+        "gzip": 18168
+      },
+      "commitB": {
+        "raw": 78851,
+        "gzip": 18174
+      },
+      "delta": {
+        "raw": 0,
+        "gzip": 6
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "agent/mermaid.cjs",
+      "kind": "export",
+      "commitA": {
+        "raw": 58,
+        "gzip": 78
+      },
+      "commitB": {
+        "raw": 58,
+        "gzip": 78
+      },
+      "delta": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "agent/mermaid.js",
+      "kind": "export",
+      "commitA": {
+        "raw": 31,
+        "gzip": 51
+      },
+      "commitB": {
+        "raw": 31,
+        "gzip": 51
+      },
+      "delta": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "ansi-palette-CNXqFciC.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 1870,
+        "gzip": 746
+      },
+      "commitB": {
+        "raw": 1870,
+        "gzip": 746
+      },
+      "delta": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "block-source-CNaCNhNy.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "commitB": {
+        "raw": 111931,
+        "gzip": 25539
+      },
+      "delta": {
+        "raw": 111931,
+        "gzip": 25539
+      },
+      "status": "fail"
+    },
+    {
+      "file": "block-source-DwhIQ1HE.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 111931,
+        "gzip": 25539
+      },
+      "commitB": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "delta": {
+        "raw": -111931,
+        "gzip": -25539
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "cli.cjs",
+      "kind": "export",
+      "commitA": {
+        "raw": 505325,
+        "gzip": 107699
+      },
+      "commitB": {
+        "raw": 510067,
+        "gzip": 108489
+      },
+      "delta": {
+        "raw": 4742,
+        "gzip": 790
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "cli.js",
+      "kind": "export",
+      "commitA": {
+        "raw": 450698,
+        "gzip": 100736
+      },
+      "commitB": {
+        "raw": 455091,
+        "gzip": 101525
+      },
+      "delta": {
+        "raw": 4393,
+        "gzip": 789
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "core.cjs",
+      "kind": "export",
+      "commitA": {
+        "raw": 100900,
+        "gzip": 22076
+      },
+      "commitB": {
+        "raw": 105642,
+        "gzip": 22850
+      },
+      "delta": {
+        "raw": 4742,
+        "gzip": 774
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "core.js",
+      "kind": "export",
+      "commitA": {
+        "raw": 12447,
+        "gzip": 3432
+      },
+      "commitB": {
+        "raw": 12447,
+        "gzip": 3434
+      },
+      "delta": {
+        "raw": 0,
+        "gzip": 2
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "create-terminal-D4mGjAYO.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "commitB": {
+        "raw": 50674,
+        "gzip": 10230
+      },
+      "delta": {
+        "raw": 50674,
+        "gzip": 10230
+      },
+      "status": "fail"
+    },
+    {
+      "file": "create-terminal-DXuZ2fci.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 50167,
+        "gzip": 10101
+      },
+      "commitB": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "delta": {
+        "raw": -50167,
+        "gzip": -10101
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "debug-logger-ChY_PXVk.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 2287,
+        "gzip": 954
+      },
+      "commitB": {
+        "raw": 2287,
+        "gzip": 954
+      },
+      "delta": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "dom-renderer-B1BFE_qD.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "commitB": {
+        "raw": 40429,
+        "gzip": 9581
+      },
+      "delta": {
+        "raw": 40429,
+        "gzip": 9581
+      },
+      "status": "fail"
+    },
+    {
+      "file": "dom-renderer-DNzmg2As.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 40429,
+        "gzip": 9577
+      },
+      "commitB": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "delta": {
+        "raw": -40429,
+        "gzip": -9577
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "env-DNCzvX8b.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 744,
+        "gzip": 305
+      },
+      "commitB": {
+        "raw": 744,
+        "gzip": 305
+      },
+      "delta": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "experimental.cjs",
+      "kind": "export",
+      "commitA": {
+        "raw": 465030,
+        "gzip": 88176
+      },
+      "commitB": {
+        "raw": 470114,
+        "gzip": 88941
+      },
+      "delta": {
+        "raw": 5084,
+        "gzip": 765
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "experimental.js",
+      "kind": "export",
+      "commitA": {
+        "raw": 53382,
+        "gzip": 12014
+      },
+      "commitB": {
+        "raw": 53382,
+        "gzip": 12015
+      },
+      "delta": {
+        "raw": 0,
+        "gzip": 1
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "frame-perf-BBhE-iuS.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 3426,
+        "gzip": 1208
+      },
+      "commitB": {
+        "raw": 3426,
+        "gzip": 1208
+      },
+      "delta": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "hyperlink-B35-O-cW.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 8925,
+        "gzip": 2674
+      },
+      "commitB": {
+        "raw": 8925,
+        "gzip": 2674
+      },
+      "delta": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "index.cjs",
+      "kind": "export",
+      "commitA": {
+        "raw": 671154,
+        "gzip": 131594
+      },
+      "commitB": {
+        "raw": 679916,
+        "gzip": 132946
+      },
+      "delta": {
+        "raw": 8762,
+        "gzip": 1352
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "index.js",
+      "kind": "export",
+      "commitA": {
+        "raw": 1425,
+        "gzip": 590
+      },
+      "commitB": {
+        "raw": 1425,
+        "gzip": 593
+      },
+      "delta": {
+        "raw": 0,
+        "gzip": 3
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "linkify-CHbrAN-4.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "commitB": {
+        "raw": 17811,
+        "gzip": 5369
+      },
+      "delta": {
+        "raw": 17811,
+        "gzip": 5369
+      },
+      "status": "fail"
+    },
+    {
+      "file": "linkify-CtwsMJAM.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 17811,
+        "gzip": 5368
+      },
+      "commitB": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "delta": {
+        "raw": -17811,
+        "gzip": -5368
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "markdown.cjs",
+      "kind": "export",
+      "commitA": {
+        "raw": 1392928,
+        "gzip": 298243
+      },
+      "commitB": {
+        "raw": 1397169,
+        "gzip": 298892
+      },
+      "delta": {
+        "raw": 4241,
+        "gzip": 649
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "markdown.js",
+      "kind": "export",
+      "commitA": {
+        "raw": 9513,
+        "gzip": 2591
+      },
+      "commitB": {
+        "raw": 9513,
+        "gzip": 2592
+      },
+      "delta": {
+        "raw": 0,
+        "gzip": 1
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "mermaid-BpLHvgkp.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 5744,
+        "gzip": 1556
+      },
+      "commitB": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "delta": {
+        "raw": -5744,
+        "gzip": -1556
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "mermaid-C--qkA3Q.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "commitB": {
+        "raw": 5744,
+        "gzip": 1556
+      },
+      "delta": {
+        "raw": 5744,
+        "gzip": 1556
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "mermaid.cjs",
+      "kind": "export",
+      "commitA": {
+        "raw": 65680,
+        "gzip": 15921
+      },
+      "commitB": {
+        "raw": 69919,
+        "gzip": 16618
+      },
+      "delta": {
+        "raw": 4239,
+        "gzip": 697
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "mermaid.js",
+      "kind": "export",
+      "commitA": {
+        "raw": 525,
+        "gzip": 213
+      },
+      "commitB": {
+        "raw": 525,
+        "gzip": 215
+      },
+      "delta": {
+        "raw": 0,
+        "gzip": 2
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "observability.cjs",
+      "kind": "export",
+      "commitA": {
+        "raw": 9567,
+        "gzip": 2738
+      },
+      "commitB": {
+        "raw": 9567,
+        "gzip": 2738
+      },
+      "delta": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "observability.js",
+      "kind": "export",
+      "commitA": {
+        "raw": 314,
+        "gzip": 165
+      },
+      "commitB": {
+        "raw": 314,
+        "gzip": 165
+      },
+      "delta": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "path-BI9W15Zt.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 2514,
+        "gzip": 925
+      },
+      "commitB": {
+        "raw": 2514,
+        "gzip": 925
+      },
+      "delta": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "path-suggest-Dk9TRLh5.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 134,
+        "gzip": 111
+      },
+      "commitB": {
+        "raw": 134,
+        "gzip": 111
+      },
+      "delta": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "path-suggest-bvR9SY6Q.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 16517,
+        "gzip": 4467
+      },
+      "commitB": {
+        "raw": 16517,
+        "gzip": 4467
+      },
+      "delta": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "path-suggest-fPzRsgPv.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 8006,
+        "gzip": 2373
+      },
+      "commitB": {
+        "raw": 8006,
+        "gzip": 2373
+      },
+      "delta": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "rect-B6_AnM18.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "commitB": {
+        "raw": 30161,
+        "gzip": 7056
+      },
+      "delta": {
+        "raw": 30161,
+        "gzip": 7056
+      },
+      "status": "fail"
+    },
+    {
+      "file": "rect-BIXnso0J.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 28818,
+        "gzip": 6859
+      },
+      "commitB": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "delta": {
+        "raw": -28818,
+        "gzip": -6859
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "renderer-dom.cjs",
+      "kind": "export",
+      "commitA": {
+        "raw": 49432,
+        "gzip": 11363
+      },
+      "commitB": {
+        "raw": 49432,
+        "gzip": 11363
+      },
+      "delta": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "renderer-dom.js",
+      "kind": "export",
+      "commitA": {
+        "raw": 289,
+        "gzip": 192
+      },
+      "commitB": {
+        "raw": 289,
+        "gzip": 191
+      },
+      "delta": {
+        "raw": 0,
+        "gzip": -1
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "runtime-D77C03RM.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 38350,
+        "gzip": 7815
+      },
+      "commitB": {
+        "raw": 38350,
+        "gzip": 7815
+      },
+      "delta": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "runtime.cjs",
+      "kind": "export",
+      "commitA": {
+        "raw": 56089,
+        "gzip": 11216
+      },
+      "commitB": {
+        "raw": 56089,
+        "gzip": 11216
+      },
+      "delta": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "runtime.js",
+      "kind": "export",
+      "commitA": {
+        "raw": 364,
+        "gzip": 168
+      },
+      "commitB": {
+        "raw": 364,
+        "gzip": 168
+      },
+      "delta": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "terminal-selection-CQYr--26.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 11778,
+        "gzip": 3072
+      },
+      "commitB": {
+        "raw": 11778,
+        "gzip": 3072
+      },
+      "delta": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "tlog-theme-BvTCC3ct.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "commitB": {
+        "raw": 298579,
+        "gzip": 55151
+      },
+      "delta": {
+        "raw": 298579,
+        "gzip": 55151
+      },
+      "status": "fail"
+    },
+    {
+      "file": "tlog-theme-latSKU3E.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 298579,
+        "gzip": 55148
+      },
+      "commitB": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "delta": {
+        "raw": -298579,
+        "gzip": -55148
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "trace-CYHDKM1m.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 4823,
+        "gzip": 1515
+      },
+      "commitB": {
+        "raw": 4823,
+        "gzip": 1515
+      },
+      "delta": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "vue.cjs",
+      "kind": "export",
+      "commitA": {
+        "raw": 859919,
+        "gzip": 168857
+      },
+      "commitB": {
+        "raw": 868681,
+        "gzip": 170184
+      },
+      "delta": {
+        "raw": 8762,
+        "gzip": 1327
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "vue.js",
+      "kind": "export",
+      "commitA": {
+        "raw": 135026,
+        "gzip": 29651
+      },
+      "commitB": {
+        "raw": 135026,
+        "gzip": 29658
+      },
+      "delta": {
+        "raw": 0,
+        "gzip": 7
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "wheel-scroll-CQ22Hcyj.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 2972,
+        "gzip": 959
+      },
+      "commitB": {
+        "raw": 2972,
+        "gzip": 959
+      },
+      "delta": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "status": "acceptable"
+    },
+    {
+      "file": "width-DnZjDPPc.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "commitB": {
+        "raw": 17046,
+        "gzip": 4389
+      },
+      "delta": {
+        "raw": 17046,
+        "gzip": 4389
+      },
+      "status": "warning"
+    },
+    {
+      "file": "width-GqllnV8C.js",
+      "kind": "non-export",
+      "commitA": {
+        "raw": 10978,
+        "gzip": 3365
+      },
+      "commitB": {
+        "raw": 0,
+        "gzip": 0
+      },
+      "delta": {
+        "raw": -10978,
+        "gzip": -3365
+      },
+      "status": "acceptable"
+    }
+  ],
+  "aggregate": {
+    "totalFiles": 59,
+    "commitA": {
+      "raw": 8093094,
+      "gzip": 1687732
+    },
+    "commitB": {
+      "raw": 8151063,
+      "gzip": 1697010
+    },
+    "delta": {
+      "raw": 57969,
+      "gzip": 9278
+    }
+  }
+}
