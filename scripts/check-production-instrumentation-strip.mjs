@@ -11,13 +11,7 @@
  * 1 - Instrumentation found in production artifacts
  */
 
-import {
-  readFileSync,
-  readdirSync,
-  statSync,
-  existsSync,
-  mkdirSync,
-} from "node:fs";
+import { readFileSync, readdirSync, statSync, existsSync, mkdirSync } from "node:fs";
 import { join, relative, resolve, normalize } from "node:path";
 import { build as esbuild } from "esbuild";
 import process from "node:process";
@@ -26,9 +20,7 @@ const DIST_DIR = "dist";
 const rootDir = process.cwd();
 
 // Module paths to check
-const realInstrumentationPath = normalize(
-  resolve(rootDir, "src/core/perf/instrumentation.ts"),
-);
+const realInstrumentationPath = normalize(resolve(rootDir, "src/core/perf/instrumentation.ts"));
 const noopInstrumentationPath = normalize(
   resolve(rootDir, "src/core/perf/instrumentation-noop.ts"),
 );

@@ -40,14 +40,8 @@ const productionDefine = {
 };
 
 // Module paths for precise instrumentation replacement
-const realInstrumentationPath = resolve(
-  rootDir,
-  "src/core/perf/instrumentation.ts",
-);
-const noopInstrumentationPath = resolve(
-  rootDir,
-  "src/core/perf/instrumentation-noop.ts",
-);
+const realInstrumentationPath = resolve(rootDir, "src/core/perf/instrumentation.ts");
+const noopInstrumentationPath = resolve(rootDir, "src/core/perf/instrumentation-noop.ts");
 
 // Plugin to replace instrumentation imports with no-op stub
 const instrumentationStripPlugin = {
