@@ -1,104 +1,54 @@
-# Phase 3.4: Production Instrumentation Isolation - Implementation Status
+# Phase 3.4: Production Instrumentation Isolation
 
-**Status**: 🚧 **Implementation Complete, Validation Pending**  
-**Issue**: #119 (Open)  
-**PR**: #122 (Draft)  
-**Type**: Performance remediation (required)
+**Status**: ✅ Implementation and built-dist runtime validation complete  
+**Issue**: #119  
+**PR**: #122
 
----
+## Result
 
-## Summary
+Standard ESM and CJS builds compile out all Cell, Text/Wrap, and Grapheme instrumentation hot-path dispatches. Source-mode profiling through Vitest/tsx remains available.
 
-Production strip implementation is complete. Standard ESM/CJS builds now use no-op instrumentation stub instead of real collector, eliminating debug overhead from production artifacts. Source-mode profiling remains fully functional.
+## Structural evidence
 
-**Performance validation is pending.** Built-dist A/B/C benchmarks have not yet been completed.
+`pnpm run check:production-instrumentation-strip` reads first-build metafiles emitted by tsdown/Rolldown and esbuild. It requires both modules to contribute zero output bytes:
 
----
+- `src/core/perf/instrumentation.ts`: 0 bytes
+- `src/core/perf/instrumentation-noop.ts`: 0 bytes
 
-## Implementation Status
+The same command runs a build-level control:
 
-### ✅ Completed
+- B-style instrumentation-enabled build: real collector contributes 9,090 bytes and the control fails.
+- C-style stripped build: real collector and no-op stub contribute 0 bytes and the control passes.
 
-#### 1. Build Configuration
+Missing ESM or CJS metafiles are hard failures.
 
-- Added `src/perf-build-globals.d.ts` with compile-time constant declaration
-- Configured `__VUE_TUI_PERF_INSTRUMENTATION__ = false` in tsdown & esbuild
-- Enabled tree-shaking in both bundlers
+## Built-dist A/B/C runtime evidence
 
-#### 2. Hot-Path Guards (40 calls)
+`scripts/validate-built-dist-abc.ts` uses isolated worktrees and actual built `dist/vue.js`, `dist/core.js`, `dist/vue.cjs`, and `dist/core.cjs` artifacts:
 
-- **buffer.ts**: 12 Cell instrumentation calls guarded
-- **text.ts**: 24 Text/Wrap instrumentation calls guarded
-- **grapheme.ts**: 4 Grapheme instrumentation calls guarded
-- Removed instrumentation-only parameters
+- A: `697472b0cc5c000fb46baf16e85c60d84ee22471`
+- B: `4d543ff7042f9c2400fa50a9dff921a0f36f77a3`
+- C: PR implementation commit
 
-#### 3. Module Replacement Strategy
+Each measurement runs in a fresh Node child process. All six A/B/C permutations are used, timed batches calibrate toward 3 ms, and the primary C/A gate is the seeded bootstrap 95% CI of paired p50 ratios with upper bound `<= 1.05`.
 
-Created `instrumentation-noop.ts` with matching API and configured bundler plugins to replace imports.
+All twelve ESM/CJS gates passed. The widest passing upper bound was `1.0462` for ESM terminal write.
 
-#### 4. Production Artifact Verification
+Detailed raw observations and analysis: `docs/perf/phase3.4-built-dist-abc.json`.
 
-Created `scripts/check-production-instrumentation-strip.mjs` that checks for real instrumentation patterns.
+## Permanent release gates
 
-**Current Results**:
+`release:check` runs, after `build:checked`:
 
-```
-✅ 48 runtime files verified clean
-✅ 225 type declaration files verified clean
-✅ No real instrumentation chunks
-✅ No leaked compile-time globals
-```
+1. `check:production-instrumentation-strip`
+2. `check:consumer-bundle`
 
-#### 5. Source Mode Validation
+The packed consumer A/B/C validator compares the same core, text utility, and Vue component fixtures from independently packed A/B/C worktrees, reports minified/raw/gzip/brotli sizes and module closure, and enforces the registered size gates.
 
-```
-✅ Test Files: 140 passed
-✅ Tests: 2081 passed
-```
+## Source-mode correctness
 
-#### 6. Consumer Bundle Validation
+The existing instrumentation API and tests continue to use the real collector when source files are loaded directly. Production stripping is deterministic and does not depend on environment variables.
 
-Created `scripts/check-consumer-bundle.ts` for tree-shaking verification.
+## Non-goals
 
-#### 7. CI Integration
-
-- `check:production-instrumentation-strip` added
-- `check:consumer-bundle` added
-- All checks pass
-
----
-
-### ⏳ Pending
-
-#### Built-Dist A/B/C Performance Validation
-
-Actual runtime performance comparison:
-
-- **A**: Pre-Phase-3 baseline
-- **B**: With instrumentation
-- **C**: Current PR
-
-**Status**: Not yet started.
-
----
-
-## Merge Criteria
-
-Can merge when either:
-
-**Option A**: Complete validation in this PR
-
-1. ✅ CI green
-2. ✅ Structural checks pass
-3. ⏳ A/B/C validation proves C ≈ A
-
-**Option B**: Merge implementation, validate separately
-
-1. ✅ CI green
-2. ✅ Structural checks pass
-3. 📝 Documentation states validation pending
-4. 📝 #119 remains open
-
----
-
-**Status**: Implementation complete, awaiting performance validation.
+This work does not change Cell cache capacity, eviction, long-text admission, provider caches, or virtual scrolling. Future optimization remains dependent on a real application workload profile.
