@@ -1,5 +1,11 @@
 import { builtinModules } from "node:module";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 import { defineConfig } from "tsdown";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const rootDir = resolve(__dirname);
 
 const nodeBuiltins = Array.from(
   new Set([
@@ -19,12 +25,15 @@ const productionDefine = {
   __VUE_TUI_PERF_INSTRUMENTATION__: "false",
 };
 
-// Production alias: replace instrumentation imports with no-op stub
-// This ensures entire instrumentation module is excluded from production bundles
-const productionAlias = {
-  "./perf/instrumentation.js": "./perf/instrumentation-noop.js",
-  "../core/perf/instrumentation.js": "../core/perf/instrumentation-noop.js", 
-  "../../core/perf/instrumentation.js": "../../core/perf/instrumentation-noop.js",
+// Rollup plugin to replace instrumentation imports with no-op stub
+const instrumentationStripPlugin = {
+  name: "instrumentation-strip",
+  resolveId(id, importer) {
+    if (id.includes("/perf/instrumentation")) {
+      return resolve(rootDir, "src/core/perf/instrumentation-noop.ts");
+    }
+    return null;
+  },
 };
 
 export default defineConfig([
@@ -50,9 +59,7 @@ export default defineConfig([
     external: browserExternals,
     define: productionDefine,
     treeshake: true,
-    resolve: {
-      alias: productionAlias,
-    },
+    plugins: [instrumentationStripPlugin],
   },
   {
     target: "node16",
@@ -66,8 +73,6 @@ export default defineConfig([
     external: ["vue", ...nodeBuiltins],
     define: productionDefine,
     treeshake: true,
-    resolve: {
-      alias: productionAlias,
-    },
+    plugins: [instrumentationStripPlugin],
   },
 ]);

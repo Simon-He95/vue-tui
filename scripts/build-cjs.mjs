@@ -43,11 +43,16 @@ const productionDefine = {
 const instrumentationStripPlugin = {
   name: "instrumentation-strip",
   setup(build) {
-    build.onResolve({ filter: /\/perf\/instrumentation$/ }, (args) => {
-      return {
-        path: resolve(rootDir, "src/core/perf/instrumentation-noop.ts"),
-      };
-    });
+    // Match any import ending with instrumentation (with or without .js/.ts)
+    build.onResolve(
+      { filter: /\/perf\/instrumentation(\.js|\.ts)?$/ },
+      (args) => {
+        // Return the resolved path to no-op stub
+        return {
+          path: resolve(rootDir, "src/core/perf/instrumentation-noop.ts"),
+        };
+      },
+    );
   },
 };
 
