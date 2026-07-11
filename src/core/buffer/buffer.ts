@@ -24,7 +24,6 @@ export function normalizeStyle(style?: Style): Style {
 function getOrCreateCellCache(
   map: WeakMap<Style, Map<string, Cell>>,
   style: Style,
-  width: 1 | 2,
 ): Map<string, Cell> {
   const cached = map.get(style);
   if (cached) return cached;
@@ -32,41 +31,61 @@ function getOrCreateCellCache(
   map.set(style, next);
 
   // Register bucket for distribution tracking when instrumentation enabled
-  cellInstr.registerCacheBucket(width, next);
+  if (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" || __VUE_TUI_PERF_INSTRUMENTATION__) {
+    cellInstr.registerCacheBucket(map === cellCacheWidth2 ? 2 : 1, next);
+  }
 
   return next;
 }
 
 export function createCell(ch: string, style?: Style, widthProvider?: WidthProvider): Cell {
-  cellInstr.recordCreateCellCall();
+  if (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" || __VUE_TUI_PERF_INSTRUMENTATION__) {
+    cellInstr.recordCreateCellCall();
+  }
 
   if (ch === " ") return createBlankCell(style);
 
   const normalizedStyle = normalizeStyle(style);
-  cellInstr.recordCharCellWidthCall();
+  if (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" || __VUE_TUI_PERF_INSTRUMENTATION__) {
+    cellInstr.recordCharCellWidthCall();
+  }
   const width = charCellWidth(ch, widthProvider);
 
   const map =
     width === 2
-      ? getOrCreateCellCache(cellCacheWidth2, normalizedStyle, 2)
-      : getOrCreateCellCache(cellCacheWidth1, normalizedStyle, 1);
+      ? getOrCreateCellCache(cellCacheWidth2, normalizedStyle)
+      : getOrCreateCellCache(cellCacheWidth1, normalizedStyle);
 
   const cached = map.get(ch);
   if (cached) {
-    cellInstr.recordCacheHit(width as 1 | 2);
+    if (
+      typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ||
+      __VUE_TUI_PERF_INSTRUMENTATION__
+    ) {
+      cellInstr.recordCacheHit(width as 1 | 2);
+    }
     return cached;
   }
 
-  cellInstr.recordCacheMiss(width as 1 | 2);
-  cellInstr.recordNewCell();
+  if (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" || __VUE_TUI_PERF_INSTRUMENTATION__) {
+    cellInstr.recordCacheMiss(width as 1 | 2);
+    cellInstr.recordNewCell();
+  }
 
   const cell: Cell = { ch, width, style: normalizedStyle };
   map.set(ch, cell);
 
-  cellInstr.updateMaxCacheSize(width as 1 | 2, map.size);
+  if (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" || __VUE_TUI_PERF_INSTRUMENTATION__) {
+    cellInstr.updateMaxCacheSize(width as 1 | 2, map.size);
+  }
 
   if (map.size > MAX_CACHED_CELLS_PER_STYLE) {
-    cellInstr.recordCacheClear(width as 1 | 2);
+    if (
+      typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ||
+      __VUE_TUI_PERF_INSTRUMENTATION__
+    ) {
+      cellInstr.recordCacheClear(width as 1 | 2);
+    }
     map.clear();
   }
 
@@ -77,11 +96,18 @@ export function createBlankCell(style?: Style): Cell {
   const normalizedStyle = normalizeStyle(style);
   const cached = blankCellCache.get(normalizedStyle);
   if (cached) {
-    cellInstr.recordBlankCacheHit();
+    if (
+      typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ||
+      __VUE_TUI_PERF_INSTRUMENTATION__
+    ) {
+      cellInstr.recordBlankCacheHit();
+    }
     return cached;
   }
 
-  cellInstr.recordBlankCacheMiss();
+  if (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" || __VUE_TUI_PERF_INSTRUMENTATION__) {
+    cellInstr.recordBlankCacheMiss();
+  }
 
   const cell = Object.freeze({
     ch: " ",
@@ -96,11 +122,18 @@ export function createContinuationCell(style?: Style): Cell {
   const normalizedStyle = normalizeStyle(style);
   const cached = continuationCellCache.get(normalizedStyle);
   if (cached) {
-    cellInstr.recordContinuationCacheHit();
+    if (
+      typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ||
+      __VUE_TUI_PERF_INSTRUMENTATION__
+    ) {
+      cellInstr.recordContinuationCacheHit();
+    }
     return cached;
   }
 
-  cellInstr.recordContinuationCacheMiss();
+  if (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" || __VUE_TUI_PERF_INSTRUMENTATION__) {
+    cellInstr.recordContinuationCacheMiss();
+  }
 
   const cell = Object.freeze({
     ch: "",

@@ -140,14 +140,23 @@ function fallbackGraphemeSegments(text: string): readonly GraphemeSegment[] {
 export function segmentedGraphemes(text: string): Iterable<GraphemeSegment> | null {
   if (!needsGraphemeSegmentation(text)) return null;
 
-  graphemeInstr.recordSegmentedGraphemesCall();
-  graphemeInstr.recordSegmentationRequiredInput();
+  if (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" || __VUE_TUI_PERF_INSTRUMENTATION__) {
+    graphemeInstr.recordSegmentedGraphemesCall();
+    graphemeInstr.recordSegmentationRequiredInput();
+  }
 
   if (graphemeSegmenter) {
-    graphemeInstr.recordIntlSegmenterUsed();
+    if (
+      typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ||
+      __VUE_TUI_PERF_INSTRUMENTATION__
+    ) {
+      graphemeInstr.recordIntlSegmenterUsed();
+    }
     return graphemeSegmenter.segment(text);
   }
 
-  graphemeInstr.recordFallbackSegmenterUsed();
+  if (typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" || __VUE_TUI_PERF_INSTRUMENTATION__) {
+    graphemeInstr.recordFallbackSegmenterUsed();
+  }
   return fallbackGraphemeSegments(text);
 }

@@ -69,6 +69,8 @@ jobs:
 
       - run: pnpm run build:checked
 
+      - run: pnpm run check:production-instrumentation-strip
+
       - run: pnpm run check:dist-dts
 
       - run: pnpm run test:types:dist

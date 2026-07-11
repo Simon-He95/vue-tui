@@ -1,6 +1,12 @@
 import { builtinModules } from "node:module";
 import { mkdirSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 import { build } from "esbuild";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const rootDir = resolve(__dirname, "..");
 
 const nodeBuiltins = Array.from(
   new Set([
@@ -28,9 +34,39 @@ const forbidNodeBuiltinsPlugin = {
   },
 };
 
+// Production builds: strip performance instrumentation via dead-code elimination
+const productionDefine = {
+  __VUE_TUI_PERF_INSTRUMENTATION__: "false",
+};
+
+// Module paths for precise instrumentation replacement
+const realInstrumentationPath = resolve(rootDir, "src/core/perf/instrumentation.ts");
+const noopInstrumentationPath = resolve(rootDir, "src/core/perf/instrumentation-noop.ts");
+
+// Plugin to replace instrumentation imports with no-op stub
+const instrumentationStripPlugin = {
+  name: "instrumentation-strip",
+  setup(build) {
+    build.onResolve({ filter: /instrumentation/ }, (args) => {
+      // Resolve to absolute path, handling .js imports
+      if (args.resolveDir) {
+        // Remove .js extension if present, add .ts
+        const sourcePath = args.path.replace(/\.js$/, ".ts");
+        const resolved = resolve(args.resolveDir, sourcePath);
+
+        // Compare with real instrumentation path
+        if (resolved === realInstrumentationPath) {
+          return { path: noopInstrumentationPath };
+        }
+      }
+      return null;
+    });
+  },
+};
+
 // Keep CJS as a separate esbuild step so the package can publish named `.cjs`
 // files alongside tsdown's ESM and declaration output.
-await build({
+const cjsBrowserResult = await build({
   entryPoints: {
     index: "src/index.ts",
     core: "src/core.ts",
@@ -50,6 +86,9 @@ await build({
   platform: "neutral",
   target: ["es2020"],
   sourcemap: false,
+  treeShaking: true,
+  minifySyntax: true,
+  metafile: true,
   // Keep dynamic import syntax in browser-facing CJS. The Mermaid bridge uses
   // import("beautiful-mermaid") so CJS consumers can load the optional ESM peer
   // lazily at render time instead of requiring it during entrypoint import.
@@ -58,8 +97,16 @@ await build({
   // ESM entrypoints. Keep beautiful-mermaid external so the CJS bridge can
   // load the optional ESM peer through dynamic import at render time.
   external: ["vue", "beautiful-mermaid"],
-  plugins: [forbidNodeBuiltinsPlugin],
+  plugins: [forbidNodeBuiltinsPlugin, instrumentationStripPlugin],
+  define: productionDefine,
 });
+
+// Save metafile for verification
+mkdirSync(".tmp/build-metafiles", { recursive: true });
+writeFileSync(
+  ".tmp/build-metafiles/cjs-browser.json",
+  JSON.stringify(cjsBrowserResult.metafile, null, 2),
+);
 
 mkdirSync("dist/agent", { recursive: true });
 // Keep /agent/mermaid as a thin bridge over /mermaid so both entrypoints share
@@ -70,7 +117,7 @@ writeFileSync(
   `"use strict";\nmodule.exports = require("../mermaid.cjs");\n`,
 );
 
-await build({
+const cjsCliResult = await build({
   entryPoints: {
     cli: "src/cli.ts",
   },
@@ -81,5 +128,13 @@ await build({
   platform: "node",
   target: ["node16"],
   sourcemap: false,
+  treeShaking: true,
+  minifySyntax: true,
+  metafile: true,
   external: ["vue"],
+  define: productionDefine,
+  plugins: [instrumentationStripPlugin],
 });
+
+// Save metafile for verification
+writeFileSync(".tmp/build-metafiles/cjs-cli.json", JSON.stringify(cjsCliResult.metafile, null, 2));

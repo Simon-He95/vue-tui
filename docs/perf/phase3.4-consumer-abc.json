@@ -1,0 +1,231 @@
+{
+  "commits": {
+    "A": "697472b0cc5c000fb46baf16e85c60d84ee22471",
+    "B": "4d543ff7042f9c2400fa50a9dff921a0f36f77a3",
+    "C": "359896331846b254a82315d4f829a43ea30b2ac8"
+  },
+  "measurements": {
+    "A": {
+      "core": {
+        "raw": 36673,
+        "gzip": 12538,
+        "brotli": 10559,
+        "packageInputs": [
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/ansi-palette-CNXqFciC.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/core.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/create-terminal-DXuZ2fci.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/env-DNCzvX8b.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/hyperlink-B35-O-cW.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/path-BI9W15Zt.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/path-suggest-fPzRsgPv.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/width-GqllnV8C.js"
+        ],
+        "instrumentationInputs": []
+      },
+      "textUtils": {
+        "raw": 153989,
+        "gzip": 48824,
+        "brotli": 41204,
+        "packageInputs": [
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/TMermaidText-BFdof_v4.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/TSelect-CU17UUYA.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/TTree-7E2AfU9c.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/ansi-palette-CNXqFciC.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/create-terminal-DXuZ2fci.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/debug-logger-ChY_PXVk.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/dom-renderer-DNzmg2As.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/env-DNCzvX8b.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/frame-perf-BBhE-iuS.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/hyperlink-B35-O-cW.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/linkify-DidkdiSH.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/path-BI9W15Zt.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/path-suggest-fPzRsgPv.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/rect-BIXnso0J.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/runtime-D77C03RM.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/terminal-selection-CQYr--26.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/trace-CYHDKM1m.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/vue.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/wheel-scroll-CQ22Hcyj.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/width-GqllnV8C.js"
+        ],
+        "instrumentationInputs": []
+      },
+      "components": {
+        "raw": 326340,
+        "gzip": 104100,
+        "brotli": 87037,
+        "packageInputs": [
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/TMermaidText-BFdof_v4.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/TSelect-CU17UUYA.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/TTree-7E2AfU9c.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/ansi-palette-CNXqFciC.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/create-terminal-DXuZ2fci.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/debug-logger-ChY_PXVk.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/dom-renderer-DNzmg2As.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/env-DNCzvX8b.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/frame-perf-BBhE-iuS.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/hyperlink-B35-O-cW.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/linkify-DidkdiSH.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/path-BI9W15Zt.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/path-suggest-fPzRsgPv.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/rect-BIXnso0J.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/runtime-D77C03RM.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/terminal-selection-CQYr--26.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/trace-CYHDKM1m.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/vue.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/wheel-scroll-CQ22Hcyj.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_003936eff618806e38be095e8667dffa/node_modules/@simon_he/vue-tui/dist/width-GqllnV8C.js"
+        ],
+        "instrumentationInputs": []
+      }
+    },
+    "B": {
+      "core": {
+        "raw": 39176,
+        "gzip": 13166,
+        "brotli": 11122,
+        "packageInputs": [
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/ansi-palette-CNXqFciC.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/core.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/create-terminal-D4mGjAYO.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/env-DNCzvX8b.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/hyperlink-B35-O-cW.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/path-BI9W15Zt.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/path-suggest-fPzRsgPv.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/width-DnZjDPPc.js"
+        ],
+        "instrumentationInputs": []
+      },
+      "textUtils": {
+        "raw": 156387,
+        "gzip": 49342,
+        "brotli": 41778,
+        "packageInputs": [
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/TMermaidText-DFIVZ2_g.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/TSelect-DWDeDEbf.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/TTree-_2jM75BK.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/ansi-palette-CNXqFciC.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/create-terminal-D4mGjAYO.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/debug-logger-ChY_PXVk.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/dom-renderer-B1BFE_qD.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/env-DNCzvX8b.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/frame-perf-BBhE-iuS.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/hyperlink-B35-O-cW.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/linkify-CHbrAN-4.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/path-BI9W15Zt.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/path-suggest-fPzRsgPv.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/rect-B6_AnM18.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/runtime-D77C03RM.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/terminal-selection-CQYr--26.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/trace-CYHDKM1m.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/vue.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/wheel-scroll-CQ22Hcyj.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/width-DnZjDPPc.js"
+        ],
+        "instrumentationInputs": []
+      },
+      "components": {
+        "raw": 330727,
+        "gzip": 105119,
+        "brotli": 88061,
+        "packageInputs": [
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/TMermaidText-DFIVZ2_g.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/TSelect-DWDeDEbf.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/TTree-_2jM75BK.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/ansi-palette-CNXqFciC.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/create-terminal-D4mGjAYO.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/debug-logger-ChY_PXVk.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/dom-renderer-B1BFE_qD.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/env-DNCzvX8b.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/frame-perf-BBhE-iuS.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/hyperlink-B35-O-cW.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/linkify-CHbrAN-4.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/path-BI9W15Zt.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/path-suggest-fPzRsgPv.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/rect-B6_AnM18.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/runtime-D77C03RM.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/terminal-selection-CQYr--26.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/trace-CYHDKM1m.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/vue.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/wheel-scroll-CQ22Hcyj.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_5ff99133a92d237dde7d01ef72fd5113/node_modules/@simon_he/vue-tui/dist/width-DnZjDPPc.js"
+        ],
+        "instrumentationInputs": []
+      }
+    },
+    "C": {
+      "core": {
+        "raw": 36673,
+        "gzip": 12538,
+        "brotli": 10559,
+        "packageInputs": [
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/ansi-palette-CNXqFciC.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/core.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/create-terminal-DXuZ2fci.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/env-DNCzvX8b.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/hyperlink-B35-O-cW.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/path-BI9W15Zt.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/path-suggest-fPzRsgPv.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/width-GqllnV8C.js"
+        ],
+        "instrumentationInputs": []
+      },
+      "textUtils": {
+        "raw": 154001,
+        "gzip": 48833,
+        "brotli": 41282,
+        "packageInputs": [
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/TMermaidText-CXm_L969.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/TSelect-CiyMvwl-.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/TTree-DKGiuIcM.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/ansi-palette-CNXqFciC.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/create-terminal-DXuZ2fci.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/debug-logger-ChY_PXVk.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/dom-renderer-DNzmg2As.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/env-DNCzvX8b.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/frame-perf-BBhE-iuS.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/hyperlink-B35-O-cW.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/linkify-CuuquMQT.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/path-BI9W15Zt.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/path-suggest-fPzRsgPv.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/rect-Ng-3eKzF.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/runtime-D77C03RM.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/terminal-selection-CQYr--26.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/trace-CYHDKM1m.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/vue.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/wheel-scroll-CQ22Hcyj.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/width-GqllnV8C.js"
+        ],
+        "instrumentationInputs": []
+      },
+      "components": {
+        "raw": 326350,
+        "gzip": 104100,
+        "brotli": 87125,
+        "packageInputs": [
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/TMermaidText-CXm_L969.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/TSelect-CiyMvwl-.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/TTree-DKGiuIcM.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/ansi-palette-CNXqFciC.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/create-terminal-DXuZ2fci.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/debug-logger-ChY_PXVk.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/dom-renderer-DNzmg2As.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/env-DNCzvX8b.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/frame-perf-BBhE-iuS.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/hyperlink-B35-O-cW.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/linkify-CuuquMQT.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/path-BI9W15Zt.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/path-suggest-fPzRsgPv.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/rect-Ng-3eKzF.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/runtime-D77C03RM.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/terminal-selection-CQYr--26.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/trace-CYHDKM1m.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/vue.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/wheel-scroll-CQ22Hcyj.js",
+          "node_modules/.pnpm/@simon_he+vue-tui@file+..+..+..+..+..+..+..+..+var+folders+z8+w1qvd0cd46z6k8_swl1n33d00_2c61f0a8b9efa28619c61c1b89b0638e/node_modules/@simon_he/vue-tui/dist/width-GqllnV8C.js"
+        ],
+        "instrumentationInputs": []
+      }
+    }
+  }
+}
