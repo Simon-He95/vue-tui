@@ -8,7 +8,7 @@
  */
 
 import { build } from "esbuild";
-import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
+import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 const FIXTURES = {

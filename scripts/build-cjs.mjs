@@ -43,7 +43,7 @@ const productionDefine = {
 const instrumentationStripPlugin = {
   name: "instrumentation-strip",
   setup(build) {
-    // Use namespace to inject no-op stub
+    // Use namespace to redirect to no-op stub file
     build.onResolve({ filter: /.*/ }, (args) => {
       // Intercept instrumentation imports
       if (
@@ -54,65 +54,9 @@ const instrumentationStripPlugin = {
         args.path === "../../core/perf/instrumentation.js"
       ) {
         return {
-          path: args.path,
-          namespace: "instrumentation-noop",
+          path: resolve(rootDir, "src/core/perf/instrumentation-noop.ts"),
         };
       }
-    });
-
-    build.onLoad({ filter: /.*/, namespace: "instrumentation-noop" }, () => {
-      return {
-        contents: `
-          const noop = () => {};
-          const noopWithArg = (_arg) => {};
-          const noopWithArgs = (..._args) => {};
-          
-          export const cellInstr = {
-            recordCreateCellCall: noop,
-            recordCharCellWidthCall: noop,
-            recordCacheHit: noopWithArg,
-            recordCacheMiss: noopWithArg,
-            recordNewCell: noop,
-            recordBlankCacheHit: noop,
-            recordBlankCacheMiss: noop,
-            recordContinuationCacheHit: noop,
-            recordContinuationCacheMiss: noop,
-            recordCacheClear: noopWithArg,
-            registerCacheBucket: noopWithArgs,
-            updateMaxCacheSize: noopWithArgs,
-          };
-          
-          export const textInstr = {
-            recordTextCellWidthCall: noopWithArgs,
-            recordRenderPassCacheHit: noop,
-            recordRenderPassCacheMiss: noop,
-            recordTextWidthCacheHit: noop,
-            recordTextWidthCacheMiss: noop,
-            recordTextWidthCacheSet: noop,
-            recordTextWidthCacheEvict: noop,
-            recordWrapByCellsCall: noop,
-            recordWrapCacheHit: noop,
-            recordWrapCacheMiss: noop,
-            recordWrapCacheClear: noop,
-            recordWrapCacheSet: noop,
-            recordWrapWidthBucketMapClear: noop,
-          };
-          
-          export const graphemeInstr = {
-            recordSegmentedGraphemesCall: noop,
-            recordSegmentationRequiredInput: noop,
-            recordIntlSegmenterUsed: noop,
-            recordFallbackSegmenterUsed: noop,
-          };
-          
-          export const isInstrumentationEnabled = () => false;
-          export const enableInstrumentation = noop;
-          export const disableInstrumentation = noop;
-          export const resetInstrumentation = noop;
-          export const getInstrumentationMetrics = () => ({});
-        `,
-        loader: "js",
-      };
     });
   },
 };
@@ -140,7 +84,6 @@ await build({
   target: ["es2020"],
   sourcemap: false,
   treeShaking: true,
-  minify: true,
   // Keep dynamic import syntax in browser-facing CJS. The Mermaid bridge uses
   // import("beautiful-mermaid") so CJS consumers can load the optional ESM peer
   // lazily at render time instead of requiring it during entrypoint import.
@@ -174,7 +117,6 @@ await build({
   target: ["node16"],
   sourcemap: false,
   treeShaking: true,
-  minify: true,
   external: ["vue"],
   define: productionDefine,
   plugins: [instrumentationStripPlugin],

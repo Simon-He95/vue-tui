@@ -51,5 +51,7 @@ export const graphemeInstr = {
 export const isInstrumentationEnabled = () => false;
 export const enableInstrumentation = noop;
 export const disableInstrumentation = noop;
-export const resetInstrumentation = noop;
-export const getInstrumentationMetrics = () => ({} as any);
+export const resetMetrics = noop;
+export const getMetrics = () => ({}) as any;
+export const getHeapUsed = () => null;
+export const getMetricsWithHeap = () => ({}) as any;

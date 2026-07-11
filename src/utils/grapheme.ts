@@ -2,9 +2,7 @@ import { graphemeInstr } from "../core/perf/instrumentation.js";
 
 // Compile-time constant for instrumentation stripping in production builds
 const PERF_INSTRUMENTATION_COMPILED =
-  typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined"
-    ? true
-    : __VUE_TUI_PERF_INSTRUMENTATION__;
+  typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ? true : __VUE_TUI_PERF_INSTRUMENTATION__;
 
 export interface GraphemeSegment {
   segment: string;

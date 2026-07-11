@@ -8,9 +8,6 @@
  * See issue #119 for validation status.
  */
 
-// Unique marker for verification that this module is stripped from production
-const INSTRUMENTATION_MARKER = "vue-tui-internal-perf-instrumentation";
-
 export interface CellCacheMetrics {
   createCellCalls: number;
   charCellWidthCallsFromCreateCell: number;

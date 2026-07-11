@@ -28,7 +28,7 @@ const productionDefine = {
 // Rollup plugin to replace instrumentation imports with no-op stub
 const instrumentationStripPlugin = {
   name: "instrumentation-strip",
-  resolveId(id, importer) {
+  resolveId(id) {
     if (id.includes("/perf/instrumentation")) {
       return resolve(rootDir, "src/core/perf/instrumentation-noop.ts");
     }

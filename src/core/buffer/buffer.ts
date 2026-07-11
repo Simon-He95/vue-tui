@@ -5,9 +5,7 @@ import { cellInstr } from "../perf/instrumentation.js";
 
 // Compile-time constant for instrumentation stripping in production builds
 const PERF_INSTRUMENTATION_COMPILED =
-  typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined"
-    ? true
-    : __VUE_TUI_PERF_INSTRUMENTATION__;
+  typeof __VUE_TUI_PERF_INSTRUMENTATION__ === "undefined" ? true : __VUE_TUI_PERF_INSTRUMENTATION__;
 
 const DEFAULT_STYLE: Style = Object.freeze({});
 const styleCache = new WeakMap<object, Style>();
