@@ -31,7 +31,11 @@ import { padEndByCells, sliceByCells, textCellWidth } from "../../shared/text-ut
 import { TVirtualMarkdown } from "@simon_he/vue-tui/markdown";
 import { TLogView } from "@simon_he/vue-tui/experimental";
 import { handleAgentConsoleKeymap } from "./keymap";
-import { createMockAgentStream, type AgentEvent } from "./mock-agent-stream";
+import {
+  createMockAgentStream,
+  nextSyntheticAgentIndexAfterSeed,
+  type AgentEvent,
+} from "./mock-agent-stream";
 import {
   createAgentTranscriptStore,
   type AgentReplayLog,
@@ -72,7 +76,7 @@ export type AgentConsoleApi = Readonly<{
   replayTotal: Ref<number>;
   metrics: Ref<TLogViewScrollMetrics | null>;
   searchState: Ref<TLogViewSearchState>;
-  seed: (count?: number) => void;
+  seed: (count?: number) => number;
   appendSyntheticChunk: (index: number) => void;
   appendBurst: (count: number) => Promise<void>;
   captureReplayLog: () => AgentReplayLog;
@@ -98,6 +102,8 @@ export type AgentConsoleApi = Readonly<{
   getCopiedText: () => string;
   getInputValue: () => string;
   getTranscriptRows: () => readonly string[];
+  getMarkdownBlockCount: () => number;
+  getMarkdownLength: () => number;
   getChromeRows: () => readonly string[];
   getTerminalSnapshot: () => readonly string[];
 }>;
@@ -512,7 +518,7 @@ export const AgentConsoleSurface = defineComponent({
       syncReplayCursor();
     }
 
-    function seed(count = 36): void {
+    function seed(count = 36): number {
       stopStream();
       stream.reset();
       streamIndex.value = 0;
@@ -525,6 +531,7 @@ export const AgentConsoleSurface = defineComponent({
         refreshSearchState();
         refreshLinks();
       });
+      return nextSyntheticAgentIndexAfterSeed(count);
     }
 
     function appendSyntheticChunk(index: number): void {
@@ -1122,6 +1129,7 @@ export const AgentConsoleSurface = defineComponent({
             clientX: rect.left + ((cellX + 0.5) * rect.width) / size.cols,
             clientY: rect.top + ((cellY + 0.5) * rect.height) / size.rows,
             deltaY,
+            deltaMode: WheelEvent.DOM_DELTA_LINE,
           }),
         );
       },
@@ -1147,12 +1155,20 @@ export const AgentConsoleSurface = defineComponent({
         Array.from({ length: AGENT_CONSOLE_LAYOUT.transcript.h }, (_, index) =>
           rowTextFromTerminal(terminalContext.terminal, AGENT_CONSOLE_LAYOUT.transcript.y + index),
         ),
+      getMarkdownBlockCount: () => transcript.syncMarkdownBlocks().length,
+      getMarkdownLength: () => transcript.markdown.value.length,
       getChromeRows: () =>
         Array.from({ length: AGENT_CONSOLE_LAYOUT.chrome.h }, (_, index) =>
           rowTextFromTerminal(terminalContext.terminal, AGENT_CONSOLE_LAYOUT.chrome.y + index),
         ),
       getTerminalSnapshot: () => terminalContext.terminal.snapshot().lines,
     };
+
+    watchEffect(() => {
+      if (mode.value !== "markdown") return;
+      transcript.markdown.value;
+      transcript.syncMarkdownBlocks();
+    });
 
     watch(
       () => transcript.markdownBlocks.value,

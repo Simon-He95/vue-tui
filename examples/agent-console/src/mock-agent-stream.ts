@@ -108,6 +108,11 @@ export function createSyntheticAgentEvent(index: number): AgentEvent {
   };
 }
 
+export function nextSyntheticAgentIndexAfterSeed(count: number): number {
+  const tailRichIndex = count + ((7 - (count % 37) + 37) % 37);
+  return Math.max(count - 1, tailRichIndex) + 1;
+}
+
 export function createMockAgentEvents(count = 240): AgentEvent[] {
   const events: AgentEvent[] = [
     {
@@ -116,7 +121,7 @@ export function createMockAgentEvents(count = 240): AgentEvent[] {
     },
   ];
   for (let i = 0; i < count; i++) events.push(createSyntheticAgentEvent(i));
-  const tailRichIndex = count + ((7 - (count % 37) + 37) % 37);
+  const tailRichIndex = nextSyntheticAgentIndexAfterSeed(count) - 1;
   events.push(createSyntheticAgentEvent(tailRichIndex));
   events.push({ type: "assistant-delta", text: "\nDone. The console stayed interactive.\n" });
   return events;

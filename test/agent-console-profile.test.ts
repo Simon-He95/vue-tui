@@ -36,6 +36,8 @@ describe("Agent Console profile harness", () => {
       "detached-append",
       "search-large-history",
       "stream-scroll-interaction",
+      "markdown-toggle-large-history",
+      "markdown-stream-steady",
     ]);
   });
 

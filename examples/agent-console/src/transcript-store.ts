@@ -37,6 +37,7 @@ export type AgentTranscriptStore = Readonly<{
   logStore: AppendOnlyLogStore;
   markdown: Ref<string>;
   markdownBlocks: Ref<readonly TuiMarkdownBlock[]>;
+  syncMarkdownBlocks: () => readonly TuiMarkdownBlock[];
   links: Ref<readonly TranscriptLink[]>;
   stats: Ref<TranscriptStats>;
   eventLog: Ref<readonly AgentEvent[]>;
@@ -94,11 +95,23 @@ export function parseAgentReplayLog(raw: string): AgentReplayLog {
   return createAgentReplayLog(value.events);
 }
 
+type AgentConsoleProfileVariant = "A" | "B" | "C";
+function profileVariant(): AgentConsoleProfileVariant {
+  const value =
+    (globalThis as any).__AGENT_CONSOLE_PROFILE_VARIANT__ ??
+    (globalThis as any).process?.env?.AGENT_CONSOLE_PROFILE_VARIANT;
+  return value === "A" || value === "B" ? value : "C";
+}
+
 export function createAgentTranscriptStore(): AgentTranscriptStore {
+  const variant = profileVariant();
+  const eagerMarkdown = variant !== "C";
+  const copiedEventLog = variant === "A";
   const logStore = createAppendOnlyLogStore({ maxLines: 8_000 });
   const markdownSource = createMarkdownBlockSource({ theme: markdownTheme });
   const markdown = ref("");
-  const markdownBlocks = ref<readonly TuiMarkdownBlock[]>(markdownSource.blocks);
+  const markdownBlocks = shallowRef<readonly TuiMarkdownBlock[]>([]);
+  let markdownBlocksDirty = true;
   const links = ref<readonly TranscriptLink[]>([]);
   const stats = ref<TranscriptStats>({
     chunks: 0,
@@ -108,7 +121,9 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
     approxTokens: 0,
   });
   let eventLogBacking: AgentEvent[] = [];
-  const eventLog = shallowRef<readonly AgentEvent[]>(eventLogBacking);
+  const eventLog = copiedEventLog
+    ? ref<readonly AgentEvent[]>(eventLogBacking)
+    : shallowRef<readonly AgentEvent[]>(eventLogBacking);
   let assistantOpen = false;
   let toolFenceOpen = false;
   let fixtureExpansion: AgentFixtureExpansion = {
@@ -123,12 +138,22 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
   function appendMarkdown(text: string): void {
     markdown.value += text;
     markdownSource.appendDelta(text);
-    markdownBlocks.value = markdownSource.blocks;
+    markdownBlocksDirty = true;
+    if (eagerMarkdown) syncMarkdownBlocks();
   }
 
   function finalizeMarkdownBlock(): void {
     markdownSource.finalizeBlock();
-    markdownBlocks.value = markdownSource.blocks;
+    markdownBlocksDirty = true;
+    if (eagerMarkdown) syncMarkdownBlocks();
+  }
+
+  function syncMarkdownBlocks(): readonly TuiMarkdownBlock[] {
+    if (markdownBlocksDirty) {
+      markdownBlocks.value = markdownSource.blocks;
+      markdownBlocksDirty = false;
+    }
+    return markdownBlocks.value;
   }
 
   function closeAssistantLine(): void {
@@ -154,7 +179,8 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
     logStore.clear();
     markdown.value = "";
     markdownSource.clear();
-    markdownBlocks.value = markdownSource.blocks;
+    markdownBlocksDirty = true;
+    markdownBlocks.value = [];
     links.value = [];
     assistantOpen = false;
     toolFenceOpen = false;
@@ -174,8 +200,13 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
 
   function applyEvent(event: AgentEvent, record: boolean): void {
     if (record) {
-      eventLogBacking.push(event);
-      triggerRef(eventLog);
+      if (copiedEventLog) {
+        eventLogBacking = [...eventLogBacking, event];
+        eventLog.value = eventLogBacking;
+      } else {
+        eventLogBacking.push(event);
+        triggerRef(eventLog);
+      }
     }
 
     if (event.type === "user") {
@@ -291,6 +322,7 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
     logStore,
     markdown,
     markdownBlocks,
+    syncMarkdownBlocks,
     links,
     stats,
     eventLog,

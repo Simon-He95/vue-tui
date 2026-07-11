@@ -8,8 +8,15 @@ export const AGENT_CONSOLE_PROFILE_SCENARIOS = [
   "detached-append",
   "search-large-history",
   "stream-scroll-interaction",
+  "markdown-toggle-large-history",
+  "markdown-stream-steady",
 ] as const;
 export type AgentConsoleProfileScenario = (typeof AGENT_CONSOLE_PROFILE_SCENARIOS)[number];
+export const AGENT_CONSOLE_CPU_PROFILE_SCENARIOS = [
+  "tail-append-burst-framed",
+  "tail-append-burst-single-task",
+  "stream-scroll-interaction",
+] as const satisfies readonly AgentConsoleProfileScenario[];
 export const AGENT_CONSOLE_PROFILE_DEFAULTS = Object.freeze({
   seedCount: 6_000,
   appendCount: 1_000,
@@ -30,6 +37,10 @@ export type AgentConsoleProfileInputLatency = Readonly<{
   inputToPaintOpportunityMs: number | null;
   scrollChanged: boolean;
   scrollFrameObserved: boolean;
+  dispatchAccepted: boolean;
+  matchedFrameId: number | null;
+  matchedFrameReason: string | null;
+  domFlushObserved: boolean;
   direction: -1 | 1;
 }>;
 export interface AgentConsoleProfileAdapter {
@@ -41,10 +52,12 @@ export interface AgentConsoleProfileAdapter {
   sleepUntil(deadline: number): Promise<void>;
   dispatchWheel(delta: number): Promise<AgentConsoleProfileInputLatency>;
   waitUntilSettled(): Promise<void>;
+  requiresDomFlush?: boolean;
 }
 export type PreparedAgentConsoleProfile = Readonly<{
   seedCount: number;
   appendStartIndex: number;
+  initialReplayTotal: number;
 }>;
 export interface AgentConsoleProfileResult {
   scenario: AgentConsoleProfileScenario;
@@ -52,7 +65,13 @@ export interface AgentConsoleProfileResult {
   eventsAdded: number;
   frameSamples: readonly FramePerfSample[];
   correctness: Readonly<Record<string, boolean | number | string>>;
-  diagnostics: Readonly<Record<string, number | string | readonly number[]>>;
+  diagnostics: Readonly<Record<string, number | string | readonly number[] | readonly string[]>>;
+  preparedState: Readonly<{
+    visualIndexStatus: string;
+    measuredLineCount: number;
+    lineCount: number;
+  }>;
+  finalState: Readonly<{ visualIndexStatus: string; measuredLineCount: number; lineCount: number }>;
   corpus: Readonly<{
     version: 1;
     seed: 0;
@@ -67,17 +86,30 @@ export interface AgentConsoleProfileResult {
 interface ViewportAnchor {
   scrollTop: number;
   firstLineIndex: number;
-  firstVisibleRow: string;
+  visibleRows: readonly string[];
 }
-function optionsWithDefaults(options: AgentConsoleProfileOptions) {
-  return { ...AGENT_CONSOLE_PROFILE_DEFAULTS, ...options };
+export function resolveAgentConsoleProfileOptions(options: AgentConsoleProfileOptions = {}) {
+  const result = { ...AGENT_CONSOLE_PROFILE_DEFAULTS, ...options };
+  for (const key of ["seedCount", "appendCount", "steadyCount"] as const) {
+    if (!Number.isFinite(result[key]) || !Number.isInteger(result[key]) || result[key] < 0)
+      throw new Error(`${key} must be a finite non-negative integer`);
+  }
+  if (
+    !Number.isFinite(result.batchSize) ||
+    !Number.isInteger(result.batchSize) ||
+    result.batchSize <= 0
+  )
+    throw new Error("batchSize must be a finite positive integer");
+  if (!Number.isFinite(result.cadenceMs) || result.cadenceMs < 0)
+    throw new Error("cadenceMs must be finite and non-negative");
+  return result;
 }
 function viewportAnchor(api: AgentConsoleApi): ViewportAnchor {
   const metrics = api.metrics.value;
   return {
     scrollTop: metrics?.scrollTop ?? -1,
     firstLineIndex: metrics?.firstLineIndex ?? -1,
-    firstVisibleRow: api.getTranscriptRows().find((row) => row.length > 0) ?? "",
+    visibleRows: api.getTranscriptRows(),
   };
 }
 async function appendFramed(
@@ -121,12 +153,12 @@ export async function prepareAgentConsoleProfile(
   adapter: AgentConsoleProfileAdapter,
   options: AgentConsoleProfileOptions = {},
 ): Promise<PreparedAgentConsoleProfile> {
-  const { seedCount } = optionsWithDefaults(options);
-  adapter.api.seed(seedCount);
+  const { seedCount } = resolveAgentConsoleProfileOptions(options);
+  const appendStartIndex = adapter.api.seed(seedCount);
   await adapter.waitUntilSettled();
   adapter.api.jumpToBottom();
   await adapter.waitUntilSettled();
-  return { seedCount, appendStartIndex: adapter.api.replayTotal.value };
+  return { seedCount, appendStartIndex, initialReplayTotal: adapter.api.replayTotal.value };
 }
 export async function runPreparedAgentConsoleProfileScenario(
   adapter: AgentConsoleProfileAdapter,
@@ -134,13 +166,22 @@ export async function runPreparedAgentConsoleProfileScenario(
   prepared: PreparedAgentConsoleProfile,
   options: AgentConsoleProfileOptions = {},
 ): Promise<AgentConsoleProfileResult> {
-  const { appendCount, steadyCount, cadenceMs, batchSize } = optionsWithDefaults(options);
-  const { appendStartIndex, seedCount } = prepared;
+  const { appendCount, steadyCount, cadenceMs, batchSize } =
+    resolveAgentConsoleProfileOptions(options);
+  const { appendStartIndex, seedCount, initialReplayTotal } = prepared;
   const frameSamples: FramePerfSample[] = [];
   const unsubscribe = adapter.api.subscribeFramePerf((sample) => frameSamples.push(sample));
   const started = adapter.now();
-  const correctness: Record<string, boolean | number | string> = {};
-  const diagnostics: Record<string, number | string | readonly number[]> = {};
+  const preparedMetrics = adapter.api.metrics.value;
+  const preparedState = {
+    visualIndexStatus: preparedMetrics?.visualIndexStatus ?? "unknown",
+    measuredLineCount: preparedMetrics?.measuredLineCount ?? 0,
+    lineCount: preparedMetrics?.lineCount ?? 0,
+  };
+  const correctness: Record<string, boolean | number | string> = {
+    preparedVisualIndexExact: preparedState.visualIndexStatus === "exact",
+  };
+  const diagnostics: Record<string, number | string | readonly number[] | readonly string[]> = {};
   try {
     if (scenario === "tail-stream-steady") {
       await appendSteady(adapter, appendStartIndex, steadyCount, cadenceMs);
@@ -161,7 +202,9 @@ export async function runPreparedAgentConsoleProfileScenario(
       await appendFramed(adapter, appendStartIndex, appendCount, batchSize);
       const after = viewportAnchor(adapter.api);
       correctness.detachedAfterAppend = adapter.api.metrics.value?.atBottom === false;
-      correctness.viewportAnchorPreserved = after.firstVisibleRow === before.firstVisibleRow;
+      correctness.viewportAnchorPreserved =
+        after.visibleRows.length === before.visibleRows.length &&
+        after.visibleRows.every((row, index) => row === before.visibleRows[index]);
       diagnostics.retentionShifted = after.firstLineIndex !== before.firstLineIndex ? 1 : 0;
       diagnostics.scrollTopDelta = after.scrollTop - before.scrollTop;
       diagnostics.firstLineIndexDelta = after.firstLineIndex - before.firstLineIndex;
@@ -169,21 +212,44 @@ export async function runPreparedAgentConsoleProfileScenario(
       diagnostics.scrollTopAfter = after.scrollTop;
       diagnostics.firstLineIndexBefore = before.firstLineIndex;
       diagnostics.firstLineIndexAfter = after.firstLineIndex;
-      diagnostics.firstVisibleRowBefore = before.firstVisibleRow;
-      diagnostics.firstVisibleRowAfter = after.firstVisibleRow;
+      diagnostics.visibleRowsBefore = before.visibleRows;
+      diagnostics.visibleRowsAfter = after.visibleRows;
     } else if (scenario === "search-large-history") {
       adapter.api.openSearch("ERROR");
       await settleSearch(adapter);
       correctness.searchStatus = adapter.api.searchState.value.status;
       correctness.matches = adapter.api.searchState.value.matchCount;
       correctness.hasMatches = adapter.api.searchState.value.matchCount > 0;
+    } else if (scenario === "markdown-toggle-large-history") {
+      const markdownLength = adapter.api.getMarkdownLength();
+      adapter.api.mode.value = "markdown";
+      await adapter.waitUntilSettled();
+      const blockCount = adapter.api.getMarkdownBlockCount();
+      correctness.markdownMode = adapter.api.mode.value === "markdown";
+      correctness.markdownContentComplete = markdownLength > 0 && blockCount > 0;
+      correctness.contentVisible = adapter.api.getTranscriptRows().some((row) => row.length > 0);
+      diagnostics.markdownLength = markdownLength;
+      diagnostics.markdownBlockCount = blockCount;
+    } else if (scenario === "markdown-stream-steady") {
+      adapter.api.mode.value = "markdown";
+      await adapter.waitUntilSettled();
+      const beforeLength = adapter.api.getMarkdownLength();
+      await appendSteady(adapter, appendStartIndex, steadyCount, cadenceMs);
+      const afterLength = adapter.api.getMarkdownLength();
+      correctness.markdownMode = adapter.api.mode.value === "markdown";
+      correctness.markdownGrew = afterLength > beforeLength;
+      correctness.markdownBlocksPublished = adapter.api.getMarkdownBlockCount() > 0;
+      correctness.contentVisible = adapter.api.getTranscriptRows().some((row) => row.length > 0);
+      diagnostics.markdownLengthBefore = beforeLength;
+      diagnostics.markdownLengthAfter = afterLength;
+      diagnostics.markdownBlockCount = adapter.api.getMarkdownBlockCount();
     } else {
       const inputLatencies: AgentConsoleProfileInputLatency[] = [];
       let deadline = adapter.now();
       for (let offset = 0; offset < steadyCount; offset++) {
         adapter.append(appendStartIndex + offset);
         if (offset % 8 === 0) {
-          inputLatencies.push(await adapter.dispatchWheel(offset % 16 === 0 ? -6 : 6));
+          inputLatencies.push(await adapter.dispatchWheel(-60));
         }
         deadline += cadenceMs;
         if (cadenceMs > 0) await adapter.sleepUntil(deadline);
@@ -199,13 +265,13 @@ export async function runPreparedAgentConsoleProfileScenario(
       );
       correctness.inputSamples = inputLatencies.length;
       correctness.inputSamplesCorrect = inputLatencies.length === Math.ceil(steadyCount / 8);
-      correctness.scrollChanged = inputLatencies.some((sample) => sample.scrollChanged);
-      correctness.scrollFramesObserved = inputLatencies.some(
-        (sample) => sample.scrollFrameObserved,
+      correctness.scrollChanged = inputLatencies.every((sample) => sample.scrollChanged);
+      correctness.scrollFramesObserved = inputLatencies.every(
+        (sample) => sample.scrollFrameObserved && sample.matchedFrameReason === "scroll",
       );
-      correctness.directionReversalObserved = inputLatencies.some(
-        (sample, index) => index > 0 && sample.direction !== inputLatencies[index - 1]?.direction,
-      );
+      correctness.dispatchAccepted = inputLatencies.every((sample) => sample.dispatchAccepted);
+      correctness.domFlushesObserved =
+        !adapter.requiresDomFlush || inputLatencies.every((sample) => sample.domFlushObserved);
       correctness.contentVisible = adapter.api.getTranscriptRows().some((row) => row.length > 0);
     }
     await adapter.waitUntilSettled();
@@ -215,12 +281,14 @@ export async function runPreparedAgentConsoleProfileScenario(
   const elapsedMs = adapter.now() - started;
   const finalReplayTotal = adapter.api.replayTotal.value;
   const expectedAdded =
-    scenario === "search-large-history"
+    scenario === "search-large-history" || scenario === "markdown-toggle-large-history"
       ? 0
-      : scenario === "tail-stream-steady" || scenario === "stream-scroll-interaction"
+      : scenario === "tail-stream-steady" ||
+          scenario === "stream-scroll-interaction" ||
+          scenario === "markdown-stream-steady"
         ? steadyCount
         : appendCount;
-  const eventsAdded = finalReplayTotal - appendStartIndex;
+  const eventsAdded = finalReplayTotal - initialReplayTotal;
   correctness.eventCount = eventsAdded;
   correctness.eventCountCorrect = eventsAdded === expectedAdded;
   const failed = Object.entries(correctness).filter(
@@ -229,6 +297,14 @@ export async function runPreparedAgentConsoleProfileScenario(
   if (failed.length)
     throw new Error(`${scenario} correctness failed: ${failed.map(([key]) => key).join(", ")}`);
   const metrics = adapter.api.metrics.value;
+  const finalState = {
+    visualIndexStatus: metrics?.visualIndexStatus ?? "unknown",
+    measuredLineCount: metrics?.measuredLineCount ?? 0,
+    lineCount: metrics?.lineCount ?? 0,
+  };
+  correctness.finalVisualIndexExact = finalState.visualIndexStatus === "exact";
+  if (!correctness.finalVisualIndexExact)
+    throw new Error(`${scenario} correctness failed: finalVisualIndexExact`);
   return {
     scenario,
     elapsedMs,
@@ -236,6 +312,8 @@ export async function runPreparedAgentConsoleProfileScenario(
     frameSamples,
     correctness,
     diagnostics,
+    preparedState,
+    finalState,
     corpus: {
       version: 1,
       seed: 0,

@@ -1,13 +1,20 @@
 #!/usr/bin/env tsx
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { AGENT_CONSOLE_PROFILE_SCENARIOS } from "../examples/agent-console/src/perf-harness.js";
+import {
+  AGENT_CONSOLE_CPU_PROFILE_SCENARIOS,
+  AGENT_CONSOLE_PROFILE_SCENARIOS,
+} from "../examples/agent-console/src/perf-harness.js";
 import { agentConsoleProfileEnvironment } from "./agent-console-profile-environment.js";
 
 const root = process.cwd();
-const outputDir = resolve(root, ".tmp/perf/agent-console/cli");
+const outputDir = resolve(
+  root,
+  process.env.VUE_TUI_PROFILE_OUTPUT_DIR ?? ".tmp/perf/agent-console",
+  "cli",
+);
 const smoke = process.env.AGENT_CONSOLE_PROFILE_SMOKE === "1";
 const runCount = smoke ? 1 : 5;
 mkdirSync(outputDir, { recursive: true });
@@ -42,11 +49,7 @@ for (const scenario of AGENT_CONSOLE_PROFILE_SCENARIOS) {
   }
 }
 if (!smoke) {
-  for (const scenario of [
-    "tail-append-burst-framed",
-    "tail-append-burst-single-task",
-    "stream-scroll-interaction",
-  ]) {
+  for (const scenario of AGENT_CONSOLE_CPU_PROFILE_SCENARIOS) {
     execFileSync(
       process.execPath,
       ["--expose-gc", "--import", "tsx", "scripts/profile-agent-console-cli-worker.ts"],
@@ -63,8 +66,16 @@ if (!smoke) {
         },
       },
     );
-    const diagnostic = readFileSync(resolve(outputDir, `${scenario}.json`), "utf8");
-    writeFileSync(resolve(outputDir, `${scenario}-cpu-diagnostic.json`), diagnostic);
+    const diagnosticPath = resolve(outputDir, `${scenario}.json`);
+    const diagnostic = JSON.parse(readFileSync(diagnosticPath, "utf8"));
+    if (!diagnostic.cpuProfilePath || statSync(diagnostic.cpuProfilePath).size <= 0)
+      throw new Error(`${scenario}: missing or empty Node CPU profile`);
+    if (!diagnostic.cpuProfileSummary?.hotspots?.length)
+      throw new Error(`${scenario}: empty Node CPU hotspot summary`);
+    writeFileSync(
+      resolve(outputDir, `${scenario}-cpu-diagnostic.json`),
+      JSON.stringify(diagnostic, null, 2),
+    );
   }
 }
 writeFileSync(resolve(outputDir, "all.json"), JSON.stringify(all, null, 2));

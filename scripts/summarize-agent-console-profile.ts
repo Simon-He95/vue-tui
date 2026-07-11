@@ -74,11 +74,19 @@ function elapsedOf(run: any): number {
   return run.elapsedMs ?? run.profileResult?.elapsedMs ?? run.timing?.elapsedMs ?? 0;
 }
 function cpuSummary(runs: any[]) {
-  const entries = runs.flatMap((r) => r.cpuHotspots ?? []);
-  const total = entries.reduce((n, h) => n + (h.selfTimeMs ?? 0), 0);
-  return entries
-    .slice(0, 20)
-    .map((h) => ({ ...h, share: total ? (h.selfTimeMs ?? 0) / total : 0 }));
+  return runs.flatMap((run) => {
+    if (run.cpuProfileSummary) return [run.cpuProfileSummary];
+    return run.cpuHotspots?.length
+      ? [
+          {
+            totalSampledTimeMs: null,
+            totalSamples: null,
+            topNSampledTimeMs: null,
+            hotspots: run.cpuHotspots,
+          },
+        ]
+      : [];
+  });
 }
 function summarizeRoot(root: string) {
   const cli = readJson(resolve(root, "cli/all.json"), []);

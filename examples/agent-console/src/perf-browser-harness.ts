@@ -54,6 +54,7 @@ async function settle(turns = 4): Promise<void> {
 function browserAdapter(api: AgentConsoleApi, getSamples: () => readonly FramePerfSample[]) {
   return {
     api,
+    requiresDomFlush: true,
     now: () => performance.now(),
     append: (index: number) => api.appendSyntheticChunk(index),
     async yieldTask() {
@@ -73,31 +74,66 @@ function browserAdapter(api: AgentConsoleApi, getSamples: () => readonly FramePe
       const beforeTop = api.metrics.value?.scrollTop ?? -1;
       const beforeFrame = getSamples().at(-1)?.frameId ?? -1;
       const beforeFlush = api.getRendererDebugStats()?.flush.count ?? 0;
-      api.dispatchProfileWheel(delta, started);
-      for (let turn = 0; turn < 60; turn++) {
+      const dispatchAccepted = api.dispatchProfileWheel(delta, started);
+      let matched: FramePerfSample | undefined;
+      for (let turn = 0; turn < 120; turn++) {
         await nextTick();
         await new Promise<void>((done) => requestAnimationFrame(() => done()));
-        if (getSamples().some((sample) => sample.frameId > beforeFrame)) break;
+        matched = getSamples().find(
+          (sample) => sample.frameId > beforeFrame && sample.reason === "scroll",
+        );
+        if (matched && (api.metrics.value?.scrollTop ?? -1) !== beforeTop) break;
       }
-      const commitAt = performance.now();
-      for (let turn = 0; turn < 60; turn++) {
-        if ((api.getRendererDebugStats()?.flush.count ?? 0) > beforeFlush) break;
+      const commitAt = matched ? matched.startedAt + matched.durationMs : null;
+      let matchedFlush:
+        | ReturnType<AgentConsoleApi["getRendererDebugStats"]>["flush"]["last"]
+        | undefined;
+      for (let turn = 0; matched && turn < 120; turn++) {
+        const stats = api.getRendererDebugStats();
+        const flush = stats?.flush.last;
+        if (
+          (stats?.flush.count ?? 0) > beforeFlush &&
+          flush &&
+          flush.startedAt >= matched.startedAt
+        ) {
+          matchedFlush = flush;
+          break;
+        }
         await new Promise<void>((done) => requestAnimationFrame(() => done()));
       }
-      const flushAt = performance.now();
       await new Promise<void>((done) => requestAnimationFrame(() => done()));
       const afterTop = api.metrics.value?.scrollTop ?? -1;
       return {
-        inputToCommitMs: commitAt - started,
-        inputToDomFlushMs: flushAt - started,
-        inputToPaintOpportunityMs: performance.now() - started,
+        inputToCommitMs: commitAt == null ? Number.NaN : commitAt - started,
+        inputToDomFlushMs: matchedFlush
+          ? matchedFlush.startedAt + matchedFlush.durationMs - started
+          : null,
+        inputToPaintOpportunityMs: matchedFlush ? performance.now() - started : null,
         scrollChanged: afterTop !== beforeTop,
-        scrollFrameObserved: getSamples().some((sample) => sample.frameId > beforeFrame),
+        scrollFrameObserved: Boolean(matched),
+        dispatchAccepted,
+        matchedFrameId: matched?.frameId ?? null,
+        matchedFrameReason: matched?.reason ?? null,
+        domFlushObserved: Boolean(matchedFlush),
         direction: (delta < 0 ? -1 : 1) as -1 | 1,
       };
     },
     async waitUntilSettled() {
-      await settle(8);
+      const deadline = performance.now() + 15_000;
+      let quiet = 0;
+      let previousSamples = getSamples().length;
+      while (performance.now() < deadline) {
+        await nextTick();
+        await new Promise<void>((done) => requestAnimationFrame(() => done()));
+        const count = getSamples().length;
+        const metrics = api.metrics.value;
+        const exact = metrics?.visualIndexStatus === "exact";
+        const searchIdle = api.searchState.value.status !== "scanning";
+        quiet = count === previousSamples ? quiet + 1 : 0;
+        previousSamples = count;
+        if (exact && searchIdle && quiet >= 2) return;
+      }
+      throw new Error("Agent Console browser workload did not settle to exact/quiet state");
     },
   };
 }

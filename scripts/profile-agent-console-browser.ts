@@ -1,11 +1,18 @@
 #!/usr/bin/env tsx
 
-import { execFileSync, spawn, type ChildProcess } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type CDPSession, type Page } from "@playwright/test";
+import { preview, type PreviewServer } from "vite";
 import { summarizeCpuProfile } from "./agent-console-cpu-profile.js";
 import { agentConsoleProfileEnvironment } from "./agent-console-profile-environment.js";
+import {
+  AGENT_CONSOLE_CPU_PROFILE_SCENARIOS,
+  AGENT_CONSOLE_PROFILE_DEFAULTS,
+  AGENT_CONSOLE_PROFILE_SCENARIOS,
+  resolveAgentConsoleProfileOptions,
+} from "../examples/agent-console/src/perf-harness.js";
 
 const root = process.cwd();
 const outputDir = resolve(
@@ -15,10 +22,33 @@ const outputDir = resolve(
 const port = Number(process.env.VUE_TUI_AGENT_CONSOLE_PORT ?? 4178);
 const baseUrl = `http://127.0.0.1:${port}/?profile=1`;
 const smoke = process.env.AGENT_CONSOLE_PROFILE_SMOKE === "1";
-const seedCount = Number(process.env.VUE_TUI_AGENT_CONSOLE_SEED ?? (smoke ? 120 : 6_000));
-const appendCount = Number(process.env.VUE_TUI_AGENT_CONSOLE_APPEND ?? (smoke ? 30 : 1_000));
-const steadyCount = Number(process.env.VUE_TUI_AGENT_CONSOLE_STEADY ?? (smoke ? 20 : 500));
-const cadenceMs = smoke ? 0 : 12;
+const canonicalOptions = resolveAgentConsoleProfileOptions(
+  smoke
+    ? { seedCount: 120, appendCount: 30, steadyCount: 20, cadenceMs: 0 }
+    : {
+        seedCount:
+          process.env.VUE_TUI_AGENT_CONSOLE_SEED == null
+            ? AGENT_CONSOLE_PROFILE_DEFAULTS.seedCount
+            : Number(process.env.VUE_TUI_AGENT_CONSOLE_SEED),
+        appendCount:
+          process.env.VUE_TUI_AGENT_CONSOLE_APPEND == null
+            ? AGENT_CONSOLE_PROFILE_DEFAULTS.appendCount
+            : Number(process.env.VUE_TUI_AGENT_CONSOLE_APPEND),
+        steadyCount:
+          process.env.VUE_TUI_AGENT_CONSOLE_STEADY == null
+            ? AGENT_CONSOLE_PROFILE_DEFAULTS.steadyCount
+            : Number(process.env.VUE_TUI_AGENT_CONSOLE_STEADY),
+        cadenceMs:
+          process.env.VUE_TUI_AGENT_CONSOLE_CADENCE_MS == null
+            ? AGENT_CONSOLE_PROFILE_DEFAULTS.cadenceMs
+            : Number(process.env.VUE_TUI_AGENT_CONSOLE_CADENCE_MS),
+        batchSize:
+          process.env.VUE_TUI_AGENT_CONSOLE_BATCH_SIZE == null
+            ? AGENT_CONSOLE_PROFILE_DEFAULTS.batchSize
+            : Number(process.env.VUE_TUI_AGENT_CONSOLE_BATCH_SIZE),
+      },
+);
+const { seedCount, appendCount, steadyCount, cadenceMs, batchSize } = canonicalOptions;
 const runCount = smoke ? 1 : 5;
 
 type BrowserTiming = Readonly<{
@@ -34,33 +64,18 @@ type ScenarioResult = Readonly<{
   profileResult: unknown;
   memory: Readonly<{ beforeUsedSize: number; afterUsedSize: number; deltaUsedSize: number }>;
   cpuProfilePath?: string;
-  cpuHotspots?: ReturnType<typeof summarizeCpuProfile>;
+  cpuProfileSummary?: ReturnType<typeof summarizeCpuProfile>;
+  cpuHotspots?: ReturnType<typeof summarizeCpuProfile>["hotspots"];
 }>;
 
-const cpuProfileScenarios = new Set([
-  "tail-append-burst-framed",
-  "tail-append-burst-single-task",
-  "stream-scroll-interaction",
-]);
+const cpuProfileScenarios = new Set(AGENT_CONSOLE_CPU_PROFILE_SCENARIOS);
 
-function startServer(): ChildProcess {
-  return spawn(
-    "pnpm",
-    [
-      "-C",
-      "examples/agent-console",
-      "preview",
-      "--host",
-      "127.0.0.1",
-      "--port",
-      String(port),
-      "--strictPort",
-    ],
-    {
-      cwd: root,
-      stdio: ["ignore", "pipe", "pipe"],
-    },
-  );
+async function startServer(): Promise<PreviewServer> {
+  return preview({
+    root: resolve(root, "examples/agent-console"),
+    preview: { host: "127.0.0.1", port, strictPort: true },
+    logLevel: "warn",
+  });
 }
 async function waitForServer(): Promise<void> {
   for (let attempt = 0; attempt < 120; attempt++) {
@@ -119,7 +134,10 @@ async function measure(
   const measured = await page.evaluate(
     (scenarioName) => {
       cancelAnimationFrame((window as any).__agentPerfRaf);
-      (window as any).__agentPerfObserver?.disconnect();
+      const observer = (window as any).__agentPerfObserver as PerformanceObserver | undefined;
+      for (const entry of observer?.takeRecords() ?? [])
+        (window as any).__agentPerfLongTasks.push(entry.duration);
+      observer?.disconnect();
       return {
         name: scenarioName.name,
         run: scenarioName.run,
@@ -134,12 +152,12 @@ async function measure(
     { name, run },
   );
   let cpuProfilePath: string | undefined;
-  let cpuHotspots: ReturnType<typeof summarizeCpuProfile> | undefined;
+  let cpuProfileSummary: ReturnType<typeof summarizeCpuProfile> | undefined;
   if (profileCpu) {
     const { profile } = await session.send("Profiler.stop");
     cpuProfilePath = join(outputDir, `${name}-run-${run + 1}.browser.cpuprofile`);
     writeFileSync(cpuProfilePath, JSON.stringify(profile));
-    cpuHotspots = summarizeCpuProfile(profile);
+    cpuProfileSummary = summarizeCpuProfile(profile);
     await session.send("Profiler.disable");
   }
   await session.send("HeapProfiler.collectGarbage");
@@ -148,6 +166,7 @@ async function measure(
     ...measured,
     profileResult,
     memory: {
+      includesProfilerBuffers: true,
       beforeUsedSize: memoryBefore.usedSize,
       afterUsedSize: memoryAfter.usedSize,
       deltaUsedSize: memoryAfter.usedSize - memoryBefore.usedSize,
@@ -157,7 +176,8 @@ async function measure(
         : 0,
     },
     cpuProfilePath,
-    cpuHotspots,
+    cpuProfileSummary,
+    cpuHotspots: cpuProfileSummary?.hotspots,
   };
 }
 async function main(): Promise<void> {
@@ -170,7 +190,7 @@ async function main(): Promise<void> {
     stdio: "inherit",
     env: { ...process.env, VUE_TUI_PROFILE_DIST: "1" },
   });
-  const server = startServer();
+  const server = await startServer();
   let browser: Browser | null = null;
   try {
     await waitForServer();
@@ -182,15 +202,7 @@ async function main(): Promise<void> {
       const session = await context.newCDPSession(page);
       await page.addInitScript({ content: "globalThis.__name = (target) => target;" });
 
-      const scenarios = [
-        "tail-stream-steady",
-        "tail-append-burst-framed",
-        "tail-append-burst-single-task",
-        "detached-append",
-        "search-large-history",
-        "stream-scroll-interaction",
-      ];
-      for (const scenario of scenarios) {
+      for (const scenario of AGENT_CONSOLE_PROFILE_SCENARIOS) {
         await prepare(page);
         const prepared = await page.evaluate(
           (options) => globalThis.__AGENT_CONSOLE_PERF__.prepareScenario(options),
@@ -205,7 +217,7 @@ async function main(): Promise<void> {
               {
                 name: scenario,
                 prepared,
-                options: { seedCount, appendCount, steadyCount, cadenceMs },
+                options: canonicalOptions,
               },
             ),
           ),
@@ -241,6 +253,10 @@ async function main(): Promise<void> {
             ),
           true,
         );
+        if (!diagnostic.cpuProfilePath || statSync(diagnostic.cpuProfilePath).size <= 0)
+          throw new Error(`${scenario}: missing or empty Chromium CPU profile`);
+        if (!diagnostic.cpuProfileSummary?.hotspots?.length)
+          throw new Error(`${scenario}: empty Chromium CPU hotspot summary`);
         writeFileSync(
           join(outputDir, `${scenario}-cpu-diagnostic.json`),
           JSON.stringify(diagnostic, null, 2),
@@ -302,7 +318,9 @@ async function main(): Promise<void> {
     console.log(path);
   } finally {
     await browser?.close();
-    server.kill("SIGTERM");
+    await new Promise<void>((done, reject) => {
+      server.httpServer.close((error) => (error ? reject(error) : done()));
+    });
   }
 }
 

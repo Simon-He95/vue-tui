@@ -11,22 +11,23 @@ import {
   AgentConsoleSurface,
 } from "../examples/agent-console/src/AgentConsoleSurface.js";
 import {
+  AGENT_CONSOLE_CPU_PROFILE_SCENARIOS,
   AGENT_CONSOLE_PROFILE_SCENARIOS,
   prepareAgentConsoleProfile,
   runPreparedAgentConsoleProfileScenario,
 } from "../examples/agent-console/src/perf-harness.js";
 import { nextTick } from "vue";
-const outputDir = resolve(process.cwd(), ".tmp/perf/agent-console/cli");
+const outputDir = resolve(
+  process.cwd(),
+  process.env.VUE_TUI_PROFILE_OUTPUT_DIR ?? ".tmp/perf/agent-console",
+  "cli",
+);
 mkdirSync(outputDir, { recursive: true });
 const smoke = process.env.AGENT_CONSOLE_PROFILE_SMOKE === "1";
 const options = smoke
   ? { seedCount: 120, appendCount: 30, steadyCount: 20, cadenceMs: 0 }
   : undefined;
-const cpuProfileScenarios = new Set([
-  "tail-append-burst-framed",
-  "tail-append-burst",
-  "stream-scroll-interaction",
-]);
+const cpuProfileScenarios = new Set(AGENT_CONSOLE_CPU_PROFILE_SCENARIOS);
 function post<T>(session: Session, method: string, params?: Record<string, unknown>): Promise<T> {
   return new Promise((resolvePost, reject) => {
     session.post(method, params ?? {}, (error, result) => {
@@ -113,25 +114,62 @@ for (const scenario of scenarios) {
           deltaY: delta,
           time: started,
         });
-        await nextTick();
-        app.scheduler.flushNow();
+        const dispatchAccepted = true;
+        app.scheduler.invalidate({ priority: "high", reason: "scroll" });
+        let matched: ReturnType<AgentConsoleApi["getFramePerfSamples"]>[number] | undefined;
+        for (let turn = 0; turn < 120; turn++) {
+          await new Promise<void>((done) => setTimeout(done, 17));
+          await nextTick();
+          app.scheduler.flushNow();
+          matched = mountedApi
+            .getFramePerfSamples()
+            .find((sample) => sample.frameId > beforeFrame && sample.reason === "scroll");
+          if (matched && (mountedApi.metrics.value?.scrollTop ?? -1) !== beforeTop) break;
+        }
         const afterTop = mountedApi.metrics.value?.scrollTop ?? -1;
         return {
-          inputToCommitMs: performance.now() - started,
+          inputToCommitMs: matched ? matched.startedAt + matched.durationMs - started : Number.NaN,
           inputToDomFlushMs: null,
           inputToPaintOpportunityMs: null,
           scrollChanged: afterTop !== beforeTop,
-          scrollFrameObserved:
-            (mountedApi.getFramePerfSamples().at(-1)?.frameId ?? -1) > beforeFrame,
+          scrollFrameObserved: Boolean(matched),
+          dispatchAccepted,
+          matchedFrameId: matched?.frameId ?? null,
+          matchedFrameReason: matched?.reason ?? null,
+          domFlushObserved: false,
           direction: delta < 0 ? -1 : 1,
         } as const;
       },
       async waitUntilSettled() {
-        for (let i = 0; i < 5; i++) {
+        const deadline = performance.now() + 15_000;
+        let quiet = 0;
+        let previousFrame = mountedApi.getFramePerfSamples().at(-1)?.frameId ?? -1;
+        while (performance.now() < deadline) {
           await nextTick();
-          app.scheduler.flushNow();
-          await Promise.resolve();
+          const exact = mountedApi.metrics.value?.visualIndexStatus === "exact";
+          const searchIdle = mountedApi.searchState.value.status !== "scanning";
+          if (!exact || !searchIdle) app.scheduler.flushNow();
+          await new Promise<void>((done) => setTimeout(done, 5));
+          const frame = mountedApi.getFramePerfSamples().at(-1)?.frameId ?? -1;
+          quiet = exact && searchIdle && frame === previousFrame ? quiet + 1 : 0;
+          previousFrame = frame;
+          if (exact && searchIdle && quiet >= 2) return;
         }
+        throw new Error(
+          `Agent Console CLI workload did not settle: ${JSON.stringify({
+            metrics: mountedApi.metrics.value,
+            search: mountedApi.searchState.value,
+            quiet,
+            frames: mountedApi
+              .getFramePerfSamples()
+              .slice(-5)
+              .map((sample) => ({
+                id: sample.frameId,
+                reason: sample.reason,
+                durationMs: sample.durationMs,
+              })),
+          })}`,
+        );
       },
     };
     const prepared = await prepareAgentConsoleProfile(adapter, options);
@@ -158,12 +196,12 @@ for (const scenario of scenarios) {
       options,
     );
     let cpuProfilePath: string | undefined;
-    let cpuHotspots: ReturnType<typeof summarizeCpuProfile> | undefined;
+    let cpuProfileSummary: ReturnType<typeof summarizeCpuProfile> | undefined;
     if (inspector) {
       const { profile } = await post<{ profile: CpuProfile }>(inspector, "Profiler.stop");
       cpuProfilePath = resolve(outputDir, `${scenario}-run-${runNumber}.node.cpuprofile`);
       writeFileSync(cpuProfilePath, JSON.stringify(profile));
-      cpuHotspots = summarizeCpuProfile(profile);
+      cpuProfileSummary = summarizeCpuProfile(profile);
       inspector.disconnect();
     }
     await collectGarbage();
@@ -171,6 +209,7 @@ for (const scenario of scenarios) {
     const enriched = {
       ...result,
       memory: {
+        includesProfilerBuffers: true,
         before: memoryBefore,
         after: memoryAfter,
         heapUsedDelta: memoryAfter.heapUsed - memoryBefore.heapUsed,
@@ -183,7 +222,8 @@ for (const scenario of scenarios) {
           : 0,
       },
       cpuProfilePath,
-      cpuHotspots,
+      cpuProfileSummary,
+      cpuHotspots: cpuProfileSummary?.hotspots,
       stdout: {
         ...output,
         bytesPerFrame: result.frameSamples.length ? output.bytes / result.frameSamples.length : 0,

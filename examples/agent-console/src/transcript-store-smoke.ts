@@ -13,9 +13,23 @@ const stop = watch(
 
 store.appendSyntheticChunk(1);
 store.appendSyntheticChunk(2);
+assert.equal(store.markdownBlocks.value.length, 0, "log-mode append keeps Markdown blocks lazy");
+const firstBlocks = store.syncMarkdownBlocks();
+assert.ok(firstBlocks.length > 0, "visible Markdown sync publishes blocks");
+store.appendSyntheticChunk(3);
+assert.equal(
+  store.markdownBlocks.value,
+  firstBlocks,
+  "later appends do not eagerly rematerialize hidden Markdown blocks",
+);
+assert.notEqual(
+  store.syncMarkdownBlocks(),
+  firstBlocks,
+  "next visible sync publishes fresh blocks",
+);
 await nextTick();
-assert.deepEqual(observedLengths, [1, 2], "append must notify eventLog length watchers");
-assert.equal(store.captureReplayLog().events.length, 2, "capture includes every appended event");
+assert.deepEqual(observedLengths, [1, 2, 3], "append must notify eventLog length watchers");
+assert.equal(store.captureReplayLog().events.length, 3, "capture includes every appended event");
 
 store.clear();
 await nextTick();
