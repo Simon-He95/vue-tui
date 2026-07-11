@@ -47,12 +47,13 @@ async function main() {
     process.exit(1);
   }
 
-  const esmPath = join(metafileDir, "esm.json");
+  const esmBrowserPath = join(metafileDir, "esm-browser.json");
+  const esmCliPath = join(metafileDir, "esm-cli.json");
   const cjsBrowserPath = join(metafileDir, "cjs-browser.json");
   const cjsCliPath = join(metafileDir, "cjs-cli.json");
 
-  if (!existsSync(esmPath)) {
-    console.error("❌ Error: ESM metafile not found");
+  if (!existsSync(esmBrowserPath) || !existsSync(esmCliPath)) {
+    console.error("❌ Error: ESM browser/CLI metafile not found");
     process.exit(1);
   }
 
@@ -68,18 +69,23 @@ async function main() {
 
   let foundViolations = false;
 
-  // Check ESM
-  console.log("📦 Checking ESM builds...");
-  const esmMeta = JSON.parse(readFileSync(esmPath, "utf-8"));
-  const esmRealBytes = bytesInOutputs(esmMeta, (path) => path === realInstrumentationPath);
-  const esmNoopBytes = bytesInOutputs(esmMeta, (path) => path === noopInstrumentationPath);
-  console.log(`  Real instrumentation: ${esmRealBytes} bytes`);
-  console.log(`  No-op stub: ${esmNoopBytes} bytes`);
-  if (esmRealBytes > 0 || esmNoopBytes > 0) {
-    console.error("  ❌ FAIL: Instrumentation remains in ESM builds");
-    foundViolations = true;
-  } else {
-    console.log("  ✅ PASS: Both modules at 0 bytes");
+  // Check ESM browser and CLI independently.
+  for (const [label, path] of [
+    ["browser", esmBrowserPath],
+    ["CLI", esmCliPath],
+  ]) {
+    console.log(`📦 Checking ESM ${label} build...`);
+    const meta = JSON.parse(readFileSync(path, "utf-8"));
+    const realBytes = bytesInOutputs(meta, (input) => input === realInstrumentationPath);
+    const noopBytes = bytesInOutputs(meta, (input) => input === noopInstrumentationPath);
+    console.log(`  Real instrumentation: ${realBytes} bytes`);
+    console.log(`  No-op stub: ${noopBytes} bytes`);
+    if (realBytes > 0 || noopBytes > 0) {
+      console.error(`  ❌ FAIL: Instrumentation remains in ESM ${label} build`);
+      foundViolations = true;
+    } else {
+      console.log("  ✅ PASS: Both modules at 0 bytes");
+    }
   }
 
   // Check CJS browser

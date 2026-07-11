@@ -263,6 +263,7 @@
     "check:tracked-build-output": "node scripts/check-tracked-build-output.cjs",
     "check:production-instrumentation-strip": "node scripts/check-production-instrumentation-strip.mjs && node scripts/check-production-instrumentation-negative-control.mjs",
     "check:consumer-bundle": "tsx scripts/check-consumer-bundle.ts",
+    "validate:consumer-bundle-abc": "tsx scripts/validate-consumer-bundle-abc.ts",
     "validate:built-dist-abc": "tsx scripts/validate-built-dist-abc.ts",
     "prepublishOnly": "node -e \"if (process.env.VUE_TUI_ALLOW_DIRECT_PUBLISH !== '1') { console.error('Direct npm publish is disabled. Use pnpm run release:local or the GitHub Release workflow.'); process.exit(1) }\"",
     "release:workflow-only": "node -e \"console.error('Use GitHub Release workflow'); process.exit(1)\"",

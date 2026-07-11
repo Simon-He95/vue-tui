@@ -31,8 +31,8 @@ const realInstrumentationPath = resolve(rootDir, "src/core/perf/instrumentation.
 const noopInstrumentationPath = resolve(rootDir, "src/core/perf/instrumentation-noop.ts");
 
 // Rollup plugin to replace instrumentation imports with no-op stub
-const instrumentationStripPlugin = {
-  name: "instrumentation-strip",
+const instrumentationStripPlugin = (metafileName) => ({
+  name: `instrumentation-strip-${metafileName}`,
   generateBundle(_options, bundle) {
     const outputs = {};
     for (const [fileName, output] of Object.entries(bundle)) {
@@ -47,7 +47,7 @@ const instrumentationStripPlugin = {
     }
     mkdirSync(resolve(rootDir, "dist/.metafiles"), { recursive: true });
     writeFileSync(
-      resolve(rootDir, "dist/.metafiles/esm.json"),
+      resolve(rootDir, `dist/.metafiles/${metafileName}.json`),
       JSON.stringify({ outputs }, null, 2),
     );
   },
@@ -66,7 +66,7 @@ const instrumentationStripPlugin = {
 
     return null;
   },
-};
+});
 
 export default defineConfig([
   {
@@ -91,7 +91,7 @@ export default defineConfig([
     external: browserExternals,
     define: productionDefine,
     treeshake: true,
-    plugins: [instrumentationStripPlugin],
+    plugins: [instrumentationStripPlugin("esm-browser")],
   },
   {
     target: "node16",
@@ -105,6 +105,6 @@ export default defineConfig([
     external: ["vue", ...nodeBuiltins],
     define: productionDefine,
     treeshake: true,
-    plugins: [instrumentationStripPlugin],
+    plugins: [instrumentationStripPlugin("esm-cli")],
   },
 ]);

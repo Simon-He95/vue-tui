@@ -89,9 +89,9 @@ const uniqueWrap = Array.from({ length: 8192 }, (_, i) => "換行中文內容" +
 const results = {
   textCellWidth_ascii_long_fast_path: benchmark(() => () => textCellWidth(ascii)),
   textCellWidth_cjk_long_hot: benchmark(() => () => textCellWidth(cjk)),
-  textCellWidth_cjk_unique: benchmark(() => { let i = 0; return () => textCellWidth(uniqueCjk[i++ & 8191]); }),
+  textCellWidth_cjk_cycling_working_set: benchmark(() => { let i = 0; return () => textCellWidth(uniqueCjk[i++ & 8191]); }),
   wrapByCells_cjk_long_hot: benchmark(() => () => wrapByCells(cjk, 40).length),
-  wrapByCells_cjk_unique: benchmark(() => { let i = 0; return () => wrapByCells(uniqueWrap[i++ & 8191], 40).length; }),
+  wrapByCells_cjk_cycling_working_set: benchmark(() => { let i = 0; return () => wrapByCells(uniqueWrap[i++ & 8191], 40).length; }),
   terminal_write_supplementary_cjk_hot: benchmark(() => {
     const terminal = createTerminal({ cols: 80, rows: 24 });
     return () => { terminal.setCursor(0, 0); terminal.write("𠀀𠮷𠀀𠮷"); return 1; };
