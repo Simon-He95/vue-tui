@@ -45,7 +45,7 @@ for (const [runtime, label] of [
   const key = `${runtime}/tail-append-burst-framed`;
   const a = Math.round(data.variants.A.scenarios[key].elapsedMs.median).toLocaleString("en-US");
   const c = Math.round(data.variants.C.scenarios[key].elapsedMs.median).toLocaleString("en-US");
-  if (!docs.includes(`${label} framed burst | ${a} ms`) || !docs.includes(`| ${c} ms |`))
-    fail(`${label} headline is stale`);
+  const row = docs.split("\n").find((line) => line.includes(`${label} framed burst`)) ?? "";
+  if (!row.includes(`${a} ms`) || !row.includes(`${c} ms`)) fail(`${label} headline is stale`);
 }
 console.log("Committed Agent Console baseline check passed");

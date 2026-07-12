@@ -81,6 +81,8 @@ jobs:
 
       - run: pnpm exec playwright install --with-deps chromium firefox webkit
 
+      - run: pnpm run check:agent-console-profile-baseline
+
       - run: pnpm run profile:agent-console:smoke
 
       - name: Upload Agent Console profile smoke artifacts

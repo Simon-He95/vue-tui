@@ -116,15 +116,15 @@ for (const runtime of runtimes) {
     "markdown-stream-steady",
   ]) {
     const key = `${runtime}/${scenario}`;
-    const a = summaries.A.scenarios[key];
+    const b = summaries.B.scenarios[key];
     const c = summaries.C.scenarios[key];
-    if (ratio(c.frameP95Ms.median, a.frameP95Ms.median) > 1.1)
+    if (ratio(c.frameP95Ms.median, b.frameP95Ms.median) > 1.1)
       fail(`${key} frame p95 non-regression gate failed`);
     if (
       !["tail-stream-steady", "stream-scroll-interaction", "markdown-stream-steady"].includes(
         scenario,
       ) &&
-      ratio(c.elapsedMs.median, a.elapsedMs.median) > 1.1
+      ratio(c.elapsedMs.median, b.elapsedMs.median) > 1.1
     )
       fail(`${key} elapsed non-regression gate failed`);
   }

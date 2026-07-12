@@ -18,12 +18,12 @@ Replay copying was a real application hotspot. Lazy Markdown publication removed
 
 | Workload                  | A median | B median | C median |       C vs A |
 | ------------------------- | -------: | -------: | -------: | -----------: |
-| CLI framed burst          | 1,211 ms | 1,037 ms |   463 ms | 61.8% faster |
-| Browser framed burst      | 1,186 ms | 1,046 ms |   857 ms | 27.8% faster |
-| CLI single-task burst     |   842 ms |   661 ms |    89 ms | 89.5% faster |
-| Browser single-task burst |   827 ms |   672 ms |    49 ms | 94.1% faster |
+| CLI framed burst          | 1,500 ms | 1,295 ms |   519 ms | 65.4% faster |
+| Browser framed burst      | 1,307 ms | 1,157 ms |   854 ms | 34.7% faster |
+| CLI single-task burst     | 1,050 ms |   855 ms |   101 ms | 90.4% faster |
+| Browser single-task burst |   909 ms |   740 ms |    54 ms | 94.1% faster |
 
-In C's default Log burst, `mergeGroups` no longer dominates CPU samples. Markdown-visible work remains measured separately: large-history toggle median is 109 ms CLI / 91 ms browser, and steady Markdown streaming keeps the canonical 12 ms cadence. The toggle cost is visible feature work and is not a regression transferred from Log mode: A/B have comparable toggle medians. Content completeness and live block publication pass in every run.
+In C's default Log burst, `mergeGroups` no longer dominates CPU samples. Markdown-visible work remains measured separately: large-history toggle median is 173 ms CLI / 122 ms browser, and steady Markdown streaming keeps the canonical 12 ms cadence. The toggle cost is visible feature work and is not a regression transferred from Log mode: A/B have comparable toggle medians. Content completeness and live block publication pass in every run.
 
 No remaining evidence supports further runtime/cache changes. The performance initiative ends with C.
 

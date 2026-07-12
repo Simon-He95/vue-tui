@@ -144,6 +144,10 @@ function summarizeRoot(root: string) {
         domFlushMs: latencySummary(latencyValues("inputToDomFlushMs")),
         paintOpportunityMs: latencySummary(latencyValues("inputToPaintOpportunityMs")),
       },
+      preparedStates: runs
+        .map((r) => r.preparedState ?? r.profileResult?.preparedState)
+        .filter(Boolean),
+      finalStates: runs.map((r) => r.finalState ?? r.profileResult?.finalState).filter(Boolean),
       corpus: runs.map((r) => r.corpus ?? r.profileResult?.corpus).filter(Boolean),
       memory: runs.map((r) => r.memory).filter(Boolean),
       stdout: runs.map((r) => r.stdout).filter(Boolean),
