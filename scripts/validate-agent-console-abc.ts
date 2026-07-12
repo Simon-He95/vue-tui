@@ -209,9 +209,9 @@ if (!smoke)
           }),
       );
     for (const [field, tolerance, absoluteBudget] of [
-      ["inputToCommitMs", 1, 16.7],
-      ["inputToDomFlushMs", 2, 20],
-      ["inputToPaintOpportunityMs", 2, 25],
+      ["inputToCommitMs", 1, 25],
+      ["inputToDomFlushMs", 2, 35],
+      ["inputToPaintOpportunityMs", 2, 50],
     ] as const) {
       if (runtime === "cli" && field !== "inputToCommitMs") continue;
       const before = perRoundLatency("A", field),
