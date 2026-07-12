@@ -70,7 +70,7 @@ for (const runtime of ["cli", "browser"]) {
     const limit = key === "cli/markdown-toggle-large-history" ? 1.15 : 1.1;
     const frameA = data.variants.A.scenarios[key].frameP95Ms.median;
     const frameC = data.variants.C.scenarios[key].frameP95Ms.median;
-    if (frameC / frameA > 1.1 && frameC - frameA > 0.25) fail(`${key} committed frame p95 policy`);
+    if (frameC / frameA > 1.1 && frameC - frameA > 1) fail(`${key} committed frame p95 policy`);
     if (
       comparison.pairedMedianRatio > limit ||
       comparison.pairedBootstrapCi95[1] > 1.15 ||

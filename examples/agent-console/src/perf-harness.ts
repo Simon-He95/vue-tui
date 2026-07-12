@@ -305,6 +305,7 @@ export async function runPreparedAgentConsoleProfileScenario(
       for (let offset = 0; offset < steadyCount; offset++) {
         adapter.append(appendStartIndex + offset);
         if (offset % 8 === 0) {
+          await adapter.yieldFrame();
           inputLatencies.push(await adapter.dispatchWheel(-60));
         }
         deadline += cadenceMs;
@@ -351,6 +352,7 @@ export async function runPreparedAgentConsoleProfileScenario(
   );
   if (failed.length)
     throw new Error(`${scenario} correctness failed: ${failed.map(([key]) => key).join(", ")}`);
+  await adapter.waitUntilSettled();
   const metrics = adapter.api.metrics.value;
   const finalState = {
     visualIndexStatus: metrics?.visualIndexStatus ?? "unknown",
