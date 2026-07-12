@@ -316,6 +316,7 @@ export async function runPreparedAgentConsoleProfileScenario(
       for (let offset = 0; offset < steadyCount; offset++) {
         adapter.append(appendStartIndex + offset);
         if (offset % 8 === 0) {
+          await adapter.yieldTask();
           await adapter.yieldFrame();
           inputLatencies.push(await adapter.dispatchWheel(-60));
         }

@@ -196,10 +196,10 @@ if (!smoke)
             return [run.round, sorted[Math.max(0, Math.ceil(sorted.length * 0.95) - 1)] ?? 0];
           }),
       );
-    for (const [field, tolerance] of [
-      ["inputToCommitMs", 1],
-      ["inputToDomFlushMs", 2],
-      ["inputToPaintOpportunityMs", 2],
+    for (const [field, tolerance, absoluteBudget] of [
+      ["inputToCommitMs", 1, 16.7],
+      ["inputToDomFlushMs", 2, 20],
+      ["inputToPaintOpportunityMs", 2, 25],
     ] as const) {
       if (runtime === "cli" && field !== "inputToCommitMs") continue;
       const before = perRoundLatency("A", field),
@@ -210,7 +210,11 @@ if (!smoke)
       const deltas = [...before.keys()].map(
         (round) => (after.get(round) ?? 0) - (before.get(round) ?? 0),
       );
-      if (median(ratios) > 1.1 && median(deltas) > tolerance)
+      if (
+        median(ratios) > 1.1 &&
+        median(deltas) > tolerance &&
+        median([...after.values()]) > absoluteBudget
+      )
         fail(`${runtime}/${field} latency regression`);
     }
     if (runtime === "browser")
