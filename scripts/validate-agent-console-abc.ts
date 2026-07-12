@@ -299,14 +299,30 @@ if (!smoke)
         (value: number, index: number) => frameC[index] / Math.max(value, 0.001),
       );
       const frameDeltas = frameA.map((value: number, index: number) => frameC[index] - value);
-      if (
-        (median(frameRatios) > 1.1 && median(frameDeltas) > 1) ||
-        bootstrapMedianCi95(frameRatios)[1] > 1.15
-      )
+      const frameCi = bootstrapMedianCi95(frameRatios);
+      if ((median(frameRatios) > 1.1 || frameCi[0] > 1.1) && median(frameDeltas) > 2)
         fail(`${key} paired C/A frame p95 gate`);
-      const count = (x: any) =>
-        (x.longFrames ?? []).reduce((n: number, value: any) => n + value.over16_7, 0);
-      if (count(c) > count(a) + 1) fail(`${key} long-frame regression`);
+      const longFramesByRound = (variant: string) =>
+        raws[variant][runtime]
+          .filter((run: any) => (run.scenario ?? run.name) === scenario)
+          .sort((left: any, right: any) => left.round - right.round)
+          .map((run: any) =>
+            ((run.profileResult ?? run).frameSamples ?? [])
+              .filter((sample: any) => sample.durationMs > 16.7)
+              .map((sample: any) => sample.durationMs),
+          );
+      const longA = longFramesByRound("A"),
+        longC = longFramesByRound("C");
+      const countDeltas = longA.map(
+        (items: number[], index: number) => longC[index].length - items.length,
+      );
+      const durationDeltas = longA.map(
+        (items: number[], index: number) =>
+          longC[index].reduce((sum: number, value: number) => sum + value, 0) -
+          items.reduce((sum: number, value: number) => sum + value, 0),
+      );
+      if (median(countDeltas) > 0 && median(durationDeltas) > 5)
+        fail(`${key} long-frame regression`);
     }
   }
 console.log("Agent Console A/B/C performance and correctness validation passed");

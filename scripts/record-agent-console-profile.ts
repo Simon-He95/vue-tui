@@ -25,7 +25,8 @@ for (const variant of ["A", "B", "C"])
     browser: JSON.parse(readFileSync(resolve(rawRoot, variant, "browser-raw.json"), "utf8"))
       .results,
   };
-const harnessRef = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+const verificationRef = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+let measurementRef: string | undefined;
 for (const variant of ["A", "B", "C"]) {
   const cliEnvironment = JSON.parse(
     readFileSync(resolve(rawRoot, variant, "cli/environment.json"), "utf8"),
@@ -34,8 +35,11 @@ for (const variant of ["A", "B", "C"]) {
     readFileSync(resolve(rawRoot, variant, "browser-raw.json"), "utf8"),
   ).environment;
   for (const environment of [cliEnvironment, browserEnvironment]) {
-    if (environment.commit !== harnessRef || environment.dirty !== false)
-      throw new Error(`${variant}: raw provenance does not match HEAD ${harnessRef}`);
+    measurementRef ??= environment.commit;
+    if (environment.commit !== measurementRef || environment.dirty !== false)
+      throw new Error(`${variant}: inconsistent or dirty raw measurement provenance`);
+    if (JSON.stringify(environment.measurementInputs) !== JSON.stringify(measurementInputHashes()))
+      throw new Error(`${variant}: measurement input hashes do not match current checkout`);
   }
 }
 function normalize(value: any): any {
@@ -47,7 +51,7 @@ function normalize(value: any): any {
 }
 const variants = normalize(audit.variants);
 for (const value of Object.values(variants) as any[]) {
-  value.productionRef = harnessRef;
+  value.productionRef = measurementRef;
   for (const scenario of Object.values(value.scenarios) as any[]) {
     scenario.preparedState = scenario.preparedStates?.[0];
     scenario.finalState = scenario.finalStates?.[0];
@@ -78,9 +82,9 @@ for (const [name, from, to] of [
 }
 const output = {
   schemaVersion: 4,
-  measurementRef: harnessRef,
+  measurementRef,
   measurementInputs: measurementInputHashes(),
-  verificationRef: harnessRef,
+  verificationRef,
   verificationInputs: verificationInputHashes(),
   canonicalConfig: { ...AGENT_CONSOLE_PROFILE_DEFAULTS, runs: 6, orders: audit.orders },
   variants,
