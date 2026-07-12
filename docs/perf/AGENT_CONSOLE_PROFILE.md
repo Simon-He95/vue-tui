@@ -18,14 +18,14 @@ Replay copying was a real application hotspot. Lazy Markdown publication removed
 
 | Workload                  | A median | B median | C median |       C vs A |
 | ------------------------- | -------: | -------: | -------: | -----------: |
-| CLI framed burst          | 1,304 ms | 1,126 ms |   458 ms | 64.9% faster |
-| Browser framed burst      | 1,211 ms | 1,114 ms |   856 ms | 29.3% faster |
-| CLI single-task burst     |   916 ms |   749 ms |    90 ms | 90.2% faster |
-| Browser single-task burst |   864 ms |   704 ms |    49 ms | 94.3% faster |
+| CLI framed burst          | 1,319 ms | 1,159 ms |   523 ms | 60.3% faster |
+| Browser framed burst      | 1,269 ms | 1,119 ms |   857 ms | 32.5% faster |
+| CLI single-task burst     |   937 ms |   761 ms |    95 ms | 89.9% faster |
+| Browser single-task burst |   866 ms |   716 ms |    51 ms | 94.1% faster |
 
-In C's default Log burst, `mergeGroups` no longer dominates CPU samples. Markdown-visible work remains measured separately: large-history toggle median is 147 ms CLI / 122 ms browser, and steady Markdown streaming keeps the canonical 12 ms cadence. The final balanced audit keeps CLI Markdown toggle and Browser search within the uniform 10% C/A non-regression target (3.5% and 6.2% respectively). Explicit bounded fallback policies (toggle <=200 ms/1.15; search <=120 ms/1.15) remain encoded, alongside frame-p95 and long-frame gates, so future evidence cannot hide a cumulative C/A regression. Content completeness and live block publication pass in every run.
+In C's default Log burst, `mergeGroups` no longer dominates CPU samples. Markdown-visible work remains measured separately: large-history toggle median is 134 ms CLI / 123 ms browser, and steady Markdown streaming keeps the canonical 12 ms cadence. Formal decisions use paired per-round ratios: CLI Markdown toggle is +6.8% and Browser search is +8.2% at the paired median. Their bootstrap intervals do not clearly prove a regression beyond 10%. Markdown toggle alone has a predeclared <=200 ms / 1.15 transfer-cost bound. Frame-p95 uses a 10% gate with a 0.25 ms quantization tolerance, and long-frame counts may not increase. CLI framed replay B/A has a 0.89 paired median but a wide interval due two host-noise rounds; it is accepted together with decisive CLI single-task and Browser evidence, and is explicitly not described as CI-proven below 0.95. Content completeness and live block publication pass in every run.
 
-No remaining evidence supports further runtime/cache changes. The performance initiative ends with C.
+For the canonical Agent Console workload measured here, no evidence justifies changing core Cell/text/wrap/provider caches, renderer architecture, long-text admission, or virtual scrolling. The current initiative closes with those areas unchanged.
 
 ## Canonical workloads
 

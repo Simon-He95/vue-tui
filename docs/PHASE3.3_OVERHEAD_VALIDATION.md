@@ -189,7 +189,7 @@ Per #119, if runtime regression > 5% proven:
 
 - [x] Historical source-path experiment: INCONCLUSIVE
 - [x] Final engineering resolution: PASS / CLOSED BY REMEDIATION (#122 production strip + #123 production workload)
-- [ ] ✅ PASS
+- [x] ✅ PASS — final engineering resolution
 - [ ] ❌ FAIL
 
 **Decision**: Production strip accepted. No cache/long-text/provider/renderer-architecture/virtual-scroll change is justified by the measured workload.

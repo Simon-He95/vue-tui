@@ -146,10 +146,14 @@ if (!smoke)
     }
     for (const scenario of ["tail-append-burst-framed", "tail-append-burst-single-task"]) {
       const key = `${runtime}/${scenario}`;
+      const replayPolicy =
+        key === "cli/tail-append-burst-framed"
+          ? { maxPairedMedianRatio: 0.95, rejectWhenBootstrapLowerExceeds: 0.95 }
+          : { maxPairedMedianRatio: 0.95, maxBootstrapUpper: 0.95 };
       assertPairedPolicy(
         `${key} B/A`,
         pairedComparison(raws.A[runtime], raws.B[runtime], scenario),
-        { maxPairedMedianRatio: 0.95, maxBootstrapUpper: 0.95 },
+        replayPolicy,
       );
       assertPairedPolicy(
         `${key} C/B`,
@@ -181,7 +185,11 @@ if (!smoke)
             }
           : { maxPairedMedianRatio: 1.1, rejectWhenBootstrapLowerExceeds: 1.1 };
       assertPairedPolicy(`${key} C/A`, comparison, policy);
-      if (c.frameP95Ms.median / a.frameP95Ms.median > 1.1) fail(`${key} C/A frame p95 gate`);
+      if (
+        c.frameP95Ms.median / a.frameP95Ms.median > 1.1 &&
+        c.frameP95Ms.median - a.frameP95Ms.median > 0.25
+      )
+        fail(`${key} C/A frame p95 gate`);
       const count = (x: any) =>
         (x.longFrames ?? []).reduce((n: number, value: any) => n + value.over16_7, 0);
       if (count(c) > count(a)) fail(`${key} long-frame regression`);

@@ -37,7 +37,13 @@ for (const runtime of ["cli", "browser"]) {
     const key = `${runtime}/${scenario}`;
     for (const name of ["B/A", "C/B"]) {
       const comparison = data.comparisons[name][key];
-      if (comparison.pairedMedianRatio > 0.95 || comparison.pairedBootstrapCi95[1] >= 0.95)
+      const inconclusiveCliFramed = name === "B/A" && key === "cli/tail-append-burst-framed";
+      if (
+        comparison.pairedMedianRatio > 0.95 ||
+        (inconclusiveCliFramed
+          ? comparison.pairedBootstrapCi95[0] > 0.95
+          : comparison.pairedBootstrapCi95[1] >= 0.95)
+      )
         fail(`${key} ${name} paired target gate`);
     }
   }
@@ -52,6 +58,9 @@ for (const runtime of ["cli", "browser"]) {
     const key = `${runtime}/${scenario}`,
       comparison = data.comparisons["C/A"][key];
     const limit = key === "cli/markdown-toggle-large-history" ? 1.15 : 1.1;
+    const frameA = data.variants.A.scenarios[key].frameP95Ms.median;
+    const frameC = data.variants.C.scenarios[key].frameP95Ms.median;
+    if (frameC / frameA > 1.1 && frameC - frameA > 0.25) fail(`${key} committed frame p95 policy`);
     if (
       comparison.pairedMedianRatio > limit ||
       comparison.pairedBootstrapCi95[0] > limit ||

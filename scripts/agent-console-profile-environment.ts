@@ -48,7 +48,12 @@ export const AGENT_CONSOLE_PROFILE_INPUTS = [
   "scripts/profile-agent-console-browser.ts",
   "scripts/profile-agent-console-cli-worker.ts",
   "scripts/profile-agent-console-cli.ts",
+  "scripts/agent-console-profile-environment.ts",
+  "scripts/agent-console-profile-stats.ts",
+  "scripts/check-agent-console-profile-baseline.ts",
+  "scripts/record-agent-console-profile.ts",
   "scripts/summarize-agent-console-profile.ts",
+  "scripts/tsconfig.agent-console-profile-dist.json",
   "scripts/validate-agent-console-abc.ts",
 ] as const;
 export function profileInputHashes() {
