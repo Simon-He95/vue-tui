@@ -304,11 +304,10 @@ async function main(): Promise<void> {
       runtime: "browser",
       generatedAt: new Date().toISOString(),
       environment: {
-        ...agentConsoleProfileEnvironment([
-          "dist/vue.js",
-          "dist/cli.js",
-          "examples/agent-console/dist/index.html",
-        ]),
+        ...agentConsoleProfileEnvironment(
+          ["dist/vue.js", "dist/cli.js", "examples/agent-console/dist/index.html"],
+          ["dist", "examples/agent-console/dist"],
+        ),
         browser: await browser.version(),
         seedCount,
         appendCount,

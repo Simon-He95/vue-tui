@@ -18,6 +18,15 @@ const outputDir = resolve(
 );
 const smoke = process.env.AGENT_CONSOLE_PROFILE_SMOKE === "1";
 const runCount = smoke ? 1 : Number(process.env.AGENT_CONSOLE_PROFILE_RUNS ?? 5);
+const profileConfig = smoke
+  ? {
+      ...AGENT_CONSOLE_PROFILE_DEFAULTS,
+      seedCount: 120,
+      appendCount: 30,
+      steadyCount: 20,
+      cadenceMs: 0,
+    }
+  : AGENT_CONSOLE_PROFILE_DEFAULTS;
 mkdirSync(outputDir, { recursive: true });
 if (process.env.AGENT_CONSOLE_PROFILE_SKIP_BUILD !== "1") {
   execFileSync("pnpm", ["run", "build:checked"], { cwd: root, stdio: "inherit" });
@@ -35,6 +44,7 @@ for (const scenario of AGENT_CONSOLE_PROFILE_SCENARIOS) {
           ...process.env,
           VUE_TUI_PROFILE: "",
           AGENT_CONSOLE_PROFILE_MODE: "1",
+          TSX_TSCONFIG_PATH: resolve(root, "scripts/tsconfig.agent-console-profile-dist.json"),
           AGENT_CONSOLE_PROFILE_SMOKE: smoke ? "1" : "0",
           AGENT_CONSOLE_PROFILE_SCENARIO: scenario,
           AGENT_CONSOLE_PROFILE_RUN: String(run + 1),
@@ -62,6 +72,7 @@ if (!smoke && process.env.AGENT_CONSOLE_PROFILE_SKIP_CPU !== "1") {
           ...process.env,
           VUE_TUI_PROFILE: "",
           AGENT_CONSOLE_PROFILE_MODE: "1",
+          TSX_TSCONFIG_PATH: resolve(root, "scripts/tsconfig.agent-console-profile-dist.json"),
           AGENT_CONSOLE_PROFILE_SMOKE: "0",
           AGENT_CONSOLE_PROFILE_SCENARIO: scenario,
           AGENT_CONSOLE_PROFILE_RUN: "cpu",
@@ -86,10 +97,13 @@ writeFileSync(
   resolve(outputDir, "environment.json"),
   JSON.stringify(
     {
-      ...agentConsoleProfileEnvironment(["dist/cli.js", "dist/vue.js"]),
+      ...agentConsoleProfileEnvironment(["dist/cli.js", "dist/vue.js"], ["dist"]),
+      runtimeResolutions: JSON.parse(
+        readFileSync(resolve(outputDir, "runtime-resolutions.json"), "utf8"),
+      ),
       runCount,
       smoke,
-      ...AGENT_CONSOLE_PROFILE_DEFAULTS,
+      ...profileConfig,
     },
     null,
     2,

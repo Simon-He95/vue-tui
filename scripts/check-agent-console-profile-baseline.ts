@@ -1,9 +1,9 @@
 #!/usr/bin/env tsx
 
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { AGENT_CONSOLE_PROFILE_SCENARIOS } from "../examples/agent-console/src/perf-harness.js";
+import { profileInputHashes } from "./agent-console-profile-environment.js";
 
 const file = resolve(process.argv[2] ?? "docs/perf/agent-console-profile-baseline.json");
 const data = JSON.parse(readFileSync(file, "utf8"));
@@ -11,11 +11,8 @@ function fail(message: string): never {
   throw new Error(`Committed Agent Console baseline invalid: ${message}`);
 }
 if (data.schemaVersion !== 4 || !/^[0-9a-f]{40}$/.test(data.harnessRef)) fail("schema/harnessRef");
-try {
-  execFileSync("git", ["merge-base", "--is-ancestor", data.harnessRef, "HEAD"]);
-} catch {
-  fail("harnessRef is not an ancestor of HEAD");
-}
+if (JSON.stringify(data.profileInputs) !== JSON.stringify(profileInputHashes()))
+  fail("profile input content hashes changed");
 for (const variant of ["A", "B", "C"]) {
   const value = data.variants?.[variant];
   if (!value || value.productionRef !== data.harnessRef) fail(`${variant} productionRef`);
@@ -31,17 +28,19 @@ for (const variant of ["A", "B", "C"]) {
         fail(`${variant}/${runtime}/${scenario} exact state`);
     }
 }
-for (const runtime of ["cli", "browser"])
-  for (const scenario of ["tail-append-burst-framed", "tail-append-burst-single-task"]) {
-    const key = `${runtime}/${scenario}`;
-    if (data.comparisons["B/A"][key].ratio > 0.95 || data.comparisons["C/B"][key].ratio > 0.95)
-      fail(`${key} performance gate`);
-  }
 for (const comparison of ["B/A", "C/B", "C/A"])
   for (const value of Object.values(data.comparisons[comparison]) as any[])
     if (value.pairedRatios?.length !== 6 || value.pairedBootstrapCi95?.length !== 2)
       fail(`${comparison} paired evidence`);
-for (const runtime of ["cli", "browser"])
+for (const runtime of ["cli", "browser"]) {
+  for (const scenario of ["tail-append-burst-framed", "tail-append-burst-single-task"]) {
+    const key = `${runtime}/${scenario}`;
+    for (const name of ["B/A", "C/B"]) {
+      const comparison = data.comparisons[name][key];
+      if (comparison.pairedMedianRatio > 0.95 || comparison.pairedBootstrapCi95[1] >= 0.95)
+        fail(`${key} ${name} paired target gate`);
+    }
+  }
   for (const scenario of [
     "tail-stream-steady",
     "detached-append",
@@ -52,20 +51,15 @@ for (const runtime of ["cli", "browser"])
   ]) {
     const key = `${runtime}/${scenario}`,
       comparison = data.comparisons["C/A"][key];
-    const policy =
-      key === "browser/search-large-history"
-        ? { ratio: 1.15, absolute: 120 }
-        : key === "cli/markdown-toggle-large-history"
-          ? { ratio: 1.15, absolute: 200 }
-          : { ratio: 1.1, absolute: Infinity };
+    const limit = key === "cli/markdown-toggle-large-history" ? 1.15 : 1.1;
     if (
-      !["tail-stream-steady", "stream-scroll-interaction", "markdown-stream-steady"].includes(
-        scenario,
-      ) &&
-      (comparison.ratio > policy.ratio || comparison.elapsedMedianToMs > policy.absolute)
+      comparison.pairedMedianRatio > limit ||
+      comparison.pairedBootstrapCi95[0] > limit ||
+      (key === "cli/markdown-toggle-large-history" && comparison.elapsedMedianToMs > 200)
     )
-      fail(`${key} committed C/A policy`);
+      fail(`${key} committed paired C/A policy`);
   }
+}
 const docs = readFileSync(resolve("docs/perf/AGENT_CONSOLE_PROFILE.md"), "utf8");
 for (const [runtime, label] of [
   ["cli", "CLI"],

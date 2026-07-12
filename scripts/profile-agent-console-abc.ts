@@ -19,40 +19,40 @@ rmSync(base, { recursive: true, force: true });
 mkdirSync(base, { recursive: true });
 execFileSync("pnpm", ["run", "build:checked"], { cwd: root, stdio: "inherit" });
 
-for (let round = 0; round < orders.length; round++) {
-  const order = orders[round]!;
-  for (const variant of order) {
-    const output = resolve(base, variant);
-    const env = {
-      ...process.env,
-      AGENT_CONSOLE_PROFILE_SKIP_BUILD: "1",
-      AGENT_CONSOLE_PROFILE_SKIP_CPU: "1",
-      AGENT_CONSOLE_PROFILE_RUNS: "1",
-      AGENT_CONSOLE_PROFILE_MODE: "1",
-      AGENT_CONSOLE_PROFILE_VARIANT: variant,
-      VUE_TUI_PROFILE_OUTPUT_DIR: output,
-      VUE_TUI_AGENT_CONSOLE_PORT: String(45178 + round * 3 + variants.indexOf(variant as any)),
-    };
-    execFileSync("pnpm", ["run", "profile:agent-console:cli"], {
-      cwd: root,
-      stdio: "inherit",
-      env,
-    });
-    execFileSync("pnpm", ["run", "profile:agent-console:browser"], {
-      cwd: root,
-      stdio: "inherit",
-      env,
-    });
-    const cli = JSON.parse(readFileSync(resolve(output, "cli/all.json"), "utf8"));
-    const browser = JSON.parse(readFileSync(resolve(output, "browser-raw.json"), "utf8"));
-    accumulated[variant].cli.push(...cli.map((run: any) => ({ ...run, round, order })));
-    accumulated[variant].browser.push(
-      ...browser.results.map((run: any) => ({ ...run, round, order })),
-    );
-    accumulated[variant].cliEnv = JSON.parse(
-      readFileSync(resolve(output, "cli/environment.json"), "utf8"),
-    );
-    accumulated[variant].browserEnv = browser.environment;
+for (const runtime of ["cli", "browser"] as const) {
+  for (let round = 0; round < orders.length; round++) {
+    const order = orders[round]!;
+    for (const variant of order) {
+      const output = resolve(base, variant);
+      const env = {
+        ...process.env,
+        AGENT_CONSOLE_PROFILE_SKIP_BUILD: "1",
+        AGENT_CONSOLE_PROFILE_SKIP_CPU: "1",
+        AGENT_CONSOLE_PROFILE_RUNS: "1",
+        AGENT_CONSOLE_PROFILE_MODE: "1",
+        AGENT_CONSOLE_PROFILE_VARIANT: variant,
+        VUE_TUI_PROFILE_OUTPUT_DIR: output,
+        VUE_TUI_AGENT_CONSOLE_PORT: String(45178 + round * 3 + variants.indexOf(variant as any)),
+      };
+      execFileSync("pnpm", ["run", `profile:agent-console:${runtime}`], {
+        cwd: root,
+        stdio: "inherit",
+        env,
+      });
+      if (runtime === "cli") {
+        const runs = JSON.parse(readFileSync(resolve(output, "cli/all.json"), "utf8"));
+        accumulated[variant].cli.push(...runs.map((run: any) => ({ ...run, round, order })));
+        accumulated[variant].cliEnv = JSON.parse(
+          readFileSync(resolve(output, "cli/environment.json"), "utf8"),
+        );
+      } else {
+        const browser = JSON.parse(readFileSync(resolve(output, "browser-raw.json"), "utf8"));
+        accumulated[variant].browser.push(
+          ...browser.results.map((run: any) => ({ ...run, round, order })),
+        );
+        accumulated[variant].browserEnv = browser.environment;
+      }
+    }
   }
 }
 
@@ -128,8 +128,7 @@ writeFileSync(
   resolve(base, "audit.json"),
   `${JSON.stringify({ schemaVersion: 4, harnessRef: "current-head", orders, variants: summaries }, null, 2)}\n`,
 );
-if (!smoke)
-  execFileSync("pnpm", ["exec", "tsx", "scripts/validate-agent-console-abc.ts", base], {
-    cwd: root,
-    stdio: "inherit",
-  });
+execFileSync("pnpm", ["exec", "tsx", "scripts/validate-agent-console-abc.ts", base], {
+  cwd: root,
+  stdio: "inherit",
+});

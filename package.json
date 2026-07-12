@@ -240,6 +240,7 @@
     "profile:agent-console": "tsx scripts/profile-agent-console.ts",
     "profile:agent-console:smoke": "AGENT_CONSOLE_PROFILE_SMOKE=1 pnpm run profile:agent-console",
     "profile:agent-console:abc": "tsx scripts/profile-agent-console-abc.ts",
+    "profile:agent-console:abc:smoke": "AGENT_CONSOLE_PROFILE_SMOKE=1 tsx scripts/profile-agent-console-abc.ts",
     "example:tlog-view-lab": "pnpm run build && VT_SMOKE=1 tsx examples/tlog-view-lab.ts",
     "run:basic:terminal": "pnpm run build && pnpm -C examples/basic terminal",
     "run:agent-console:terminal": "pnpm run build && pnpm -C examples/agent-console terminal",

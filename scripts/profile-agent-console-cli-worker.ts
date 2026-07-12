@@ -23,6 +23,21 @@ const outputDir = resolve(
   "cli",
 );
 mkdirSync(outputDir, { recursive: true });
+const runtimeResolutions = Object.fromEntries(
+  [
+    "@simon_he/vue-tui/cli",
+    "@simon_he/vue-tui/vue",
+    "@simon_he/vue-tui/markdown",
+    "@simon_he/vue-tui/experimental",
+  ].map((specifier) => [specifier, import.meta.resolve(specifier)]),
+);
+for (const [specifier, url] of Object.entries(runtimeResolutions)) {
+  if (!url.includes("/dist/")) throw new Error(`${specifier} did not resolve to dist: ${url}`);
+}
+writeFileSync(
+  resolve(outputDir, "runtime-resolutions.json"),
+  JSON.stringify(runtimeResolutions, null, 2),
+);
 const smoke = process.env.AGENT_CONSOLE_PROFILE_SMOKE === "1";
 const options = smoke
   ? { seedCount: 120, appendCount: 30, steadyCount: 20, cadenceMs: 0 }

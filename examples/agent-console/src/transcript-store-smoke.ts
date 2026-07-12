@@ -90,4 +90,18 @@ assert.deepEqual(
 );
 
 stop();
+process.env.AGENT_CONSOLE_PROFILE_MODE = "1";
+process.env.AGENT_CONSOLE_PROFILE_VARIANT = "A";
+const baselineStore = createAgentTranscriptStore();
+baselineStore.appendSyntheticChunk(1);
+assert.ok(baselineStore.markdownBlocks.value.length > 0, "explicit profile A keeps eager Markdown");
+process.env.AGENT_CONSOLE_PROFILE_VARIANT = "B";
+const replayOnlyStore = createAgentTranscriptStore();
+replayOnlyStore.appendSyntheticChunk(1);
+assert.ok(
+  replayOnlyStore.markdownBlocks.value.length > 0,
+  "explicit profile B keeps eager Markdown",
+);
+delete process.env.AGENT_CONSOLE_PROFILE_MODE;
+delete process.env.AGENT_CONSOLE_PROFILE_VARIANT;
 process.stdout.write("Agent transcript store smoke passed\n");

@@ -2,6 +2,7 @@
 import type { FramePerfSample } from "../src/observability/frame-perf.js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { median } from "./agent-console-profile-stats.js";
 
 const percentile = (values: readonly number[], q: number) => {
   if (!values.length) return 0;
@@ -42,7 +43,7 @@ export function summarizeRunStability(values: readonly number[]) {
   return {
     runs: values.length,
     values,
-    median: percentile(values, 0.5),
+    median: median(values),
     min: Math.min(...values),
     max: Math.max(...values),
     cv: mean ? Math.sqrt(variance) / mean : 0,
