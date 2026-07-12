@@ -330,7 +330,11 @@ export async function runPreparedAgentConsoleProfileScenario(
         !adapter.requiresDomFlush || inputLatencies.every((sample) => sample.domFlushObserved);
       correctness.contentVisible = adapter.api.getTranscriptRows().some((row) => row.length > 0);
     }
+    const actionFinished = adapter.now();
     await adapter.waitUntilSettled();
+    const settled = adapter.now();
+    diagnostics.actionElapsedMs = actionFinished - started;
+    diagnostics.settleElapsedMs = settled - actionFinished;
   } finally {
     unsubscribe();
   }
