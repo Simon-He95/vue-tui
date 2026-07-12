@@ -107,15 +107,15 @@ for (const scenario of scenarios) {
         const started = performance.now();
         const beforeTop = mountedApi.metrics.value?.scrollTop ?? -1;
         const beforeFrame = mountedApi.getFramePerfSamples().at(-1)?.frameId ?? -1;
-        app.events.dispatch({
+        const prevented = app.events.dispatch({
           type: "wheel",
           cellX: AGENT_CONSOLE_LAYOUT.transcript.x + 2,
           cellY: AGENT_CONSOLE_LAYOUT.transcript.y + 2,
           deltaY: delta,
           time: started,
         });
-        const dispatchAccepted = true;
-        app.scheduler.invalidate({ priority: "high", reason: "scroll" });
+        const dispatchAccepted = prevented !== false;
+        app.scheduler.flush();
         let matched: ReturnType<AgentConsoleApi["getFramePerfSamples"]>[number] | undefined;
         for (let turn = 0; turn < 120; turn++) {
           await new Promise<void>((done) => setTimeout(done, 17));

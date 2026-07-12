@@ -110,8 +110,11 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
   const logStore = createAppendOnlyLogStore({ maxLines: 8_000 });
   const markdownSource = createMarkdownBlockSource({ theme: markdownTheme });
   const markdown = ref("");
-  const markdownBlocks = shallowRef<readonly TuiMarkdownBlock[]>([]);
-  let markdownBlocksDirty = true;
+  const markdownBlocks =
+    variant === "C"
+      ? shallowRef<readonly TuiMarkdownBlock[]>([])
+      : ref<readonly TuiMarkdownBlock[]>(markdownSource.blocks);
+  let markdownBlocksDirty = variant === "C";
   const links = ref<readonly TranscriptLink[]>([]);
   const stats = ref<TranscriptStats>({
     chunks: 0,
@@ -180,7 +183,7 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
     markdown.value = "";
     markdownSource.clear();
     markdownBlocksDirty = true;
-    markdownBlocks.value = [];
+    markdownBlocks.value = eagerMarkdown ? markdownSource.blocks : [];
     links.value = [];
     assistantOpen = false;
     toolFenceOpen = false;

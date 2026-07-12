@@ -27,7 +27,7 @@
 
 **Note**: Phase 4.0 completed the Cell-cache tuning decision checkpoint. Current cache implementation unchanged. Comprehensive cache validation (4.1+) and original Phase 4 work (long-text, provider, virtual-scroll) remain deferred or unmeasured.
 
-**Final decision**: #122 removes instrumentation from standard production artifacts. #123 profiles the production Agent Console workload and accepts only the measured replay-history publication optimization. Cache、long-text、provider 与 virtual-scroll 均没有 measured workload 证据支持修改；当前性能专项结束。
+**Final decision**: #122 removes instrumentation from standard production artifacts. #123 profiles the production Agent Console workload and accepts two measured Agent Console application-level optimizations: mutable shallow replay-history backing and lazy Markdown-block publication in Log mode. Cache、long-text、provider 与 virtual-scroll 均没有 measured workload 证据支持修改；当前性能专项结束。
 
 ---
 

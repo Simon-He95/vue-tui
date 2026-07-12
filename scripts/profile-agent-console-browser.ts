@@ -20,7 +20,8 @@ const outputDir = resolve(
   process.env.VUE_TUI_PROFILE_OUTPUT_DIR ?? ".tmp/perf/agent-console",
 );
 const port = Number(process.env.VUE_TUI_AGENT_CONSOLE_PORT ?? 4178);
-const baseUrl = `http://127.0.0.1:${port}/?profile=1`;
+const profileVariant = process.env.AGENT_CONSOLE_PROFILE_VARIANT ?? "C";
+const baseUrl = `http://127.0.0.1:${port}/?profile=1&variant=${profileVariant}`;
 const smoke = process.env.AGENT_CONSOLE_PROFILE_SMOKE === "1";
 const canonicalOptions = resolveAgentConsoleProfileOptions(
   smoke
@@ -49,7 +50,7 @@ const canonicalOptions = resolveAgentConsoleProfileOptions(
       },
 );
 const { seedCount, appendCount, steadyCount, cadenceMs, batchSize } = canonicalOptions;
-const runCount = smoke ? 1 : 5;
+const runCount = smoke ? 1 : Number(process.env.AGENT_CONSOLE_PROFILE_RUNS ?? 5);
 
 type BrowserTiming = Readonly<{
   elapsedMs: number;
@@ -227,7 +228,7 @@ async function main(): Promise<void> {
       await context.close();
     }
 
-    if (!smoke) {
+    if (!smoke && process.env.AGENT_CONSOLE_PROFILE_SKIP_CPU !== "1") {
       for (const scenario of cpuProfileScenarios) {
         const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
         const page = await context.newPage();
@@ -309,6 +310,8 @@ async function main(): Promise<void> {
         seedCount,
         appendCount,
         steadyCount,
+        cadenceMs,
+        batchSize,
         runCount,
       },
       results,

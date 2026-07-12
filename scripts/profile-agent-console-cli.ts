@@ -5,6 +5,7 @@ import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   AGENT_CONSOLE_CPU_PROFILE_SCENARIOS,
+  AGENT_CONSOLE_PROFILE_DEFAULTS,
   AGENT_CONSOLE_PROFILE_SCENARIOS,
 } from "../examples/agent-console/src/perf-harness.js";
 import { agentConsoleProfileEnvironment } from "./agent-console-profile-environment.js";
@@ -16,7 +17,7 @@ const outputDir = resolve(
   "cli",
 );
 const smoke = process.env.AGENT_CONSOLE_PROFILE_SMOKE === "1";
-const runCount = smoke ? 1 : 5;
+const runCount = smoke ? 1 : Number(process.env.AGENT_CONSOLE_PROFILE_RUNS ?? 5);
 mkdirSync(outputDir, { recursive: true });
 if (process.env.AGENT_CONSOLE_PROFILE_SKIP_BUILD !== "1") {
   execFileSync("pnpm", ["run", "build:checked"], { cwd: root, stdio: "inherit" });
@@ -48,7 +49,7 @@ for (const scenario of AGENT_CONSOLE_PROFILE_SCENARIOS) {
     );
   }
 }
-if (!smoke) {
+if (!smoke && process.env.AGENT_CONSOLE_PROFILE_SKIP_CPU !== "1") {
   for (const scenario of AGENT_CONSOLE_CPU_PROFILE_SCENARIOS) {
     execFileSync(
       process.execPath,
@@ -86,6 +87,7 @@ writeFileSync(
       ...agentConsoleProfileEnvironment(["dist/cli.js", "dist/vue.js"]),
       runCount,
       smoke,
+      ...AGENT_CONSOLE_PROFILE_DEFAULTS,
     },
     null,
     2,

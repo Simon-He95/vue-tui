@@ -49,11 +49,6 @@ const distAliases = [
 
 export default defineConfig({
   plugins: [vue()],
-  define: {
-    "globalThis.__AGENT_CONSOLE_PROFILE_VARIANT__": JSON.stringify(
-      process.env.AGENT_CONSOLE_PROFILE_VARIANT ?? "C",
-    ),
-  },
   resolve: { alias: process.env.VUE_TUI_PROFILE_DIST === "1" ? distAliases : sourceAliases },
   build: { sourcemap: process.env.VUE_TUI_PROFILE_DIST === "1" },
 });

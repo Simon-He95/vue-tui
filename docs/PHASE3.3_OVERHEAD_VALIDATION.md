@@ -208,4 +208,4 @@ Per #119, if runtime regression > 5% proven:
 
 ## Final closure (2026-07-11)
 
-PR #122 validated that standard ESM/CJS and packed consumers contain no instrumentation collector, no no-op stub, and no hot-path dispatch. PR #123 then exercised the production Agent Console package in CLI and Chromium. The only accepted follow-up is the measured Agent Console replay-history publication optimization. No cache, long-text, provider, renderer-architecture, or virtual-scroll change is justified by this workload.
+PR #122 validated that standard ESM/CJS and packed consumers contain no instrumentation collector, no no-op stub, and no hot-path dispatch. PR #123 then exercised the production Agent Console package in CLI and Chromium. The two accepted Agent Console application-level optimizations are mutable shallow replay-history backing and lazy Markdown-block publication in Log mode. No cache, long-text, provider, renderer-architecture, or virtual-scroll change is justified by this workload.

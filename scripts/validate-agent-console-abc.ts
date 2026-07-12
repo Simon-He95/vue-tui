@@ -11,11 +11,17 @@ import {
 const root = resolve(process.argv[2] ?? ".tmp/perf/agent-console-abc");
 const variants = ["A", "B", "C"] as const;
 const runtimes = ["cli", "browser"] as const;
+const expectedRuns = 6;
+const summaries: Record<string, any> = {};
 function fail(message: string): never {
   throw new Error(`Agent Console A/B/C audit invalid: ${message}`);
 }
+function ratio(to: number, from: number) {
+  return to / from;
+}
 for (const variant of variants) {
   const summary = JSON.parse(readFileSync(resolve(root, variant, "summary.json"), "utf8"));
+  summaries[variant] = summary;
   const cliRuns = JSON.parse(readFileSync(resolve(root, variant, "cli/all.json"), "utf8"));
   const browser = JSON.parse(readFileSync(resolve(root, variant, "browser-raw.json"), "utf8"));
   const rawByRuntime = { cli: cliRuns, browser: browser.results };
@@ -30,30 +36,36 @@ for (const variant of variants) {
       Object.values(environment.artifactHashes ?? {}).some((hash) => !hash)
     )
       fail(`${variant}/${runtime} missing provenance`);
+    if (
+      environment.runCount !== expectedRuns ||
+      environment.steadyCount !== AGENT_CONSOLE_PROFILE_DEFAULTS.steadyCount
+    )
+      fail(`${variant}/${runtime} canonical config mismatch`);
     for (const scenario of AGENT_CONSOLE_PROFILE_SCENARIOS) {
       const key = `${runtime}/${scenario}`;
       const result = summary.scenarios[key];
-      if (!result || result.runCount !== 5 || result.correctnessPasses !== 5)
-        fail(`${variant}/${key} does not have five passing runs`);
-      if (
-        result.preparedStates?.some((state: any) => state.visualIndexStatus !== "exact") ||
-        result.finalStates?.some((state: any) => state.visualIndexStatus !== "exact")
-      )
-        fail(`${variant}/${key} visual index is not exact`);
-      for (const corpus of result.corpus ?? []) {
-        if (
-          corpus.seedCount !== AGENT_CONSOLE_PROFILE_DEFAULTS.seedCount ||
-          corpus.appendStartIndex <= corpus.seedCount
-        )
-          fail(`${variant}/${key} corpus config mismatch`);
-      }
+      if (!result || result.runCount !== expectedRuns || result.correctnessPasses !== expectedRuns)
+        fail(`${variant}/${key} does not have six passing runs`);
       const raw = rawByRuntime[runtime].filter(
         (run: any) => (run.scenario ?? run.name) === scenario,
       );
-      if (raw.length !== 5) fail(`${variant}/${key} raw run count mismatch`);
-      if (scenario === "stream-scroll-interaction") {
-        for (const run of raw) {
-          const correctness = run.correctness ?? run.profileResult?.correctness ?? {};
+      if (raw.length !== expectedRuns) fail(`${variant}/${key} raw run count mismatch`);
+      for (const run of raw) {
+        const payload = run.profileResult ?? run;
+        if (
+          payload.preparedState?.visualIndexStatus !== "exact" ||
+          payload.finalState?.visualIndexStatus !== "exact"
+        )
+          fail(`${variant}/${key} raw visual index is not exact`);
+        const corpus = payload.corpus;
+        if (
+          !corpus ||
+          corpus.seedCount !== AGENT_CONSOLE_PROFILE_DEFAULTS.seedCount ||
+          corpus.appendStartIndex <= corpus.seedCount
+        )
+          fail(`${variant}/${key} corpus mismatch`);
+        if (scenario === "stream-scroll-interaction") {
+          const correctness = payload.correctness ?? {};
           if (
             !correctness.scrollChanged ||
             !correctness.scrollFramesObserved ||
@@ -77,4 +89,44 @@ for (const variant of variants) {
     }
   }
 }
-console.log("Agent Console A/B/C audit validation passed");
+for (const runtime of runtimes) {
+  for (const scenario of ["tail-append-burst-framed", "tail-append-burst-single-task"]) {
+    const key = `${runtime}/${scenario}`;
+    if (
+      ratio(
+        summaries.B.scenarios[key].elapsedMs.median,
+        summaries.A.scenarios[key].elapsedMs.median,
+      ) > 0.95
+    )
+      fail(`${key} replay B/A gate failed`);
+    if (
+      ratio(
+        summaries.C.scenarios[key].elapsedMs.median,
+        summaries.B.scenarios[key].elapsedMs.median,
+      ) > 0.95
+    )
+      fail(`${key} lazy Markdown C/B gate failed`);
+  }
+  for (const scenario of [
+    "tail-stream-steady",
+    "detached-append",
+    "search-large-history",
+    "stream-scroll-interaction",
+    "markdown-toggle-large-history",
+    "markdown-stream-steady",
+  ]) {
+    const key = `${runtime}/${scenario}`;
+    const a = summaries.A.scenarios[key];
+    const c = summaries.C.scenarios[key];
+    if (ratio(c.frameP95Ms.median, a.frameP95Ms.median) > 1.1)
+      fail(`${key} frame p95 non-regression gate failed`);
+    if (
+      !["tail-stream-steady", "stream-scroll-interaction", "markdown-stream-steady"].includes(
+        scenario,
+      ) &&
+      ratio(c.elapsedMs.median, a.elapsedMs.median) > 1.1
+    )
+      fail(`${key} elapsed non-regression gate failed`);
+  }
+}
+console.log("Agent Console A/B/C performance and correctness validation passed");

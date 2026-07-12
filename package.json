@@ -325,7 +325,9 @@
     "bench:profiler:legacy": "tsx scripts/bench-profiler-legacy.ts",
     "bench:overhead": "tsx scripts/bench-instrumentation-overhead.ts",
     "bench:bundle-size": "tsx scripts/bench-bundle-size.ts",
-    "validate:agent-console:abc": "tsx scripts/validate-agent-console-abc.ts"
+    "validate:agent-console:abc": "tsx scripts/validate-agent-console-abc.ts",
+    "profile:agent-console:record": "tsx scripts/record-agent-console-profile.ts",
+    "check:agent-console-profile-baseline": "tsx scripts/check-agent-console-profile-baseline.ts"
   },
   "dependencies": {
     "katex": "^0.16.47",

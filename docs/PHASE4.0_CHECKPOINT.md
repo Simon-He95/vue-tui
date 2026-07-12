@@ -304,4 +304,4 @@ Before claiming comprehensive cache validation, add:
 
 ## Production workload follow-up
 
-PR #123 completed the Agent Console production workload profile. It found and contained an application replay-history publication hotspot, but supplied no evidence for changing Cell cache capacity, eviction, text/wrap caches, provider caches, or virtual scrolling. Phase 4.0 remains a no-change decision for those areas.
+PR #123 completed the Agent Console production workload profile. It found and contained replay-history publication and hidden eager Markdown-block publication hotspots, but supplied no evidence for changing Cell cache capacity, eviction, text/wrap caches, provider caches, or virtual scrolling. Phase 4.0 remains a no-change decision for those areas.

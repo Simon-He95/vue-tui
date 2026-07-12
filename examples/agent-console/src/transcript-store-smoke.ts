@@ -27,9 +27,29 @@ assert.notEqual(
   firstBlocks,
   "next visible sync publishes fresh blocks",
 );
+const marker = "LATESTMARKDOWNMARKER123";
+store.apply({ type: "assistant-delta", text: marker });
+store.apply({ type: "status", state: "paused" });
 await nextTick();
-assert.deepEqual(observedLengths, [1, 2, 3], "append must notify eventLog length watchers");
-assert.equal(store.captureReplayLog().events.length, 3, "capture includes every appended event");
+assert.ok(store.markdown.value.includes(marker), "latest marker reaches Markdown source");
+assert.ok(
+  JSON.stringify(store.syncMarkdownBlocks()).includes(marker),
+  "latest marker reaches the published Markdown blocks",
+);
+const markerSnapshot = store.captureReplayLog();
+store.apply({ type: "assistant-delta", text: " later" });
+assert.equal(
+  markerSnapshot.events.length + 1,
+  store.captureReplayLog().events.length,
+  "captured replay snapshots remain immutable after later appends",
+);
+await nextTick();
+assert.deepEqual(
+  observedLengths,
+  [1, 2, 3, 4, 5, 6],
+  "append must notify eventLog length watchers",
+);
+assert.equal(store.captureReplayLog().events.length, 6, "capture includes every appended event");
 
 store.clear();
 await nextTick();

@@ -6,7 +6,7 @@
 
 **Decision**: No runtime cache change proposed
 
-**Production workload follow-up**: ✅ Complete in #123; no cache change justified
+**Production workload closure**: ✅ #123 accepts shallow replay backing plus lazy Markdown publication; no core cache/renderer/virtual-scroll change justified
 
 ---
 
