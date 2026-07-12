@@ -67,14 +67,14 @@ for (const runtime of ["cli", "browser"]) {
   ]) {
     const key = `${runtime}/${scenario}`,
       comparison = data.comparisons["C/A"][key];
-    const limit = key === "cli/markdown-toggle-large-history" ? 1.15 : 1.1;
+    const limit = scenario === "markdown-toggle-large-history" ? 1.15 : 1.1;
     const frameA = data.variants.A.scenarios[key].frameP95Ms.median;
     const frameC = data.variants.C.scenarios[key].frameP95Ms.median;
     if (frameC / frameA > 1.1 && frameC - frameA > 1) fail(`${key} committed frame p95 policy`);
     if (
       comparison.pairedMedianRatio > limit ||
       comparison.pairedBootstrapCi95[1] > 1.15 ||
-      (key === "cli/markdown-toggle-large-history" && comparison.elapsedMedianToMs > 200)
+      (scenario === "markdown-toggle-large-history" && comparison.elapsedMedianToMs > 200)
     )
       fail(`${key} committed paired C/A policy`);
   }

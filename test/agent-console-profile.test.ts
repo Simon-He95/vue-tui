@@ -11,6 +11,7 @@ import {
   median,
   pairedComparison,
   pairedRatiosByRound,
+  workloadElapsedMs,
 } from "../scripts/agent-console-profile-stats.js";
 import {
   summarizeAgentConsoleRun,
@@ -65,6 +66,17 @@ describe("Agent Console profile harness", () => {
 
   it("uses the arithmetic median for even samples", () => {
     expect(median([2, 4, 6, 8, 10, 12])).toBe(7);
+  });
+
+  it("uses the inner workload boundary before controller timing", () => {
+    expect(
+      workloadElapsedMs({
+        round: 0,
+        elapsedMs: 30,
+        timing: { elapsedMs: 40 },
+        profileResult: { elapsedMs: 20, timing: { totalElapsedMs: 10 } },
+      }),
+    ).toBe(10);
   });
 
   it("pairs ratios by round rather than array position", () => {

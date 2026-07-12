@@ -2,7 +2,7 @@
 import type { FramePerfSample } from "../src/observability/frame-perf.js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { median } from "./agent-console-profile-stats.js";
+import { median, workloadElapsedMs } from "./agent-console-profile-stats.js";
 
 const percentile = (values: readonly number[], q: number) => {
   if (!values.length) return 0;
@@ -72,7 +72,7 @@ function samplesOf(run: any): FramePerfSample[] {
   return run.frameSamples ?? run.profileResult?.frameSamples ?? [];
 }
 function elapsedOf(run: any): number {
-  return run.elapsedMs ?? run.profileResult?.elapsedMs ?? run.timing?.elapsedMs ?? 0;
+  return workloadElapsedMs(run);
 }
 function cpuSummary(runs: any[]) {
   return runs.flatMap((run) => {

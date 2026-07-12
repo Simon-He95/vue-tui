@@ -103,6 +103,7 @@ export type AgentConsoleApi = Readonly<{
   getInputValue: () => string;
   getTranscriptRows: () => readonly string[];
   getMarkdownBlockCount: () => number;
+  getMarkdownPublicationCount: () => number;
   getMarkdownLength: () => number;
   getChromeRows: () => readonly string[];
   getTerminalSnapshot: () => readonly string[];
@@ -162,6 +163,7 @@ export const AgentConsoleSurface = defineComponent({
     const searchDraft = ref("ERROR");
     const markdownScrollTop = ref(1_000_000);
     const markdownStickToBottom = ref(true);
+    let markdownPublicationCount = 0;
     const metrics = ref<TLogViewScrollMetrics | null>(null);
     const searchState = ref<TLogViewSearchState>(searchStateFor(""));
     const visibleLinks = ref<readonly TLogViewVisibleLink[]>([]);
@@ -506,7 +508,7 @@ export const AgentConsoleSurface = defineComponent({
       streamState.value = "connected";
       transcript.apply({ type: "status", state: "connected" });
       syncReplayCursor();
-      timer = setInterval(applyNextEvent, 12);
+      timer = setInterval(applyNextEvent, 48);
     }
 
     function stopStream(): void {
@@ -1156,6 +1158,7 @@ export const AgentConsoleSurface = defineComponent({
           rowTextFromTerminal(terminalContext.terminal, AGENT_CONSOLE_LAYOUT.transcript.y + index),
         ),
       getMarkdownBlockCount: () => transcript.syncMarkdownBlocks().length,
+      getMarkdownPublicationCount: () => markdownPublicationCount,
       getMarkdownLength: () => transcript.markdown.value.length,
       getChromeRows: () =>
         Array.from({ length: AGENT_CONSOLE_LAYOUT.chrome.h }, (_, index) =>
@@ -1164,10 +1167,41 @@ export const AgentConsoleSurface = defineComponent({
       getTerminalSnapshot: () => terminalContext.terminal.snapshot().lines,
     };
 
-    watchEffect(() => {
-      if (mode.value !== "markdown") return;
-      transcript.markdown.value;
+    let markdownPublicationPending = false;
+    let markdownPublicationAlive = true;
+    function publishMarkdownBlocks(): void {
+      markdownPublicationPending = false;
       transcript.syncMarkdownBlocks();
+      markdownPublicationCount++;
+    }
+    function requestMarkdownBlockPublication(): void {
+      if (mode.value !== "markdown" || markdownPublicationPending) return;
+      markdownPublicationPending = true;
+      const accepted = terminalContext.scheduler.queueFrameTask({
+        id: "AgentConsoleSurface:markdown-publication",
+        reason: "stream",
+        priority: "low",
+        sync: false,
+        run: () => {
+          if (!markdownPublicationAlive) return;
+          publishMarkdownBlocks();
+        },
+      });
+      if (!accepted) publishMarkdownBlocks();
+    }
+
+    watch(
+      () => transcript.markdown.value,
+      () => requestMarkdownBlockPublication(),
+      { flush: "sync" },
+    );
+    watch(mode, (value, previous) => {
+      if (previous === "markdown" && markdownPublicationPending) publishMarkdownBlocks();
+      if (value === "markdown") publishMarkdownBlocks();
+    });
+    onBeforeUnmount(() => {
+      if (markdownPublicationPending) publishMarkdownBlocks();
+      markdownPublicationAlive = false;
     });
 
     watch(

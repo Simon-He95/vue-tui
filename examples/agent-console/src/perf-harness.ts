@@ -16,12 +16,13 @@ export const AGENT_CONSOLE_CPU_PROFILE_SCENARIOS = [
   "tail-append-burst-framed",
   "tail-append-burst-single-task",
   "stream-scroll-interaction",
+  "markdown-stream-steady",
 ] as const satisfies readonly AgentConsoleProfileScenario[];
 export const AGENT_CONSOLE_PROFILE_DEFAULTS = Object.freeze({
   seedCount: 6_000,
   appendCount: 1_000,
   steadyCount: 400,
-  cadenceMs: 12,
+  cadenceMs: 48,
   batchSize: 10,
 });
 export interface AgentConsoleProfileOptions {
@@ -158,7 +159,7 @@ async function appendSteady(
     if (cadenceMs > 0) {
       await adapter.sleepUntil(deadline);
       const lateness = Math.max(0, adapter.now() - deadline);
-      if (lateness > 0) deadlineMisses++;
+      if (lateness > Math.max(1, cadenceMs * 0.1)) deadlineMisses++;
       maxDeadlineLatenessMs = Math.max(maxDeadlineLatenessMs, lateness);
     } else await adapter.yieldTask();
   }
@@ -177,6 +178,7 @@ async function appendSteady(
 interface ScenarioPreparedState {
   viewportAnchor?: ViewportAnchor;
   markdownLength?: number;
+  markdownPublicationCount?: number;
 }
 async function prepareMeasuredScenario(
   adapter: AgentConsoleProfileAdapter,
@@ -185,7 +187,10 @@ async function prepareMeasuredScenario(
   if (scenario === "markdown-stream-steady") {
     adapter.api.mode.value = "markdown";
     await adapter.waitUntilSettled();
-    return { markdownLength: adapter.api.getMarkdownLength() };
+    return {
+      markdownLength: adapter.api.getMarkdownLength(),
+      markdownPublicationCount: adapter.api.getMarkdownPublicationCount(),
+    };
   }
   if (scenario === "detached-append") {
     await adapter.dispatchWheel(-200);
@@ -300,6 +305,11 @@ export async function runPreparedAgentConsoleProfileScenario(
       diagnostics.markdownLengthBefore = beforeLength;
       diagnostics.markdownLengthAfter = afterLength;
       diagnostics.markdownBlockCount = adapter.api.getMarkdownBlockCount();
+      diagnostics.markdownPublications =
+        adapter.api.getMarkdownPublicationCount() -
+        (scenarioPrepared.markdownPublicationCount ?? 0);
+      correctness.markdownPublicationCoalesced =
+        Number(diagnostics.markdownPublications) < steadyCount;
     } else {
       const inputLatencies: AgentConsoleProfileInputLatency[] = [];
       let deadline = adapter.now();

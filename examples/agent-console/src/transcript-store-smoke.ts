@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { nextTick, watch } from "vue";
+import { nextTick, watch, watchEffect } from "vue";
 import { createSyntheticAgentEvent } from "./mock-agent-stream";
 import { createAgentTranscriptStore } from "./transcript-store";
 
@@ -8,6 +8,10 @@ delete process.env.AGENT_CONSOLE_PROFILE_MODE;
 const store = createAgentTranscriptStore();
 delete process.env.AGENT_CONSOLE_PROFILE_VARIANT;
 const observedLengths: number[] = [];
+const observedTailTypes: Array<string | undefined> = [];
+const stopEffect = watchEffect(() => observedTailTypes.push(store.eventLog.value.at(-1)?.type), {
+  flush: "sync",
+});
 const stop = watch(
   () => store.eventLog.value.length,
   (length) => observedLengths.push(length),
@@ -53,6 +57,11 @@ assert.deepEqual(
   "append must notify eventLog length watchers",
 );
 assert.equal(store.captureReplayLog().events.length, 6, "capture includes every appended event");
+assert.equal(
+  observedTailTypes.at(-1),
+  "assistant-delta",
+  "effects observe items with stable identity",
+);
 
 store.clear();
 await nextTick();
@@ -90,6 +99,7 @@ assert.deepEqual(
 );
 
 stop();
+stopEffect();
 process.env.AGENT_CONSOLE_PROFILE_MODE = "1";
 for (const variant of ["A", "B", "C"] as const) {
   process.env.AGENT_CONSOLE_PROFILE_VARIANT = variant;

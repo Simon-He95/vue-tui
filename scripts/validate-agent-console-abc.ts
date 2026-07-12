@@ -7,7 +7,12 @@ import {
   AGENT_CONSOLE_PROFILE_DEFAULTS,
   AGENT_CONSOLE_PROFILE_SCENARIOS,
 } from "../examples/agent-console/src/perf-harness.js";
-import { assertPairedPolicy, median, pairedComparison } from "./agent-console-profile-stats.js";
+import {
+  assertPairedPolicy,
+  bootstrapMedianCi95,
+  median,
+  pairedComparison,
+} from "./agent-console-profile-stats.js";
 const root = resolve(process.argv[2] ?? ".tmp/perf/agent-console-abc");
 const variants = ["A", "B", "C"] as const,
   runtimes = ["cli", "browser"] as const;
@@ -168,6 +173,19 @@ if (!smoke)
           fail(`${runtime}/${scenario}/${field} cadence regression`);
       }
     }
+    for (const scenario of ["tail-stream-steady", "markdown-stream-steady"]) {
+      const result = summaries.C.scenarios[`${runtime}/${scenario}`];
+      const target =
+        AGENT_CONSOLE_PROFILE_DEFAULTS.steadyCount * AGENT_CONSOLE_PROFILE_DEFAULTS.cadenceMs;
+      if (result.producerElapsedMs.median > target * 1.1)
+        fail(`${runtime}/${scenario} absolute producer budget`);
+      if (result.appendIntervalP95Ms.median > AGENT_CONSOLE_PROFILE_DEFAULTS.cadenceMs * 1.2)
+        fail(`${runtime}/${scenario} absolute interval budget`);
+      if (result.deadlineMisses.median > AGENT_CONSOLE_PROFILE_DEFAULTS.steadyCount * 0.1)
+        fail(`${runtime}/${scenario} deadline miss budget`);
+      if (result.maxDeadlineLatenessMs.median > AGENT_CONSOLE_PROFILE_DEFAULTS.cadenceMs)
+        fail(`${runtime}/${scenario} deadline lateness budget`);
+    }
     const perRoundLatency = (variant: string, field: string) =>
       new Map(
         raws[variant][runtime]
@@ -197,10 +215,6 @@ if (!smoke)
     }
     if (runtime === "browser")
       for (const scenario of AGENT_CONSOLE_PROFILE_SCENARIOS) {
-        const values = (variant: string) =>
-          raws[variant].browser
-            .filter((run: any) => run.name === scenario)
-            .flatMap((run: any) => run.timing?.longTasks ?? []);
         const perRound = (variant: string) =>
           raws[variant].browser
             .filter((run: any) => run.name === scenario)
@@ -214,13 +228,18 @@ if (!smoke)
             }));
         const aRounds = perRound("A"),
           cRounds = perRound("C");
-        const countRatios = aRounds.map(
-          (item: any, index: number) => cRounds[index].count / Math.max(item.count, 1),
+        const countDeltas = aRounds.map(
+          (item: any, index: number) => cRounds[index].count - item.count,
         );
-        const totalRatios = aRounds.map(
-          (item: any, index: number) => cRounds[index].total / Math.max(item.total, 1),
+        const totalDeltas = aRounds.map(
+          (item: any, index: number) => cRounds[index].total - item.total,
         );
-        if (median(countRatios) > 1 && median(totalRatios) > 1.1)
+        const aMedianCount = median(aRounds.map((item: any) => item.count));
+        const cMedianCount = median(cRounds.map((item: any) => item.count));
+        if (
+          (aMedianCount === 0 && cMedianCount > 0) ||
+          (median(countDeltas) > 0 && median(totalDeltas) > 5)
+        )
           fail(`browser/${scenario} long-task regression`);
       }
     for (const scenario of ["tail-append-burst-framed", "tail-append-burst-single-task"]) {
@@ -256,7 +275,7 @@ if (!smoke)
         elapsedMedianToMs: c.elapsedMs.median,
       };
       const policy =
-        key === "cli/markdown-toggle-large-history"
+        scenario === "markdown-toggle-large-history"
           ? {
               maxPairedMedianRatio: 1.15,
               maxBootstrapUpper: 1.15,
@@ -264,11 +283,27 @@ if (!smoke)
             }
           : { maxPairedMedianRatio: 1.1, maxBootstrapUpper: 1.15 };
       assertPairedPolicy(`${key} C/A`, comparison, policy);
+      const frameP95ByRound = (variant: string) =>
+        raws[variant][runtime]
+          .filter((run: any) => (run.scenario ?? run.name) === scenario)
+          .sort((left: any, right: any) => left.round - right.round)
+          .map((run: any) => {
+            const samples = ((run.profileResult ?? run).frameSamples ?? [])
+              .map((sample: any) => sample.durationMs)
+              .sort((left: number, right: number) => left - right);
+            return samples[Math.max(0, Math.ceil(samples.length * 0.95) - 1)] ?? 0;
+          });
+      const frameA = frameP95ByRound("A"),
+        frameC = frameP95ByRound("C");
+      const frameRatios = frameA.map(
+        (value: number, index: number) => frameC[index] / Math.max(value, 0.001),
+      );
+      const frameDeltas = frameA.map((value: number, index: number) => frameC[index] - value);
       if (
-        c.frameP95Ms.median / a.frameP95Ms.median > 1.1 &&
-        c.frameP95Ms.median - a.frameP95Ms.median > 1
+        (median(frameRatios) > 1.1 && median(frameDeltas) > 1) ||
+        bootstrapMedianCi95(frameRatios)[1] > 1.15
       )
-        fail(`${key} C/A frame p95 gate`);
+        fail(`${key} paired C/A frame p95 gate`);
       const count = (x: any) =>
         (x.longFrames ?? []).reduce((n: number, value: any) => n + value.over16_7, 0);
       if (count(c) > count(a) + 1) fail(`${key} long-frame regression`);

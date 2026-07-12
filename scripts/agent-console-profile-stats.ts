@@ -33,7 +33,18 @@ export type PairedRun = Readonly<{
   name?: string;
   elapsedMs?: number;
   timing?: Readonly<{ elapsedMs?: number }>;
+  profileResult?: Readonly<{ elapsedMs?: number; timing?: Readonly<{ totalElapsedMs?: number }> }>;
 }>;
+
+export function workloadElapsedMs(run: PairedRun): number {
+  return (
+    run.profileResult?.timing?.totalElapsedMs ??
+    run.profileResult?.elapsedMs ??
+    run.elapsedMs ??
+    run.timing?.elapsedMs ??
+    0
+  );
+}
 
 export function pairedRatiosByRound(
   fromRuns: readonly PairedRun[],
@@ -44,7 +55,7 @@ export function pairedRatiosByRound(
     new Map(
       runs
         .filter((run) => (run.scenario ?? run.name) === scenario)
-        .map((run) => [run.round, run.elapsedMs ?? run.timing?.elapsedMs ?? 0]),
+        .map((run) => [run.round, workloadElapsedMs(run)]),
     );
   const from = select(fromRuns);
   const to = select(toRuns);

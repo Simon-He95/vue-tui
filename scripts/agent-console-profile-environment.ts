@@ -41,6 +41,8 @@ export function hashFileTree(paths: readonly string[]): string {
 }
 export const AGENT_CONSOLE_MEASUREMENT_INPUTS = [
   "examples/agent-console/src/AgentConsoleSurface.ts",
+  "examples/agent-console/src/App.vue",
+  "examples/agent-console/src/main.ts",
   "examples/agent-console/src/mock-agent-stream.ts",
   "examples/agent-console/src/perf-browser-harness.ts",
   "examples/agent-console/src/perf-harness.ts",
@@ -53,6 +55,7 @@ export const AGENT_CONSOLE_MEASUREMENT_INPUTS = [
   "scripts/tsconfig.agent-console-profile-dist.json",
 ] as const;
 export const AGENT_CONSOLE_VERIFICATION_INPUTS = [
+  "scripts/agent-console-cpu-profile.ts",
   "scripts/agent-console-profile-environment.ts",
   "scripts/agent-console-profile-stats.ts",
   "scripts/check-agent-console-profile-baseline.ts",
