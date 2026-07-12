@@ -18,18 +18,18 @@ Replay copying was a real application hotspot. Lazy Markdown publication removed
 
 | Workload                  | A median | B median | C median |       C vs A |
 | ------------------------- | -------: | -------: | -------: | -----------: |
-| CLI framed burst          | 2,310 ms | 1,113 ms |   449 ms | 80.6% faster |
-| Browser framed burst      | 2,000 ms | 1,095 ms |   857 ms | 57.1% faster |
-| CLI single-task burst     | 1,944 ms |   758 ms |    84 ms | 95.7% faster |
-| Browser single-task burst | 1,599 ms |   679 ms |    38 ms | 97.6% faster |
+| CLI framed burst          | 2,280 ms | 1,108 ms |   444 ms | 80.4% faster |
+| Browser framed burst      | 2,027 ms | 1,118 ms |   856 ms | 57.8% faster |
+| CLI single-task burst     | 1,883 ms |   741 ms |    82 ms | 95.9% faster |
+| Browser single-task burst | 1,644 ms |   707 ms |    39 ms | 97.7% faster |
 
-In C's default Log burst, `mergeGroups` no longer dominates CPU samples. Scenario-specific preludes occur before counters reset and timing starts. Visible Markdown publication is frame-coalesced, and Markdown steady is included in CPU diagnostics. The product timer and canonical target are both 48 ms: C producer median is 19.200 s CLI (interval p95 50.6 ms, 26.5 median misses, 45.0 ms max lateness) and 19.201 s Browser (49.7 ms, 7.5 misses, 15.4 ms lateness), all within absolute budgets. Formal benefits use the inner workload `totalElapsedMs`, paired by round; Playwright controller time remains diagnostic only. `validate:agent-console:abc` is the complete raw gate for cadence, paired frame/latency, Long Tasks, CPU artifacts, correctness and provenance. `check:agent-console-profile-baseline` is intentionally the cheap committed provenance/summary consistency checker.
+In C's default Log burst, `mergeGroups` no longer dominates CPU samples. Scenario-specific preludes occur before counters reset and timing starts. Visible Markdown publication is frame-coalesced, and Markdown steady is included in CPU diagnostics. The product timer and canonical target are both 64 ms: C producer median is 25.602 s CLI (interval p95 65.9 ms, 4.5 median misses, 57.5 ms max lateness) and 25.600 s Browser (65.7 ms, 0 misses, 3.0 ms lateness), all within absolute budgets. Formal benefits use the inner workload `totalElapsedMs`, paired by round; Playwright controller time remains diagnostic only. `validate:agent-console:abc` is the complete raw gate for cadence, paired frame/latency, Long Tasks, CPU artifacts, correctness and provenance. `check:agent-console-profile-baseline` is intentionally the cheap committed provenance/summary consistency checker.
 
 For the canonical Agent Console workload measured here, no evidence justifies changing core Cell/text/wrap/provider caches, renderer architecture, long-text admission, or virtual scrolling. The current initiative closes with those areas unchanged.
 
 ## Canonical workloads
 
-All CLI and Browser runners use the same validated config: seed 6,000; append 1,000; steady 400; cadence 48 ms; batch size 10; six paired runs.
+All CLI and Browser runners use the same validated config: seed 6,000; append 1,000; steady 400; cadence 64 ms; batch size 10; six paired runs.
 
 1. `tail-stream-steady`
 2. `tail-append-burst-framed`
