@@ -223,6 +223,8 @@ export async function runPreparedAgentConsoleProfileScenario(
   const { appendCount, steadyCount, cadenceMs, batchSize } =
     resolveAgentConsoleProfileOptions(options);
   const { appendStartIndex, seedCount, initialReplayTotal } = prepared;
+  const scenarioPrepared = await prepareMeasuredScenario(adapter, scenario);
+  adapter.resetMeasurements();
   const frameSamples: FramePerfSample[] = [];
   const unsubscribe = adapter.api.subscribeFramePerf((sample) => frameSamples.push(sample));
   const started = adapter.now();
@@ -251,9 +253,7 @@ export async function runPreparedAgentConsoleProfileScenario(
         adapter.append(appendStartIndex + offset);
       correctness.atBottom = adapter.api.metrics.value?.atBottom === true;
     } else if (scenario === "detached-append") {
-      await adapter.dispatchWheel(-200);
-      await adapter.waitUntilSettled();
-      const before = viewportAnchor(adapter.api);
+      const before = scenarioPrepared.viewportAnchor!;
       correctness.detachedBeforeAppend = adapter.api.metrics.value?.atBottom === false;
       await appendFramed(adapter, appendStartIndex, appendCount, batchSize);
       const after = viewportAnchor(adapter.api);
@@ -287,10 +287,11 @@ export async function runPreparedAgentConsoleProfileScenario(
       diagnostics.markdownLength = markdownLength;
       diagnostics.markdownBlockCount = blockCount;
     } else if (scenario === "markdown-stream-steady") {
-      adapter.api.mode.value = "markdown";
-      await adapter.waitUntilSettled();
-      const beforeLength = adapter.api.getMarkdownLength();
-      await appendSteady(adapter, appendStartIndex, steadyCount, cadenceMs);
+      const beforeLength = scenarioPrepared.markdownLength!;
+      Object.assign(
+        diagnostics,
+        await appendSteady(adapter, appendStartIndex, steadyCount, cadenceMs),
+      );
       const afterLength = adapter.api.getMarkdownLength();
       correctness.markdownMode = adapter.api.mode.value === "markdown";
       correctness.markdownGrew = afterLength > beforeLength;
