@@ -508,7 +508,7 @@ export const AgentConsoleSurface = defineComponent({
       streamState.value = "connected";
       transcript.apply({ type: "status", state: "connected" });
       syncReplayCursor();
-      timer = setInterval(applyNextEvent, 48);
+      timer = setInterval(applyNextEvent, 64);
     }
 
     function stopStream(): void {

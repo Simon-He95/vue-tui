@@ -22,7 +22,7 @@ export const AGENT_CONSOLE_PROFILE_DEFAULTS = Object.freeze({
   seedCount: 6_000,
   appendCount: 1_000,
   steadyCount: 400,
-  cadenceMs: 48,
+  cadenceMs: 64,
   batchSize: 10,
 });
 export interface AgentConsoleProfileOptions {
