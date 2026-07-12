@@ -132,6 +132,44 @@ function summarizeRoot(root: string) {
           ),
       ).length,
       elapsedMs: summarizeRunStability(runs.map(elapsedOf)),
+      actionElapsedMs: summarizeRunStability(
+        runs.map(
+          (run) =>
+            run.profileResult?.timing?.actionElapsedMs ??
+            run.timing?.actionElapsedMs ??
+            elapsedOf(run),
+        ),
+      ),
+      settleElapsedMs: summarizeRunStability(
+        runs.map(
+          (run) => run.profileResult?.timing?.settleElapsedMs ?? run.timing?.settleElapsedMs ?? 0,
+        ),
+      ),
+      producerElapsedMs: summarizeRunStability(
+        runs.map(
+          (run) =>
+            run.profileResult?.timing?.producerElapsedMs ?? run.timing?.producerElapsedMs ?? 0,
+        ),
+      ),
+      appendIntervalP95Ms: summarizeRunStability(
+        runs.map(
+          (run) =>
+            run.profileResult?.timing?.appendIntervalP95Ms ?? run.timing?.appendIntervalP95Ms ?? 0,
+        ),
+      ),
+      deadlineMisses: summarizeRunStability(
+        runs.map(
+          (run) => run.profileResult?.timing?.deadlineMisses ?? run.timing?.deadlineMisses ?? 0,
+        ),
+      ),
+      maxDeadlineLatenessMs: summarizeRunStability(
+        runs.map(
+          (run) =>
+            run.profileResult?.timing?.maxDeadlineLatenessMs ??
+            run.timing?.maxDeadlineLatenessMs ??
+            0,
+        ),
+      ),
       frameP95Ms: summarizeRunStability(frames.map((f) => f.durationMs.p95)),
       frameMaxMs: summarizeRunStability(frames.map((f) => f.durationMs.max)),
       renderManagerP95Ms: summarizeRunStability(frames.map((f) => f.renderManagerMs.p95)),

@@ -128,7 +128,7 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
   });
   let eventLogBacking: AgentEvent[] = [];
   const eventLog = copiedEventLog
-    ? ref<readonly AgentEvent[]>(eventLogBacking)
+    ? ref<readonly AgentEvent[]>([])
     : shallowRef<readonly AgentEvent[]>(eventLogBacking);
   let assistantOpen = false;
   let toolFenceOpen = false;
@@ -207,8 +207,7 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
   function applyEvent(event: AgentEvent, record: boolean): void {
     if (record) {
       if (copiedEventLog) {
-        eventLogBacking = [...eventLogBacking, event];
-        eventLog.value = eventLogBacking;
+        eventLog.value = [...eventLog.value, event];
       } else {
         eventLogBacking.push(event);
         triggerRef(eventLog);
@@ -301,8 +300,12 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
 
   function clear(): void {
     resetDerived();
-    eventLogBacking = [];
-    eventLog.value = eventLogBacking;
+    if (copiedEventLog) {
+      eventLog.value = [];
+    } else {
+      eventLogBacking = [];
+      eventLog.value = eventLogBacking;
+    }
   }
 
   function seed(count = 28): void {

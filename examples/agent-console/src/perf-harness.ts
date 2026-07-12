@@ -52,6 +52,7 @@ export interface AgentConsoleProfileAdapter {
   sleepUntil(deadline: number): Promise<void>;
   dispatchWheel(delta: number): Promise<AgentConsoleProfileInputLatency>;
   waitUntilSettled(): Promise<void>;
+  resetMeasurements(): void;
   requiresDomFlush?: boolean;
 }
 export type PreparedAgentConsoleProfile = Readonly<{
@@ -62,6 +63,17 @@ export type PreparedAgentConsoleProfile = Readonly<{
 export interface AgentConsoleProfileResult {
   scenario: AgentConsoleProfileScenario;
   elapsedMs: number;
+  timing: Readonly<{
+    actionElapsedMs: number;
+    settleElapsedMs: number;
+    totalElapsedMs: number;
+    producerElapsedMs?: number;
+    targetCadenceMs?: number;
+    deadlineMisses?: number;
+    maxDeadlineLatenessMs?: number;
+    appendIntervalP50Ms?: number;
+    appendIntervalP95Ms?: number;
+  }>;
   eventsAdded: number;
   frameSamples: readonly FramePerfSample[];
   correctness: Readonly<Record<string, boolean | number | string>>;
@@ -131,14 +143,56 @@ async function appendSteady(
   count: number,
   cadenceMs: number,
 ) {
-  let deadline = adapter.now();
+  const started = adapter.now();
+  let deadline = started;
+  let deadlineMisses = 0;
+  let maxDeadlineLatenessMs = 0;
+  const appendIntervals: number[] = [];
+  let previousAppendAt: number | undefined;
   for (let offset = 0; offset < count; offset++) {
+    const appendAt = adapter.now();
+    if (previousAppendAt != null) appendIntervals.push(appendAt - previousAppendAt);
+    previousAppendAt = appendAt;
     adapter.append(startIndex + offset);
     deadline += cadenceMs;
-    if (cadenceMs > 0) await adapter.sleepUntil(deadline);
-    else await adapter.yieldTask();
+    if (cadenceMs > 0) {
+      await adapter.sleepUntil(deadline);
+      const lateness = Math.max(0, adapter.now() - deadline);
+      if (lateness > 0) deadlineMisses++;
+      maxDeadlineLatenessMs = Math.max(maxDeadlineLatenessMs, lateness);
+    } else await adapter.yieldTask();
   }
-  await adapter.waitUntilSettled();
+  const sorted = [...appendIntervals].sort((a, b) => a - b);
+  const percentile = (q: number) =>
+    sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * q))]! : 0;
+  return {
+    producerElapsedMs: adapter.now() - started,
+    targetCadenceMs: cadenceMs,
+    deadlineMisses,
+    maxDeadlineLatenessMs,
+    appendIntervalP50Ms: percentile(0.5),
+    appendIntervalP95Ms: percentile(0.95),
+  };
+}
+interface ScenarioPreparedState {
+  viewportAnchor?: ViewportAnchor;
+  markdownLength?: number;
+}
+async function prepareMeasuredScenario(
+  adapter: AgentConsoleProfileAdapter,
+  scenario: AgentConsoleProfileScenario,
+): Promise<ScenarioPreparedState> {
+  if (scenario === "markdown-stream-steady") {
+    adapter.api.mode.value = "markdown";
+    await adapter.waitUntilSettled();
+    return { markdownLength: adapter.api.getMarkdownLength() };
+  }
+  if (scenario === "detached-append") {
+    await adapter.dispatchWheel(-200);
+    await adapter.waitUntilSettled();
+    return { viewportAnchor: viewportAnchor(adapter.api) };
+  }
+  return {};
 }
 async function settleSearch(adapter: AgentConsoleProfileAdapter) {
   for (let turn = 0; turn < 240; turn++) {
@@ -184,7 +238,10 @@ export async function runPreparedAgentConsoleProfileScenario(
   const diagnostics: Record<string, number | string | readonly number[] | readonly string[]> = {};
   try {
     if (scenario === "tail-stream-steady") {
-      await appendSteady(adapter, appendStartIndex, steadyCount, cadenceMs);
+      Object.assign(
+        diagnostics,
+        await appendSteady(adapter, appendStartIndex, steadyCount, cadenceMs),
+      );
       correctness.atBottom = adapter.api.metrics.value?.atBottom === true;
     } else if (scenario === "tail-append-burst-framed") {
       await appendFramed(adapter, appendStartIndex, appendCount, batchSize);
@@ -192,7 +249,6 @@ export async function runPreparedAgentConsoleProfileScenario(
     } else if (scenario === "tail-append-burst-single-task") {
       for (let offset = 0; offset < appendCount; offset++)
         adapter.append(appendStartIndex + offset);
-      await adapter.waitUntilSettled();
       correctness.atBottom = adapter.api.metrics.value?.atBottom === true;
     } else if (scenario === "detached-append") {
       await adapter.dispatchWheel(-200);
@@ -255,7 +311,6 @@ export async function runPreparedAgentConsoleProfileScenario(
         if (cadenceMs > 0) await adapter.sleepUntil(deadline);
         else await adapter.yieldTask();
       }
-      await adapter.waitUntilSettled();
       diagnostics.inputToCommitMs = inputLatencies.map((sample) => sample.inputToCommitMs);
       diagnostics.inputToDomFlushMs = inputLatencies.flatMap((sample) =>
         sample.inputToDomFlushMs == null ? [] : [sample.inputToDomFlushMs],
@@ -308,6 +363,17 @@ export async function runPreparedAgentConsoleProfileScenario(
   return {
     scenario,
     elapsedMs,
+    timing: {
+      actionElapsedMs: Number(diagnostics.actionElapsedMs),
+      settleElapsedMs: Number(diagnostics.settleElapsedMs),
+      totalElapsedMs: elapsedMs,
+      producerElapsedMs: diagnostics.producerElapsedMs as number | undefined,
+      targetCadenceMs: diagnostics.targetCadenceMs as number | undefined,
+      deadlineMisses: diagnostics.deadlineMisses as number | undefined,
+      maxDeadlineLatenessMs: diagnostics.maxDeadlineLatenessMs as number | undefined,
+      appendIntervalP50Ms: diagnostics.appendIntervalP50Ms as number | undefined,
+      appendIntervalP95Ms: diagnostics.appendIntervalP95Ms as number | undefined,
+    },
     eventsAdded,
     frameSamples,
     correctness,

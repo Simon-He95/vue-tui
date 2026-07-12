@@ -91,17 +91,42 @@ assert.deepEqual(
 
 stop();
 process.env.AGENT_CONSOLE_PROFILE_MODE = "1";
-process.env.AGENT_CONSOLE_PROFILE_VARIANT = "A";
-const baselineStore = createAgentTranscriptStore();
-baselineStore.appendSyntheticChunk(1);
-assert.ok(baselineStore.markdownBlocks.value.length > 0, "explicit profile A keeps eager Markdown");
-process.env.AGENT_CONSOLE_PROFILE_VARIANT = "B";
-const replayOnlyStore = createAgentTranscriptStore();
-replayOnlyStore.appendSyntheticChunk(1);
-assert.ok(
-  replayOnlyStore.markdownBlocks.value.length > 0,
-  "explicit profile B keeps eager Markdown",
-);
+for (const variant of ["A", "B", "C"] as const) {
+  process.env.AGENT_CONSOLE_PROFILE_VARIANT = variant;
+  const variantStore = createAgentTranscriptStore();
+  const variantLengths: number[] = [];
+  const stopVariantWatch = watch(
+    () => variantStore.eventLog.value.length,
+    (length) => variantLengths.push(length),
+    { flush: "sync" },
+  );
+  const beforeAppend = variantStore.eventLog.value;
+  variantStore.appendSyntheticChunk(1);
+  const afterAppend = variantStore.eventLog.value;
+  variantStore.appendSyntheticChunk(2);
+  if (variant === "A") {
+    assert.notEqual(afterAppend, beforeAppend, "profile A replaces the event array per append");
+    assert.notEqual(
+      variantStore.eventLog.value,
+      afterAppend,
+      "profile A preserves exact copied-ref replay semantics",
+    );
+  } else {
+    assert.equal(afterAppend, beforeAppend, `profile ${variant} retains its mutable backing array`);
+    assert.equal(
+      variantStore.eventLog.value,
+      afterAppend,
+      `profile ${variant} keeps array identity after later appends`,
+    );
+  }
+  assert.deepEqual(variantLengths, [1, 2], `profile ${variant} notifies length watchers`);
+  assert.equal(
+    variantStore.markdownBlocks.value.length > 0,
+    variant !== "C",
+    `profile ${variant} uses the expected Markdown publication mode`,
+  );
+  stopVariantWatch();
+}
 delete process.env.AGENT_CONSOLE_PROFILE_MODE;
 delete process.env.AGENT_CONSOLE_PROFILE_VARIANT;
 process.stdout.write("Agent transcript store smoke passed\n");

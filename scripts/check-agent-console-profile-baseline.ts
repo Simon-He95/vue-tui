@@ -3,19 +3,29 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { AGENT_CONSOLE_PROFILE_SCENARIOS } from "../examples/agent-console/src/perf-harness.js";
-import { profileInputHashes } from "./agent-console-profile-environment.js";
+import {
+  measurementInputHashes,
+  verificationInputHashes,
+} from "./agent-console-profile-environment.js";
 
 const file = resolve(process.argv[2] ?? "docs/perf/agent-console-profile-baseline.json");
 const data = JSON.parse(readFileSync(file, "utf8"));
 function fail(message: string): never {
   throw new Error(`Committed Agent Console baseline invalid: ${message}`);
 }
-if (data.schemaVersion !== 4 || !/^[0-9a-f]{40}$/.test(data.harnessRef)) fail("schema/harnessRef");
-if (JSON.stringify(data.profileInputs) !== JSON.stringify(profileInputHashes()))
-  fail("profile input content hashes changed");
+if (
+  data.schemaVersion !== 4 ||
+  !/^[0-9a-f]{40}$/.test(data.measurementRef) ||
+  !/^[0-9a-f]{40}$/.test(data.verificationRef)
+)
+  fail("schema/provenance refs");
+if (JSON.stringify(data.measurementInputs) !== JSON.stringify(measurementInputHashes()))
+  fail("measurement input content hashes changed");
+if (JSON.stringify(data.verificationInputs) !== JSON.stringify(verificationInputHashes()))
+  fail("verification input content hashes changed");
 for (const variant of ["A", "B", "C"]) {
   const value = data.variants?.[variant];
-  if (!value || value.productionRef !== data.harnessRef) fail(`${variant} productionRef`);
+  if (!value || value.productionRef !== data.measurementRef) fail(`${variant} productionRef`);
   for (const runtime of ["cli", "browser"])
     for (const scenario of AGENT_CONSOLE_PROFILE_SCENARIOS) {
       const result = value.scenarios?.[`${runtime}/${scenario}`];
@@ -63,7 +73,7 @@ for (const runtime of ["cli", "browser"]) {
     if (frameC / frameA > 1.1 && frameC - frameA > 0.25) fail(`${key} committed frame p95 policy`);
     if (
       comparison.pairedMedianRatio > limit ||
-      comparison.pairedBootstrapCi95[0] > limit ||
+      comparison.pairedBootstrapCi95[1] > 1.15 ||
       (key === "cli/markdown-toggle-large-history" && comparison.elapsedMedianToMs > 200)
     )
       fail(`${key} committed paired C/A policy`);

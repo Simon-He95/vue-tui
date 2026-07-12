@@ -155,6 +155,13 @@ for (const scenario of scenarios) {
           direction: delta < 0 ? -1 : 1,
         } as const;
       },
+      resetMeasurements() {
+        mountedApi.clearFramePerf();
+        output.writes = 0;
+        output.bytes = 0;
+        output.maxBytes = 0;
+        output.cursorMoves = 0;
+      },
       async waitUntilSettled() {
         const deadline = performance.now() + 15_000;
         let quiet = 0;

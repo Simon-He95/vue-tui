@@ -5,7 +5,10 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { AGENT_CONSOLE_PROFILE_DEFAULTS } from "../examples/agent-console/src/perf-harness.js";
 import { pairedComparison } from "./agent-console-profile-stats.js";
-import { profileInputHashes } from "./agent-console-profile-environment.js";
+import {
+  measurementInputHashes,
+  verificationInputHashes,
+} from "./agent-console-profile-environment.js";
 
 const root = process.cwd();
 const source = resolve(process.argv[2] ?? ".tmp/perf/agent-console-abc/audit.json");
@@ -75,8 +78,10 @@ for (const [name, from, to] of [
 }
 const output = {
   schemaVersion: 4,
-  harnessRef,
-  profileInputs: profileInputHashes(),
+  measurementRef: harnessRef,
+  measurementInputs: measurementInputHashes(),
+  verificationRef: harnessRef,
+  verificationInputs: verificationInputHashes(),
   canonicalConfig: { ...AGENT_CONSOLE_PROFILE_DEFAULTS, runs: 6, orders: audit.orders },
   variants,
   comparisons,

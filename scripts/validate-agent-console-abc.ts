@@ -7,7 +7,7 @@ import {
   AGENT_CONSOLE_PROFILE_DEFAULTS,
   AGENT_CONSOLE_PROFILE_SCENARIOS,
 } from "../examples/agent-console/src/perf-harness.js";
-import { assertPairedPolicy, pairedComparison } from "./agent-console-profile-stats.js";
+import { assertPairedPolicy, median, pairedComparison } from "./agent-console-profile-stats.js";
 const root = resolve(process.argv[2] ?? ".tmp/perf/agent-console-abc");
 const variants = ["A", "B", "C"] as const,
   runtimes = ["cli", "browser"] as const;
@@ -144,6 +144,72 @@ if (!smoke)
           fail(`${runtime}/${scenario} corpus differs`);
         }
     }
+    for (const scenario of ["tail-stream-steady", "markdown-stream-steady"]) {
+      const perRound = (variant: string, field: string) =>
+        new Map(
+          raws[variant][runtime]
+            .filter((run: any) => (run.scenario ?? run.name) === scenario)
+            .map((run: any) => [run.round, (run.profileResult ?? run).timing?.[field] ?? 0]),
+        );
+      for (const [field, tolerance] of [
+        ["producerElapsedMs", 100],
+        ["appendIntervalP95Ms", 1],
+        ["maxDeadlineLatenessMs", 5],
+      ] as const) {
+        const before = perRound("A", field),
+          after = perRound("C", field);
+        const ratios = [...before.keys()].map(
+          (round) => (after.get(round) ?? 0) / Math.max(before.get(round) ?? 0, 0.001),
+        );
+        const deltas = [...before.keys()].map(
+          (round) => (after.get(round) ?? 0) - (before.get(round) ?? 0),
+        );
+        if (median(ratios) > 1.1 && median(deltas) > tolerance)
+          fail(`${runtime}/${scenario}/${field} cadence regression`);
+      }
+    }
+    const perRoundLatency = (variant: string, field: string) =>
+      new Map(
+        raws[variant][runtime]
+          .filter((run: any) => (run.scenario ?? run.name) === "stream-scroll-interaction")
+          .map((run: any) => {
+            const values = ((run.profileResult ?? run).diagnostics?.[field] ?? []) as number[];
+            const sorted = [...values].sort((a, b) => a - b);
+            return [run.round, sorted[Math.max(0, Math.ceil(sorted.length * 0.95) - 1)] ?? 0];
+          }),
+      );
+    for (const [field, tolerance] of [
+      ["inputToCommitMs", 1],
+      ["inputToDomFlushMs", 2],
+      ["inputToPaintOpportunityMs", 2],
+    ] as const) {
+      if (runtime === "cli" && field !== "inputToCommitMs") continue;
+      const before = perRoundLatency("A", field),
+        after = perRoundLatency("C", field);
+      const ratios = [...before.keys()].map(
+        (round) => (after.get(round) ?? 0) / (before.get(round) ?? 1),
+      );
+      const deltas = [...before.keys()].map(
+        (round) => (after.get(round) ?? 0) - (before.get(round) ?? 0),
+      );
+      if (median(ratios) > 1.1 && median(deltas) > tolerance)
+        fail(`${runtime}/${field} latency regression`);
+    }
+    if (runtime === "browser")
+      for (const scenario of AGENT_CONSOLE_PROFILE_SCENARIOS) {
+        const values = (variant: string) =>
+          raws[variant].browser
+            .filter((run: any) => run.name === scenario)
+            .flatMap((run: any) => run.timing?.longTasks ?? []);
+        const aTasks = values("A"),
+          cTasks = values("C");
+        const total = (items: number[]) => items.reduce((sum, value) => sum + value, 0);
+        if (
+          cTasks.length > aTasks.length &&
+          total(cTasks) > Math.max(total(aTasks) * 1.1, total(aTasks) + 5)
+        )
+          fail(`browser/${scenario} long-task regression`);
+      }
     for (const scenario of ["tail-append-burst-framed", "tail-append-burst-single-task"]) {
       const key = `${runtime}/${scenario}`;
       const replayPolicy =
@@ -180,10 +246,10 @@ if (!smoke)
         key === "cli/markdown-toggle-large-history"
           ? {
               maxPairedMedianRatio: 1.15,
-              rejectWhenBootstrapLowerExceeds: 1.15,
+              maxBootstrapUpper: 1.15,
               maxAbsoluteMs: 200,
             }
-          : { maxPairedMedianRatio: 1.1, rejectWhenBootstrapLowerExceeds: 1.1 };
+          : { maxPairedMedianRatio: 1.1, maxBootstrapUpper: 1.15 };
       assertPairedPolicy(`${key} C/A`, comparison, policy);
       if (
         c.frameP95Ms.median / a.frameP95Ms.median > 1.1 &&

@@ -3,12 +3,12 @@ import type { AgentConsoleApi } from "./AgentConsoleSurface";
 import { onBeforeUnmount } from "vue";
 import { TerminalProvider } from "@simon_he/vue-tui";
 import { AgentConsoleSurface, AGENT_CONSOLE_LAYOUT } from "./AgentConsoleSurface";
-import { installAgentConsoleBrowserPerf } from "./perf-browser-harness";
 import { consoleDefaultStyle, domPalette } from "./theme";
 
 let removePerfHarness: (() => void) | null = null;
-function handleReady(api: AgentConsoleApi): void {
+async function handleReady(api: AgentConsoleApi): Promise<void> {
   if (!new URLSearchParams(window.location.search).has("profile")) return;
+  const { installAgentConsoleBrowserPerf } = await import("./perf-browser-harness");
   removePerfHarness?.();
   removePerfHarness = installAgentConsoleBrowserPerf(api);
 }

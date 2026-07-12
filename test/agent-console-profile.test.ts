@@ -3,6 +3,10 @@ import { AGENT_CONSOLE_PROFILE_SCENARIOS } from "../examples/agent-console/src/p
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import {
+  measurementInputHashes,
+  verificationInputHashes,
+} from "../scripts/agent-console-profile-environment.js";
+import {
   assertPairedPolicy,
   median,
   pairedComparison,
@@ -107,6 +111,19 @@ describe("Agent Console profile harness", () => {
       },
     );
     expect(output.trim()).toContain("/dist/cli.js");
+  });
+
+  it("separates measurement inputs from verification inputs", () => {
+    expect(measurementInputHashes()).toHaveProperty("examples/agent-console/src/perf-harness.ts");
+    expect(measurementInputHashes()).not.toHaveProperty(
+      "scripts/check-agent-console-profile-baseline.ts",
+    );
+    expect(verificationInputHashes()).toHaveProperty(
+      "scripts/check-agent-console-profile-baseline.ts",
+    );
+    expect(verificationInputHashes()).not.toHaveProperty(
+      "examples/agent-console/src/perf-harness.ts",
+    );
   });
 
   it("summarizes frame distributions and coalescing", () => {

@@ -51,7 +51,11 @@ async function settle(turns = 4): Promise<void> {
   }
 }
 
-function browserAdapter(api: AgentConsoleApi, getSamples: () => readonly FramePerfSample[]) {
+function browserAdapter(
+  api: AgentConsoleApi,
+  getSamples: () => readonly FramePerfSample[],
+  reset: () => void,
+) {
   return {
     api,
     requiresDomFlush: true,
@@ -118,6 +122,7 @@ function browserAdapter(api: AgentConsoleApi, getSamples: () => readonly FramePe
         direction: (delta < 0 ? -1 : 1) as -1 | 1,
       };
     },
+    resetMeasurements: reset,
     async waitUntilSettled() {
       const deadline = performance.now() + 15_000;
       let quiet = 0;
@@ -171,20 +176,21 @@ export function installAgentConsoleBrowserPerf(api: AgentConsoleApi): () => void
   };
   requestAnimationFrame(pollRenderer);
   const unsubscribeFramePerf = api.subscribeFramePerf((sample) => samples.push(sample));
+  const resetMeasurements = () => {
+    samples = [];
+    domFlushSamples = [];
+    lastFlushStartedAt =
+      api.getRendererDebugStats()?.flush.last?.startedAt ?? Number.NEGATIVE_INFINITY;
+    const rendererBaseline = rendererTotals();
+    rendererFlushBaseline = rendererBaseline.flushCount;
+    rendererRowBaseline = rendererBaseline.rowRender;
+    api.clearFramePerf();
+    performance.clearMarks();
+    performance.clearMeasures();
+  };
   const harness: AgentConsoleBrowserPerfApi = {
     api,
-    reset() {
-      samples = [];
-      domFlushSamples = [];
-      lastFlushStartedAt =
-        api.getRendererDebugStats()?.flush.last?.startedAt ?? Number.NEGATIVE_INFINITY;
-      const rendererBaseline = rendererTotals();
-      rendererFlushBaseline = rendererBaseline.flushCount;
-      rendererRowBaseline = rendererBaseline.rowRender;
-      api.clearFramePerf();
-      performance.clearMarks();
-      performance.clearMeasures();
-    },
+    reset: resetMeasurements,
     async seed(count) {
       api.seed(count);
       await settle(8);
@@ -218,13 +224,13 @@ export function installAgentConsoleBrowserPerf(api: AgentConsoleApi): () => void
     },
     prepareScenario(options) {
       return prepareAgentConsoleProfile(
-        browserAdapter(api, () => samples),
+        browserAdapter(api, () => samples, resetMeasurements),
         options,
       );
     },
     runPreparedScenario(scenario, prepared, options) {
       return runPreparedAgentConsoleProfileScenario(
-        browserAdapter(api, () => samples),
+        browserAdapter(api, () => samples, resetMeasurements),
         scenario,
         prepared,
         options,

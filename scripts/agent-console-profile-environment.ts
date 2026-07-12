@@ -39,26 +39,37 @@ export function hashFileTree(paths: readonly string[]): string {
   }
   return hash.digest("hex");
 }
-export const AGENT_CONSOLE_PROFILE_INPUTS = [
+export const AGENT_CONSOLE_MEASUREMENT_INPUTS = [
   "examples/agent-console/src/AgentConsoleSurface.ts",
+  "examples/agent-console/src/mock-agent-stream.ts",
   "examples/agent-console/src/perf-browser-harness.ts",
   "examples/agent-console/src/perf-harness.ts",
   "examples/agent-console/src/transcript-store.ts",
+  "examples/agent-console/vite.config.ts",
   "scripts/profile-agent-console-abc.ts",
   "scripts/profile-agent-console-browser.ts",
   "scripts/profile-agent-console-cli-worker.ts",
   "scripts/profile-agent-console-cli.ts",
+  "scripts/tsconfig.agent-console-profile-dist.json",
+] as const;
+export const AGENT_CONSOLE_VERIFICATION_INPUTS = [
   "scripts/agent-console-profile-environment.ts",
   "scripts/agent-console-profile-stats.ts",
   "scripts/check-agent-console-profile-baseline.ts",
   "scripts/record-agent-console-profile.ts",
   "scripts/summarize-agent-console-profile.ts",
-  "scripts/tsconfig.agent-console-profile-dist.json",
   "scripts/validate-agent-console-abc.ts",
 ] as const;
-export function profileInputHashes() {
-  return Object.fromEntries(AGENT_CONSOLE_PROFILE_INPUTS.map((path) => [path, sha256(path)]));
+function hashes(paths: readonly string[]) {
+  return Object.fromEntries(paths.map((path) => [path, sha256(path)]));
 }
+export const measurementInputHashes = () => hashes(AGENT_CONSOLE_MEASUREMENT_INPUTS);
+export const verificationInputHashes = () => hashes(AGENT_CONSOLE_VERIFICATION_INPUTS);
+/** Compatibility aggregate for callers outside the profile recorder. */
+export const profileInputHashes = () => ({
+  ...measurementInputHashes(),
+  ...verificationInputHashes(),
+});
 export function agentConsoleProfileEnvironment(
   artifacts: readonly string[],
   trees: readonly string[] = [],
@@ -72,6 +83,6 @@ export function agentConsoleProfileEnvironment(
     cpu: { model: cpus()[0]?.model ?? "unknown", cores: cpus().length },
     artifactHashes: Object.fromEntries(artifacts.map((path) => [path, sha256(path)])),
     artifactTreeHash: hashFileTree(trees),
-    profileInputs: profileInputHashes(),
+    measurementInputs: measurementInputHashes(),
   };
 }
