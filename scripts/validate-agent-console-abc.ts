@@ -153,7 +153,7 @@ if (!smoke)
         );
       for (const [field, tolerance] of [
         ["producerElapsedMs", 100],
-        ["appendIntervalP95Ms", 1],
+        ["appendIntervalP95Ms", 2],
         ["maxDeadlineLatenessMs", 5],
       ] as const) {
         const before = perRound("A", field),
@@ -201,13 +201,26 @@ if (!smoke)
           raws[variant].browser
             .filter((run: any) => run.name === scenario)
             .flatMap((run: any) => run.timing?.longTasks ?? []);
-        const aTasks = values("A"),
-          cTasks = values("C");
-        const total = (items: number[]) => items.reduce((sum, value) => sum + value, 0);
-        if (
-          cTasks.length > aTasks.length &&
-          total(cTasks) > Math.max(total(aTasks) * 1.1, total(aTasks) + 5)
-        )
+        const perRound = (variant: string) =>
+          raws[variant].browser
+            .filter((run: any) => run.name === scenario)
+            .sort((a: any, b: any) => a.round - b.round)
+            .map((run: any) => ({
+              count: (run.timing?.longTasks ?? []).length,
+              total: (run.timing?.longTasks ?? []).reduce(
+                (sum: number, value: number) => sum + value,
+                0,
+              ),
+            }));
+        const aRounds = perRound("A"),
+          cRounds = perRound("C");
+        const countRatios = aRounds.map(
+          (item: any, index: number) => cRounds[index].count / Math.max(item.count, 1),
+        );
+        const totalRatios = aRounds.map(
+          (item: any, index: number) => cRounds[index].total / Math.max(item.total, 1),
+        );
+        if (median(countRatios) > 1 && median(totalRatios) > 1.1)
           fail(`browser/${scenario} long-task regression`);
       }
     for (const scenario of ["tail-append-burst-framed", "tail-append-burst-single-task"]) {

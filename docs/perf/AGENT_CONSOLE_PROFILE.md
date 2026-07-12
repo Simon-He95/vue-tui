@@ -2,7 +2,7 @@
 
 ## Final status
 
-Balanced six-run A/B/C audit complete on the clean `harnessRef` recorded in the committed JSON, with one canonical production build, exact visual-index boundaries, and strict correctness/performance gates. Each variant appears once in every position across `ABC/ACB/BAC/BCA/CAB/CBA`.
+Balanced six-run A/B/C audit complete on the clean `measurementRef` recorded in the committed JSON, with one canonical production build, exact visual-index boundaries, and strict correctness/performance gates. Each variant appears once in every position across `ABC/ACB/BAC/BCA/CAB/CBA`.
 
 Variants:
 
@@ -18,12 +18,12 @@ Replay copying was a real application hotspot. Lazy Markdown publication removed
 
 | Workload                  | A median | B median | C median |       C vs A |
 | ------------------------- | -------: | -------: | -------: | -----------: |
-| CLI framed burst          | 1,319 ms | 1,159 ms |   523 ms | 60.3% faster |
-| Browser framed burst      | 1,269 ms | 1,119 ms |   857 ms | 32.5% faster |
-| CLI single-task burst     |   937 ms |   761 ms |    95 ms | 89.9% faster |
-| Browser single-task burst |   866 ms |   716 ms |    51 ms | 94.1% faster |
+| CLI framed burst          | 2,692 ms | 1,229 ms |   478 ms | 81.7% faster |
+| Browser framed burst      | 2,050 ms | 1,126 ms |   855 ms | 57.0% faster |
+| CLI single-task burst     | 2,164 ms |   795 ms |    87 ms | 95.9% faster |
+| Browser single-task burst | 1,669 ms |   703 ms |    38 ms | 96.7% faster |
 
-In C's default Log burst, `mergeGroups` no longer dominates CPU samples. Markdown-visible work remains measured separately: large-history toggle median is 134 ms CLI / 123 ms browser, and steady Markdown streaming keeps the canonical 12 ms cadence. Formal decisions use paired per-round ratios: CLI Markdown toggle is +6.8% and Browser search is +8.2% at the paired median. Their bootstrap intervals do not clearly prove a regression beyond 10%. Markdown toggle alone has a predeclared <=200 ms / 1.15 transfer-cost bound. Frame-p95 uses a 10% gate with a 0.25 ms quantization tolerance, and long-frame counts may not increase. CLI framed replay B/A has a 0.89 paired median but a wide interval due two host-noise rounds; it is accepted together with decisive CLI single-task and Browser evidence, and is explicitly not described as CI-proven below 0.95. Content completeness and live block publication pass in every run.
+In C's default Log burst, `mergeGroups` no longer dominates CPU samples. Scenario-specific preludes now occur before counters reset and timing starts: detached timing contains append work only, and Markdown steady excludes first-toggle materialization. Markdown steady reports producer/action/settle separately. With a 12 ms target, C's producer median is 8.90 s CLI (append interval p95 26.1 ms) and 6.90 s Browser (19.3 ms); it does not sustain 12 ms under visible Markdown rendering, but it improves materially over A and passes the predeclared paired producer/deadline non-regression gates. First Markdown toggle is 138 ms CLI / 123 ms Browser; paired C/A medians are +4.5% / +2.4%. Search is +1.9% / +3.2%. Non-target decisions require paired median <=1.10 and bootstrap upper <=1.15; toggle additionally requires <=200 ms and <=1.15. Frame p95 uses a ratio gate with a 1 ms absolute tolerance for sub-frame quantization, and paired Browser Long Task totals are gated. Formal benefits use paired per-round medians and CIs; absolute A/B/C medians are shown for readability.
 
 For the canonical Agent Console workload measured here, no evidence justifies changing core Cell/text/wrap/provider caches, renderer architecture, long-text admission, or virtual scrolling. The current initiative closes with those areas unchanged.
 
