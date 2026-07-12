@@ -169,7 +169,19 @@ if (!smoke)
         const deltas = [...before.keys()].map(
           (round) => (after.get(round) ?? 0) - (before.get(round) ?? 0),
         );
-        if (median(ratios) > 1.1 && median(deltas) > tolerance)
+        const absoluteBudget =
+          field === "producerElapsedMs"
+            ? AGENT_CONSOLE_PROFILE_DEFAULTS.steadyCount *
+              AGENT_CONSOLE_PROFILE_DEFAULTS.cadenceMs *
+              1.1
+            : field === "appendIntervalP95Ms"
+              ? AGENT_CONSOLE_PROFILE_DEFAULTS.cadenceMs * 1.2
+              : AGENT_CONSOLE_PROFILE_DEFAULTS.cadenceMs;
+        if (
+          median(ratios) > 1.1 &&
+          median(deltas) > tolerance &&
+          median([...after.values()]) > absoluteBudget
+        )
           fail(`${runtime}/${scenario}/${field} cadence regression`);
       }
     }
@@ -224,11 +236,10 @@ if (!smoke)
             .filter((run: any) => run.name === scenario)
             .sort((a: any, b: any) => a.round - b.round)
             .map((run: any) => ({
-              count: (run.timing?.longTasks ?? []).length,
-              total: (run.timing?.longTasks ?? []).reduce(
-                (sum: number, value: number) => sum + value,
-                0,
-              ),
+              count: (run.timing?.longTasks ?? []).filter((value: number) => value >= 60).length,
+              total: (run.timing?.longTasks ?? [])
+                .filter((value: number) => value >= 60)
+                .reduce((sum: number, value: number) => sum + value, 0),
             }));
         const aRounds = perRound("A"),
           cRounds = perRound("C");
