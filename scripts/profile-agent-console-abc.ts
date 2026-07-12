@@ -30,7 +30,7 @@ for (let round = 0; round < orders.length; round++) {
       AGENT_CONSOLE_PROFILE_RUNS: "1",
       AGENT_CONSOLE_PROFILE_VARIANT: variant,
       VUE_TUI_PROFILE_OUTPUT_DIR: output,
-      VUE_TUI_AGENT_CONSOLE_PORT: String(4178 + round * 3 + variants.indexOf(variant as any)),
+      VUE_TUI_AGENT_CONSOLE_PORT: String(45178 + round * 3 + variants.indexOf(variant as any)),
     };
     execFileSync("pnpm", ["run", "profile:agent-console:cli"], {
       cwd: root,
@@ -63,7 +63,7 @@ for (const variant of variants) {
     AGENT_CONSOLE_PROFILE_RUNS: "0",
     AGENT_CONSOLE_PROFILE_VARIANT: variant,
     VUE_TUI_PROFILE_OUTPUT_DIR: output,
-    VUE_TUI_AGENT_CONSOLE_PORT: String(4300 + variants.indexOf(variant)),
+    VUE_TUI_AGENT_CONSOLE_PORT: String(45300 + variants.indexOf(variant)),
   };
   if (!smoke) {
     execFileSync("pnpm", ["run", "profile:agent-console:cli"], {
