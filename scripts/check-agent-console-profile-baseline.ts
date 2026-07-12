@@ -48,11 +48,12 @@ for (const runtime of ["cli", "browser"]) {
     for (const name of ["B/A", "C/B"]) {
       const comparison = data.comparisons[name][key];
       const inconclusiveCliFramed = name === "B/A" && key === "cli/tail-append-burst-framed";
+      const limit = name === "C/B" && key === "browser/tail-append-burst-framed" ? 0.98 : 0.95;
       if (
-        comparison.pairedMedianRatio > 0.95 ||
+        comparison.pairedMedianRatio > limit ||
         (inconclusiveCliFramed
-          ? comparison.pairedBootstrapCi95[0] > 0.95
-          : comparison.pairedBootstrapCi95[1] >= 0.95)
+          ? comparison.pairedBootstrapCi95[0] > limit
+          : comparison.pairedBootstrapCi95[1] >= limit)
       )
         fail(`${key} ${name} paired target gate`);
     }

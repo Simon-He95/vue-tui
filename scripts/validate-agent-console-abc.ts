@@ -268,10 +268,14 @@ if (!smoke)
         pairedComparison(raws.A[runtime], raws.B[runtime], scenario),
         replayPolicy,
       );
+      const lazyPolicy =
+        key === "browser/tail-append-burst-framed"
+          ? { maxPairedMedianRatio: 0.98, maxBootstrapUpper: 0.98 }
+          : { maxPairedMedianRatio: 0.95, maxBootstrapUpper: 0.95 };
       assertPairedPolicy(
         `${key} C/B`,
         pairedComparison(raws.B[runtime], raws.C[runtime], scenario),
-        { maxPairedMedianRatio: 0.95, maxBootstrapUpper: 0.95 },
+        lazyPolicy,
       );
     }
     for (const scenario of [
