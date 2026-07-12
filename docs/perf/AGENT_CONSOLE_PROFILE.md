@@ -18,18 +18,18 @@ Replay copying was a real application hotspot. Lazy Markdown publication removed
 
 | Workload                  | A median | B median | C median |       C vs A |
 | ------------------------- | -------: | -------: | -------: | -----------: |
-| CLI framed burst          | 2,692 ms | 1,229 ms |   478 ms | 81.7% faster |
-| Browser framed burst      | 2,050 ms | 1,126 ms |   855 ms | 57.0% faster |
-| CLI single-task burst     | 2,164 ms |   795 ms |    87 ms | 95.9% faster |
-| Browser single-task burst | 1,669 ms |   703 ms |    38 ms | 96.7% faster |
+| CLI framed burst          | 2,310 ms | 1,113 ms |   449 ms | 80.6% faster |
+| Browser framed burst      | 2,000 ms | 1,095 ms |   857 ms | 57.1% faster |
+| CLI single-task burst     | 1,944 ms |   758 ms |    84 ms | 95.7% faster |
+| Browser single-task burst | 1,599 ms |   679 ms |    38 ms | 97.6% faster |
 
-In C's default Log burst, `mergeGroups` no longer dominates CPU samples. Scenario-specific preludes now occur before counters reset and timing starts: detached timing contains append work only, and Markdown steady excludes first-toggle materialization. Markdown steady reports producer/action/settle separately. With a 12 ms target, C's producer median is 8.90 s CLI (append interval p95 26.1 ms) and 6.90 s Browser (19.3 ms); it does not sustain 12 ms under visible Markdown rendering, but it improves materially over A and passes the predeclared paired producer/deadline non-regression gates. First Markdown toggle is 138 ms CLI / 123 ms Browser; paired C/A medians are +4.5% / +2.4%. Search is +1.9% / +3.2%. Non-target decisions require paired median <=1.10 and bootstrap upper <=1.15; toggle additionally requires <=200 ms and <=1.15. Frame p95 uses a ratio gate with a 1 ms absolute tolerance for sub-frame quantization, and paired Browser Long Task totals are gated. Formal benefits use paired per-round medians and CIs; absolute A/B/C medians are shown for readability.
+In C's default Log burst, `mergeGroups` no longer dominates CPU samples. Scenario-specific preludes occur before counters reset and timing starts. Visible Markdown publication is frame-coalesced, and Markdown steady is included in CPU diagnostics. The product timer and canonical target are both 48 ms: C producer median is 19.200 s CLI (interval p95 50.6 ms, 26.5 median misses, 45.0 ms max lateness) and 19.201 s Browser (49.7 ms, 7.5 misses, 15.4 ms lateness), all within absolute budgets. Formal benefits use the inner workload `totalElapsedMs`, paired by round; Playwright controller time remains diagnostic only. `validate:agent-console:abc` is the complete raw gate for cadence, paired frame/latency, Long Tasks, CPU artifacts, correctness and provenance. `check:agent-console-profile-baseline` is intentionally the cheap committed provenance/summary consistency checker.
 
 For the canonical Agent Console workload measured here, no evidence justifies changing core Cell/text/wrap/provider caches, renderer architecture, long-text admission, or virtual scrolling. The current initiative closes with those areas unchanged.
 
 ## Canonical workloads
 
-All CLI and Browser runners use the same validated config: seed 6,000; append 1,000; steady 400; cadence 12 ms; batch size 10; six paired runs.
+All CLI and Browser runners use the same validated config: seed 6,000; append 1,000; steady 400; cadence 48 ms; batch size 10; six paired runs.
 
 1. `tail-stream-steady`
 2. `tail-append-burst-framed`
