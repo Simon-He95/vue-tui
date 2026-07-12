@@ -153,7 +153,7 @@ Per #119, if runtime regression > 5% proven:
 **Detailed analysis**: See `docs/PHASE3.3_RESULTS.md`
 **Raw data**: `docs/perf/phase3.3-overhead-results.json`, `docs/perf/phase3.3-bundle-sizes.json`
 
-**Next required**:
+**Historical next-required list (resolved by #122/#123):**
 
 - Remediate instrumentation overhead
 - Validate built dist artifacts
@@ -187,7 +187,8 @@ Per #119, if runtime regression > 5% proven:
 
 **Final status**: ✅ Complete — #122 removed production instrumentation overhead; #123 completed the production real-workload profile.
 
-- [x] ⚠️ INCONCLUSIVE - p95: 8/9 scenarios, bundle: measurement incomplete
+- [x] Historical source-path experiment: INCONCLUSIVE
+- [x] Final engineering resolution: PASS / CLOSED BY REMEDIATION (#122 production strip + #123 production workload)
 - [ ] ✅ PASS
 - [ ] ❌ FAIL
 

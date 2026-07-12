@@ -97,6 +97,10 @@ export function parseAgentReplayLog(raw: string): AgentReplayLog {
 
 type AgentConsoleProfileVariant = "A" | "B" | "C";
 function profileVariant(): AgentConsoleProfileVariant {
+  const profileMode =
+    (globalThis as any).__AGENT_CONSOLE_PROFILE_MODE__ === true ||
+    (globalThis as any).process?.env?.AGENT_CONSOLE_PROFILE_MODE === "1";
+  if (!profileMode) return "C";
   const value =
     (globalThis as any).__AGENT_CONSOLE_PROFILE_VARIANT__ ??
     (globalThis as any).process?.env?.AGENT_CONSOLE_PROFILE_VARIANT;

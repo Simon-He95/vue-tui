@@ -37,6 +37,35 @@ for (const runtime of ["cli", "browser"])
     if (data.comparisons["B/A"][key].ratio > 0.95 || data.comparisons["C/B"][key].ratio > 0.95)
       fail(`${key} performance gate`);
   }
+for (const comparison of ["B/A", "C/B", "C/A"])
+  for (const value of Object.values(data.comparisons[comparison]) as any[])
+    if (value.pairedRatios?.length !== 6 || value.pairedBootstrapCi95?.length !== 2)
+      fail(`${comparison} paired evidence`);
+for (const runtime of ["cli", "browser"])
+  for (const scenario of [
+    "tail-stream-steady",
+    "detached-append",
+    "search-large-history",
+    "stream-scroll-interaction",
+    "markdown-toggle-large-history",
+    "markdown-stream-steady",
+  ]) {
+    const key = `${runtime}/${scenario}`,
+      comparison = data.comparisons["C/A"][key];
+    const policy =
+      key === "browser/search-large-history"
+        ? { ratio: 1.15, absolute: 120 }
+        : key === "cli/markdown-toggle-large-history"
+          ? { ratio: 1.15, absolute: 200 }
+          : { ratio: 1.1, absolute: Infinity };
+    if (
+      !["tail-stream-steady", "stream-scroll-interaction", "markdown-stream-steady"].includes(
+        scenario,
+      ) &&
+      (comparison.ratio > policy.ratio || comparison.elapsedMedianToMs > policy.absolute)
+    )
+      fail(`${key} committed C/A policy`);
+  }
 const docs = readFileSync(resolve("docs/perf/AGENT_CONSOLE_PROFILE.md"), "utf8");
 for (const [runtime, label] of [
   ["cli", "CLI"],

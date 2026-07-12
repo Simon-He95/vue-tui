@@ -106,7 +106,7 @@ No per-style Cell cache capacity or eviction change is justified by the currentl
 
 ### Completed: Phase 3 Production Overhead Validation
 
-#122 removed instrumentation from production artifacts and passed built-dist/consumer validation; #119 is closed. #123 completed the production Agent Console profile and accepted only the contained replay-history append optimization. Cache/long-text/provider/renderer-architecture/virtual-scroll remain no-change for the measured workload.
+#122 removed instrumentation from production artifacts and passed built-dist/consumer validation; #119 is closed. #123 completed the production Agent Console profile and accepted two contained Agent Console optimizations: mutable shallow replay-history backing and lazy Markdown-block publication in Log mode. Cache/long-text/provider/renderer-architecture/virtual-scroll remain no-change for the measured workload.
 
 ---
 

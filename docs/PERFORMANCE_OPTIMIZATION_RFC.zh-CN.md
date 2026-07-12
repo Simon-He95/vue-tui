@@ -41,9 +41,9 @@
 
 - ✅ **Phase 1-3 完成** - Unicode correctness、baseline、instrumentation validation 与 production strip 均完成
 - ✅ **Phase 4.0 checkpoint 完成** - Cell-cache 决策：当前证据不足以支持调整，暂不改动
-- ⏳ **Phase 4.1+ 待实施** - 目标 cache 工作负载（若继续 cache 优化）
-- ⚠️ **Phase 3 overhead 验证必需** - 独立于 cache 工作
-- 📊 后续优化应拆分为多个小 PR，每个 PR 配真实性能数据
+- ✅ **Phase 4.1–4.4 当前专项 no-change 关闭** - 仅在未来独立观测到新的 production regression 时重新评估
+- ✅ **Phase 3 overhead 已由 #122 production strip 与 #123 workload closure 解决**
+- 📊 当前专项在 #123 结束；未来独立新证据可开启新的评估，但不存在本专项待实施清单
 - 📊 所有收益预期基于代码审查，需要真实 baseline 数据验证
 
 ---

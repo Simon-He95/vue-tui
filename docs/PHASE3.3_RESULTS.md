@@ -6,6 +6,19 @@
 
 ---
 
+## Status clarification
+
+The source-path experiment below is a **historical conclusion as of 2026-07-10** and remains INCONCLUSIVE on its own terms. The engineering gaps are now closed:
+
+| Historical gap           | Resolution                       |
+| ------------------------ | -------------------------------- |
+| Built dist missing       | #122                             |
+| Consumer closure missing | #122                             |
+| Real workload missing    | #123                             |
+| Disabled-path overhead   | production compile strip in #122 |
+
+**Final engineering status: PASS / CLOSED BY REMEDIATION.**
+
 ## Executive Summary
 
 ### Formal Pre-Registered Result: INCONCLUSIVE

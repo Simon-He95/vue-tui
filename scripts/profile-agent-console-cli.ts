@@ -34,6 +34,7 @@ for (const scenario of AGENT_CONSOLE_PROFILE_SCENARIOS) {
         env: {
           ...process.env,
           VUE_TUI_PROFILE: "",
+          AGENT_CONSOLE_PROFILE_MODE: "1",
           AGENT_CONSOLE_PROFILE_SMOKE: smoke ? "1" : "0",
           AGENT_CONSOLE_PROFILE_SCENARIO: scenario,
           AGENT_CONSOLE_PROFILE_RUN: String(run + 1),
@@ -60,6 +61,7 @@ if (!smoke && process.env.AGENT_CONSOLE_PROFILE_SKIP_CPU !== "1") {
         env: {
           ...process.env,
           VUE_TUI_PROFILE: "",
+          AGENT_CONSOLE_PROFILE_MODE: "1",
           AGENT_CONSOLE_PROFILE_SMOKE: "0",
           AGENT_CONSOLE_PROFILE_SCENARIO: scenario,
           AGENT_CONSOLE_PROFILE_RUN: "cpu",

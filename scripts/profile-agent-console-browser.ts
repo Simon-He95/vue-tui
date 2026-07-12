@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type CDPSession, type Page } from "@playwright/test";
 import { preview, type PreviewServer } from "vite";
@@ -190,6 +190,9 @@ async function main(): Promise<void> {
     cwd: root,
     stdio: "inherit",
     env: { ...process.env, VUE_TUI_PROFILE_DIST: "1" },
+  });
+  cpSync(resolve(root, "examples/agent-console/dist"), resolve(outputDir, "browser-sourcemaps"), {
+    recursive: true,
   });
   const server = await startServer();
   let browser: Browser | null = null;

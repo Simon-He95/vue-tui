@@ -3,7 +3,10 @@ import { nextTick, watch } from "vue";
 import { createSyntheticAgentEvent } from "./mock-agent-stream";
 import { createAgentTranscriptStore } from "./transcript-store";
 
+process.env.AGENT_CONSOLE_PROFILE_VARIANT = "A";
+delete process.env.AGENT_CONSOLE_PROFILE_MODE;
 const store = createAgentTranscriptStore();
+delete process.env.AGENT_CONSOLE_PROFILE_VARIANT;
 const observedLengths: number[] = [];
 const stop = watch(
   () => store.eventLog.value.length,
