@@ -18,10 +18,10 @@ Replay copying was a real application hotspot. Lazy Markdown publication removed
 
 | Workload                  | A median | B median | C median |       C vs A |
 | ------------------------- | -------: | -------: | -------: | -----------: |
-| CLI framed burst          | 2,460 ms | 1,237 ms |   460 ms | 81.0% faster |
-| Browser framed burst      | 2,039 ms | 1,122 ms |   855 ms | 58.0% faster |
-| CLI single-task burst     | 1,908 ms |   814 ms |    79 ms | 95.9% faster |
-| Browser single-task burst | 1,647 ms |   702 ms |    40 ms | 97.6% faster |
+| CLI framed burst          | 2,237 ms | 1,149 ms |   434 ms | 81.0% faster |
+| Browser framed burst      | 1,961 ms | 1,080 ms |   856 ms | 56.3% faster |
+| CLI single-task burst     | 1,928 ms |   745 ms |    82 ms | 95.6% faster |
+| Browser single-task burst | 1,569 ms |   687 ms |    39 ms | 97.5% faster |
 
 In C's default Log burst, `mergeGroups` no longer dominates CPU samples. Scenario-specific preludes occur before counters reset and timing starts. Visible Markdown publication is frame-coalesced, and Markdown steady is included in CPU diagnostics. The canonical synthetic producer target is 64 ms; the product stream default remains 12 ms and is covered separately: C producer median is 25.601 s CLI (interval p95 65.7 ms, 18 median misses, 114.9 ms max lateness) and 25.600 s Browser (65.6 ms, 0 misses, 3.0 ms lateness), all run-level medians within absolute budgets; per-run maxima remain diagnostic. Formal benefits use the inner workload `totalElapsedMs`, paired by round; Playwright controller time remains diagnostic only. `validate:agent-console:abc` is the complete raw gate for cadence, paired frame/latency, Long Tasks, CPU artifacts, correctness and provenance. `check:agent-console-profile-baseline` is intentionally the cheap committed provenance/summary consistency checker.
 
