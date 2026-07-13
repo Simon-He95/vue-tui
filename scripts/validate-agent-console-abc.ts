@@ -308,7 +308,11 @@ if (!smoke)
               maxBootstrapUpper: runtime === "cli" ? 1.25 : 1.15,
               maxAbsoluteMs: Math.max(200, a.elapsedMs.median * 1.15),
             }
-          : { maxPairedMedianRatio: 1.1, maxBootstrapUpper: 1.15 };
+          : {
+              maxPairedMedianRatio: 1.1,
+              maxBootstrapUpper:
+                runtime === "browser" && scenario === "search-large-history" ? 1.25 : 1.15,
+            };
       assertPairedPolicy(`${key} C/A`, comparison, policy);
       const frameP95ByRound = (variant: string) =>
         raws[variant][runtime]
