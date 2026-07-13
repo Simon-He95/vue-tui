@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createMarkdownPublicationController } from "../examples/agent-console/src/AgentConsoleSurface.js";
+import { createMarkdownPublicationController } from "../examples/agent-console/src/markdown-publication-controller.js";
 
 function harness(result: boolean | undefined = true) {
   let mode: "log" | "markdown" = "markdown";

@@ -43,6 +43,7 @@ export const AGENT_CONSOLE_MEASUREMENT_INPUTS = [
   "examples/agent-console/src/AgentConsoleSurface.ts",
   "examples/agent-console/src/App.vue",
   "examples/agent-console/src/main.ts",
+  "examples/agent-console/src/markdown-publication-controller.ts",
   "examples/agent-console/src/mock-agent-stream.ts",
   "examples/agent-console/src/perf-browser-harness.ts",
   "examples/agent-console/src/perf-harness.ts",

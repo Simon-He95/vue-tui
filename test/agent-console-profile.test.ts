@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createMarkdownPublicationController } from "../examples/agent-console/src/AgentConsoleSurface.js";
+import { createMarkdownPublicationController } from "../examples/agent-console/src/markdown-publication-controller.js";
 import { AGENT_CONSOLE_PROFILE_SCENARIOS } from "../examples/agent-console/src/perf-harness.js";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
