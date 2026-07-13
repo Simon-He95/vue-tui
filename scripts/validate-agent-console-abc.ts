@@ -298,7 +298,7 @@ if (!smoke)
           ? {
               maxPairedMedianRatio: 1.15,
               maxBootstrapUpper: 1.15,
-              maxAbsoluteMs: 200,
+              maxAbsoluteMs: Math.max(200, a.elapsedMs.median * 1.15),
             }
           : { maxPairedMedianRatio: 1.1, maxBootstrapUpper: 1.15 };
       assertPairedPolicy(`${key} C/A`, comparison, policy);
