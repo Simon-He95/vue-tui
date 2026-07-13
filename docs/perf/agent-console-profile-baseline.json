@@ -17,15 +17,15 @@
     "scripts/profile-agent-console-cli.ts": "f990d7d144b6c8830c09339ebb8145624569eff85dbee9046ad122edbaa01544",
     "scripts/tsconfig.agent-console-profile-dist.json": "43f8b7a5af20c2c15bd025e0e0ee6e6dc35f6bd09a64e07fb6324fdbdfcb10f6"
   },
-  "verificationRef": "84d9caeddeac8f223f09e3416a1089edbe25d292",
+  "verificationRef": "ef4cf141b36f1ce057526de1151e2296be1a5e0f",
   "verificationInputs": {
     "scripts/agent-console-cpu-profile.ts": "20330b5fae6506344a36c5d2703f745a7ac3376f996d50ce54653c41e488de1f",
     "scripts/agent-console-profile-environment.ts": "0e8d6c1be94ef1be0a1eafe2895802f9a68401a751512d5429020a42397b9730",
     "scripts/agent-console-profile-stats.ts": "f8dc7a0408280c015b129941e0dd9bf18c978f976effb596691ad45a84011736",
-    "scripts/check-agent-console-profile-baseline.ts": "a47b819e9d67a7210350dd907c03c16c178e1dc4ec09e8bc5abb0b821e1159b0",
+    "scripts/check-agent-console-profile-baseline.ts": "b7f6b08e317e00740da467c5f54fcce882b0a6caf2ff0cb0a63ae2af042a6724",
     "scripts/record-agent-console-profile.ts": "65e8a7922c3e7d5fc77dd4af8660935099de4f7aba7a1151ed930b980479ea15",
     "scripts/summarize-agent-console-profile.ts": "1d74b672487b73b81177e2fd352c8afbf4abd46f774af9a464bfcf7e83af3510",
-    "scripts/validate-agent-console-abc.ts": "830aaa38c7dd3e2f09bfc957727427a451d7b5d0ba15486bfe8ba88b5ba6cdd7"
+    "scripts/validate-agent-console-abc.ts": "0c6b4d91cf31536618306445c9bb5c414b58f0f2621820cf712e7227b2592203"
   },
   "canonicalConfig": {
     "seedCount": 6000,
