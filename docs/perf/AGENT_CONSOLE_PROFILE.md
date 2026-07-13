@@ -10,7 +10,7 @@ Variants:
 - **B:** shallow mutable replay backing + eager Markdown publication.
 - **C:** shallow replay backing + lazy Markdown publication (final implementation).
 
-The final implementation keeps both measured optimizations. It does not change Cell/text caches, TLogView architecture, long-text admission, renderer architecture, or virtual scrolling.
+The final implementation keeps all three measured application-level optimizations. It does not change Cell/text caches, TLogView architecture, long-text admission, renderer architecture, or virtual scrolling.
 
 ## Findings and decision
 
@@ -18,12 +18,12 @@ Replay copying was a real application hotspot. Lazy Markdown publication removed
 
 | Workload                  | A median | B median | C median |       C vs A |
 | ------------------------- | -------: | -------: | -------: | -----------: |
-| CLI framed burst          | 2,280 ms | 1,108 ms |   444 ms | 80.4% faster |
-| Browser framed burst      | 2,027 ms | 1,118 ms |   856 ms | 57.8% faster |
-| CLI single-task burst     | 1,883 ms |   741 ms |    82 ms | 95.9% faster |
-| Browser single-task burst | 1,644 ms |   707 ms |    39 ms | 97.7% faster |
+| CLI framed burst          | 2,460 ms | 1,237 ms |   460 ms | 81.0% faster |
+| Browser framed burst      | 2,039 ms | 1,122 ms |   855 ms | 58.0% faster |
+| CLI single-task burst     | 1,908 ms |   814 ms |    79 ms | 95.9% faster |
+| Browser single-task burst | 1,647 ms |   702 ms |    40 ms | 97.6% faster |
 
-In C's default Log burst, `mergeGroups` no longer dominates CPU samples. Scenario-specific preludes occur before counters reset and timing starts. Visible Markdown publication is frame-coalesced, and Markdown steady is included in CPU diagnostics. The canonical synthetic producer target is 64 ms; the product stream default remains 12 ms and is covered separately: C producer median is 25.602 s CLI (interval p95 65.9 ms, 4.5 median misses, 57.5 ms max lateness) and 25.600 s Browser (65.7 ms, 0 misses, 3.0 ms lateness), all run-level medians within absolute budgets; per-run maxima remain diagnostic. Formal benefits use the inner workload `totalElapsedMs`, paired by round; Playwright controller time remains diagnostic only. `validate:agent-console:abc` is the complete raw gate for cadence, paired frame/latency, Long Tasks, CPU artifacts, correctness and provenance. `check:agent-console-profile-baseline` is intentionally the cheap committed provenance/summary consistency checker.
+In C's default Log burst, `mergeGroups` no longer dominates CPU samples. Scenario-specific preludes occur before counters reset and timing starts. Visible Markdown publication is frame-coalesced, and Markdown steady is included in CPU diagnostics. The canonical synthetic producer target is 64 ms; the product stream default remains 12 ms and is covered separately: C producer median is 25.601 s CLI (interval p95 65.7 ms, 18 median misses, 114.9 ms max lateness) and 25.600 s Browser (65.6 ms, 0 misses, 3.0 ms lateness), all run-level medians within absolute budgets; per-run maxima remain diagnostic. Formal benefits use the inner workload `totalElapsedMs`, paired by round; Playwright controller time remains diagnostic only. `validate:agent-console:abc` is the complete raw gate for cadence, paired frame/latency, Long Tasks, CPU artifacts, correctness and provenance. `check:agent-console-profile-baseline` is intentionally the cheap committed provenance/summary consistency checker.
 
 For the canonical Agent Console workload measured here, no evidence justifies changing core Cell/text/wrap/provider caches, renderer architecture, long-text admission, or virtual scrolling. The current initiative closes with those areas unchanged.
 
@@ -38,9 +38,10 @@ All CLI and Browser runners use the same validated config: seed 6,000; append 1,
 5. `search-large-history`
 6. `stream-scroll-interaction`
 7. `markdown-toggle-large-history`
-8. `markdown-stream-steady`
+8. `markdown-append-burst-framed`
+9. `markdown-stream-steady`
 
-Synthetic append indices use an explicit post-seed cursor. Prepared and final visual indices must be `exact`. Detached append compares the complete visible viewport. Every wheel sample must change scrollTop, match a `reason: scroll` frame, and—on Browser—match a subsequent DOM flush.
+Synthetic append indices use an explicit post-seed cursor. Prepared and final visual indices must be `exact`. Detached append compares the complete visible viewport. The concurrent interaction workload records at least 100 fully correlated wheel samples per run; every recorded sample changes scrollTop, matches a `reason: scroll` frame, and—on Browser—matches a subsequent DOM flush. It drives wheel input independently at 16 ms while the synthetic producer runs at 64 ms and repeatedly reverses direction.
 
 ## Production and diagnostics
 
