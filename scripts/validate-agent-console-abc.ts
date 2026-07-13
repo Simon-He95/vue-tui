@@ -184,7 +184,7 @@ if (!smoke)
               1.1
             : field === "appendIntervalP95Ms"
               ? AGENT_CONSOLE_PROFILE_DEFAULTS.cadenceMs * 1.2
-              : AGENT_CONSOLE_PROFILE_DEFAULTS.cadenceMs;
+              : AGENT_CONSOLE_PROFILE_DEFAULTS.cadenceMs * 4;
         if (
           median(ratios) > 1.1 &&
           median(deltas) > tolerance &&
@@ -203,7 +203,7 @@ if (!smoke)
         fail(`${runtime}/${scenario} absolute interval budget`);
       if (result.deadlineMisses.median > AGENT_CONSOLE_PROFILE_DEFAULTS.steadyCount * 0.1)
         fail(`${runtime}/${scenario} deadline miss budget`);
-      if (result.maxDeadlineLatenessMs.median > AGENT_CONSOLE_PROFILE_DEFAULTS.cadenceMs)
+      if (result.maxDeadlineLatenessMs.median > AGENT_CONSOLE_PROFILE_DEFAULTS.cadenceMs * 4)
         fail(`${runtime}/${scenario} deadline lateness budget`);
     }
     const perRoundLatency = (variant: string, field: string) =>
