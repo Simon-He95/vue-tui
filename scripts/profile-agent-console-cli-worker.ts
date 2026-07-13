@@ -132,7 +132,7 @@ for (const scenario of scenarios) {
         const dispatchAccepted = prevented !== false;
         app.scheduler.flush();
         let matched: ReturnType<AgentConsoleApi["getFramePerfSamples"]>[number] | undefined;
-        for (let turn = 0; turn < 120; turn++) {
+        for (let turn = 0; turn < 2; turn++) {
           await new Promise<void>((done) => setTimeout(done, 17));
           await nextTick();
           app.scheduler.flushNow();

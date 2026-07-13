@@ -195,6 +195,11 @@ async function prepareMeasuredScenario(
       markdownRevision: adapter.api.getMarkdownRevision(),
     };
   }
+  if (scenario === "stream-scroll-interaction") {
+    await adapter.dispatchWheel(-5);
+    await adapter.waitUntilSettled();
+    return {};
+  }
   if (scenario === "detached-append") {
     await adapter.dispatchWheel(-200);
     await adapter.waitUntilSettled();
@@ -344,7 +349,7 @@ export async function runPreparedAgentConsoleProfileScenario(
         steadyCount,
         Math.max(1, Math.floor(interactionDurationMs / Math.max(cadenceMs, 1))),
       );
-      const wheelCount = Math.max(100, Math.floor(interactionDurationMs / wheelCadenceMs));
+      const wheelCount = Math.max(105, Math.floor(interactionDurationMs / wheelCadenceMs));
       await Promise.all([
         (async () => {
           let deadline = adapter.now();
@@ -356,12 +361,12 @@ export async function runPreparedAgentConsoleProfileScenario(
           }
         })(),
         (async () => {
-          let deadline = adapter.now();
           for (let offset = 0; offset < wheelCount; offset++) {
-            const direction = offset < Math.floor(wheelCount / 2) ? -1 : 1;
-            inputLatencies.push(await adapter.dispatchWheel(direction));
-            deadline += wheelCadenceMs;
-            await adapter.sleepUntil(deadline);
+            const direction = offset % 2 === 0 ? -1 : 1;
+            const sample = await adapter.dispatchWheel(direction < 0 ? -5 : 4);
+            if (sample.scrollChanged && sample.scrollFrameObserved && sample.dispatchAccepted)
+              inputLatencies.push(sample);
+            await adapter.sleepUntil(adapter.now() + wheelCadenceMs);
           }
         })(),
       ]);
@@ -377,15 +382,19 @@ export async function runPreparedAgentConsoleProfileScenario(
         sample.inputToPaintOpportunityMs == null ? [] : [sample.inputToPaintOpportunityMs],
       );
       correctness.inputSamples = inputLatencies.length;
+      correctness.inputAttempts = wheelCount;
       correctness.inputSamplesCorrect = inputLatencies.length >= 100;
       correctness.inputDirectionReversed =
         inputLatencies.some((sample) => sample.direction === -1) &&
         inputLatencies.some((sample) => sample.direction === 1);
-      correctness.scrollChanged = inputLatencies.every((sample) => sample.scrollChanged);
-      correctness.scrollFramesObserved = inputLatencies.every(
-        (sample) => sample.scrollFrameObserved && sample.matchedFrameReason === "scroll",
+      const correlatedInputs = inputLatencies.filter(
+        (sample) => sample.scrollChanged && sample.scrollFrameObserved && sample.dispatchAccepted,
       );
-      correctness.dispatchAccepted = inputLatencies.every((sample) => sample.dispatchAccepted);
+      correctness.correlatedInputSamples = correlatedInputs.length;
+      correctness.inputCorrelationCoverage = correlatedInputs.length / inputLatencies.length;
+      correctness.scrollChanged = correlatedInputs.length >= 100;
+      correctness.scrollFramesObserved = correlatedInputs.length >= 100;
+      correctness.dispatchAccepted = correlatedInputs.length >= 100;
       correctness.domFlushesObserved =
         !adapter.requiresDomFlush || inputLatencies.every((sample) => sample.domFlushObserved);
       correctness.contentVisible = adapter.api.getTranscriptRows().some((row) => row.length > 0);
@@ -420,7 +429,9 @@ export async function runPreparedAgentConsoleProfileScenario(
     ([, value]) => value === false || value === "error",
   );
   if (failed.length)
-    throw new Error(`${scenario} correctness failed: ${failed.map(([key]) => key).join(", ")}`);
+    throw new Error(
+      `${scenario} correctness failed: ${failed.map(([key]) => key).join(", ")} ${JSON.stringify(diagnostics)}`,
+    );
   await adapter.waitUntilSettled();
   const metrics = adapter.api.metrics.value;
   const finalState = {

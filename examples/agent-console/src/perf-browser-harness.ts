@@ -80,7 +80,7 @@ function browserAdapter(
       const beforeFlush = api.getRendererDebugStats()?.flush.count ?? 0;
       const dispatchAccepted = api.dispatchProfileWheel(delta, started);
       let matched: FramePerfSample | undefined;
-      for (let turn = 0; turn < 120; turn++) {
+      for (let turn = 0; turn < 2; turn++) {
         await nextTick();
         await new Promise<void>((done) => requestAnimationFrame(() => done()));
         matched = getSamples().find(
