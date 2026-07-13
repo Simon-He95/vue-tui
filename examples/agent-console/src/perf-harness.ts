@@ -196,7 +196,7 @@ async function prepareMeasuredScenario(
     };
   }
   if (scenario === "stream-scroll-interaction") {
-    await adapter.dispatchWheel(-5);
+    await adapter.dispatchWheel(-20);
     await adapter.waitUntilSettled();
     return {};
   }
@@ -343,13 +343,13 @@ export async function runPreparedAgentConsoleProfileScenario(
         adapter.api.getMarkdownRevision() - (scenarioPrepared.markdownRevision ?? 0);
     } else if (scenario === "stream-scroll-interaction") {
       const inputLatencies: AgentConsoleProfileInputLatency[] = [];
-      const interactionDurationMs = 3_000;
-      const wheelCadenceMs = 30;
+      const interactionDurationMs = 4_000;
+      const wheelCadenceMs = 16;
       const producerCount = Math.min(
         steadyCount,
         Math.max(1, Math.floor(interactionDurationMs / Math.max(cadenceMs, 1))),
       );
-      const wheelCount = Math.max(105, Math.floor(interactionDurationMs / wheelCadenceMs));
+      const wheelCount = Math.max(250, Math.floor(interactionDurationMs / wheelCadenceMs));
       await Promise.all([
         (async () => {
           let deadline = adapter.now();
@@ -361,13 +361,18 @@ export async function runPreparedAgentConsoleProfileScenario(
           }
         })(),
         (async () => {
-          for (let offset = 0; offset < wheelCount; offset++) {
-            const direction = offset % 2 === 0 ? -1 : 1;
-            const sample = await adapter.dispatchWheel(direction < 0 ? -5 : 4);
+          let deadline = adapter.now();
+          let attempts = 0;
+          while (inputLatencies.length < 100 && attempts < wheelCount) {
+            const direction = inputLatencies.length % 2 === 0 ? -1 : 1;
+            const sample = await adapter.dispatchWheel(direction * 5);
+            attempts++;
             if (sample.scrollChanged && sample.scrollFrameObserved && sample.dispatchAccepted)
               inputLatencies.push(sample);
-            await adapter.sleepUntil(adapter.now() + wheelCadenceMs);
+            deadline += wheelCadenceMs;
+            await adapter.sleepUntil(deadline);
           }
+          diagnostics.inputAttempts = attempts;
         })(),
       ]);
       diagnostics.interactionDurationMs = interactionDurationMs;
@@ -382,7 +387,7 @@ export async function runPreparedAgentConsoleProfileScenario(
         sample.inputToPaintOpportunityMs == null ? [] : [sample.inputToPaintOpportunityMs],
       );
       correctness.inputSamples = inputLatencies.length;
-      correctness.inputAttempts = wheelCount;
+      correctness.inputAttempts = Number(diagnostics.inputAttempts);
       correctness.inputSamplesCorrect = inputLatencies.length >= 100;
       correctness.inputDirectionReversed =
         inputLatencies.some((sample) => sample.direction === -1) &&
@@ -418,7 +423,7 @@ export async function runPreparedAgentConsoleProfileScenario(
       : scenario === "markdown-append-burst-framed"
         ? appendCount
         : scenario === "stream-scroll-interaction"
-          ? Math.min(steadyCount, Math.max(1, Math.floor(3_000 / Math.max(cadenceMs, 1))))
+          ? Math.min(steadyCount, Math.max(1, Math.floor(4_000 / Math.max(cadenceMs, 1))))
           : scenario === "tail-stream-steady" || scenario === "markdown-stream-steady"
             ? steadyCount
             : appendCount;
