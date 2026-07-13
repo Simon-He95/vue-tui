@@ -9,6 +9,7 @@ export const AGENT_CONSOLE_PROFILE_SCENARIOS = [
   "search-large-history",
   "stream-scroll-interaction",
   "markdown-toggle-large-history",
+  "markdown-append-burst-framed",
   "markdown-stream-steady",
 ] as const;
 export type AgentConsoleProfileScenario = (typeof AGENT_CONSOLE_PROFILE_SCENARIOS)[number];
@@ -178,18 +179,20 @@ async function appendSteady(
 interface ScenarioPreparedState {
   viewportAnchor?: ViewportAnchor;
   markdownLength?: number;
-  markdownPublicationCount?: number;
+  markdownMaterializationCount?: number;
+  markdownRevision?: number;
 }
 async function prepareMeasuredScenario(
   adapter: AgentConsoleProfileAdapter,
   scenario: AgentConsoleProfileScenario,
 ): Promise<ScenarioPreparedState> {
-  if (scenario === "markdown-stream-steady") {
+  if (scenario === "markdown-stream-steady" || scenario === "markdown-append-burst-framed") {
     adapter.api.mode.value = "markdown";
     await adapter.waitUntilSettled();
     return {
       markdownLength: adapter.api.getMarkdownLength(),
-      markdownPublicationCount: adapter.api.getMarkdownPublicationCount(),
+      markdownMaterializationCount: adapter.api.getMarkdownMaterializationCount(),
+      markdownRevision: adapter.api.getMarkdownRevision(),
     };
   }
   if (scenario === "detached-append") {
@@ -285,12 +288,35 @@ export async function runPreparedAgentConsoleProfileScenario(
       const markdownLength = adapter.api.getMarkdownLength();
       adapter.api.mode.value = "markdown";
       await adapter.waitUntilSettled();
-      const blockCount = adapter.api.getMarkdownBlockCount();
+      const blockCount = adapter.api.peekMarkdownBlockCount();
       correctness.markdownMode = adapter.api.mode.value === "markdown";
       correctness.markdownContentComplete = markdownLength > 0 && blockCount > 0;
       correctness.contentVisible = adapter.api.getTranscriptRows().some((row) => row.length > 0);
       diagnostics.markdownLength = markdownLength;
       diagnostics.markdownBlockCount = blockCount;
+    } else if (scenario === "markdown-append-burst-framed") {
+      adapter.api.mode.value = "markdown";
+      await adapter.waitUntilSettled();
+      adapter.api.resetMarkdownMaterializationCount();
+      const revisionBefore = adapter.api.getMarkdownRevision();
+      const marker = "LATESTMARKDOWNBURSTMARKER123";
+      for (let offset = 0; offset < appendCount; offset++) {
+        adapter.api.applyProfileEvent({
+          type: "assistant-delta",
+          text: offset === appendCount - 1 ? marker : " burst",
+        });
+      }
+      await adapter.yieldFrame();
+      await adapter.waitUntilSettled();
+      const mutations = adapter.api.getMarkdownRevision() - revisionBefore;
+      const materializations = adapter.api.getMarkdownMaterializationCount();
+      const published = JSON.stringify(adapter.api.peekMarkdownBlocks()).includes(marker);
+      diagnostics.markdownMutations = mutations;
+      diagnostics.markdownMaterializations = materializations;
+      correctness.markdownBurstPublished = published;
+      correctness.markdownBurstMaterializationsValid =
+        materializations > 0 && materializations <= mutations;
+      correctness.markdownBurstBlocksPassive = adapter.api.peekMarkdownBlockCount() > 0;
     } else if (scenario === "markdown-stream-steady") {
       const beforeLength = scenarioPrepared.markdownLength!;
       Object.assign(
@@ -300,30 +326,49 @@ export async function runPreparedAgentConsoleProfileScenario(
       const afterLength = adapter.api.getMarkdownLength();
       correctness.markdownMode = adapter.api.mode.value === "markdown";
       correctness.markdownGrew = afterLength > beforeLength;
-      correctness.markdownBlocksPublished = adapter.api.getMarkdownBlockCount() > 0;
+      correctness.markdownBlocksPublished = adapter.api.peekMarkdownBlockCount() > 0;
       correctness.contentVisible = adapter.api.getTranscriptRows().some((row) => row.length > 0);
       diagnostics.markdownLengthBefore = beforeLength;
       diagnostics.markdownLengthAfter = afterLength;
-      diagnostics.markdownBlockCount = adapter.api.getMarkdownBlockCount();
-      diagnostics.markdownPublications =
-        adapter.api.getMarkdownPublicationCount() -
-        (scenarioPrepared.markdownPublicationCount ?? 0);
-      correctness.markdownPublicationCoalesced =
-        Number(diagnostics.markdownPublications) < steadyCount;
-    } else {
+      diagnostics.markdownBlockCount = adapter.api.peekMarkdownBlockCount();
+      diagnostics.markdownMaterializations =
+        adapter.api.getMarkdownMaterializationCount() -
+        (scenarioPrepared.markdownMaterializationCount ?? 0);
+      diagnostics.markdownMutations =
+        adapter.api.getMarkdownRevision() - (scenarioPrepared.markdownRevision ?? 0);
+    } else if (scenario === "stream-scroll-interaction") {
       const inputLatencies: AgentConsoleProfileInputLatency[] = [];
-      let deadline = adapter.now();
-      for (let offset = 0; offset < steadyCount; offset++) {
-        adapter.append(appendStartIndex + offset);
-        if (offset % 8 === 0) {
-          await adapter.yieldTask();
-          await adapter.yieldFrame();
-          inputLatencies.push(await adapter.dispatchWheel(-60));
-        }
-        deadline += cadenceMs;
-        if (cadenceMs > 0) await adapter.sleepUntil(deadline);
-        else await adapter.yieldTask();
-      }
+      const interactionDurationMs = 3_000;
+      const wheelCadenceMs = 30;
+      const producerCount = Math.min(
+        steadyCount,
+        Math.max(1, Math.floor(interactionDurationMs / Math.max(cadenceMs, 1))),
+      );
+      const wheelCount = Math.max(100, Math.floor(interactionDurationMs / wheelCadenceMs));
+      await Promise.all([
+        (async () => {
+          let deadline = adapter.now();
+          for (let offset = 0; offset < producerCount; offset++) {
+            adapter.append(appendStartIndex + offset);
+            deadline += cadenceMs;
+            if (cadenceMs > 0) await adapter.sleepUntil(deadline);
+            else await adapter.yieldTask();
+          }
+        })(),
+        (async () => {
+          let deadline = adapter.now();
+          for (let offset = 0; offset < wheelCount; offset++) {
+            const direction = offset < Math.floor(wheelCount / 2) ? -1 : 1;
+            inputLatencies.push(await adapter.dispatchWheel(direction));
+            deadline += wheelCadenceMs;
+            await adapter.sleepUntil(deadline);
+          }
+        })(),
+      ]);
+      diagnostics.interactionDurationMs = interactionDurationMs;
+      diagnostics.interactionProducerCount = producerCount;
+      diagnostics.wheelCadenceMs = wheelCadenceMs;
+      diagnostics.wheelDirections = inputLatencies.map((sample) => sample.direction);
       diagnostics.inputToCommitMs = inputLatencies.map((sample) => sample.inputToCommitMs);
       diagnostics.inputToDomFlushMs = inputLatencies.flatMap((sample) =>
         sample.inputToDomFlushMs == null ? [] : [sample.inputToDomFlushMs],
@@ -332,7 +377,10 @@ export async function runPreparedAgentConsoleProfileScenario(
         sample.inputToPaintOpportunityMs == null ? [] : [sample.inputToPaintOpportunityMs],
       );
       correctness.inputSamples = inputLatencies.length;
-      correctness.inputSamplesCorrect = inputLatencies.length === Math.ceil(steadyCount / 8);
+      correctness.inputSamplesCorrect = inputLatencies.length >= 100;
+      correctness.inputDirectionReversed =
+        inputLatencies.some((sample) => sample.direction === -1) &&
+        inputLatencies.some((sample) => sample.direction === 1);
       correctness.scrollChanged = inputLatencies.every((sample) => sample.scrollChanged);
       correctness.scrollFramesObserved = inputLatencies.every(
         (sample) => sample.scrollFrameObserved && sample.matchedFrameReason === "scroll",
@@ -351,15 +399,20 @@ export async function runPreparedAgentConsoleProfileScenario(
     unsubscribe();
   }
   const elapsedMs = adapter.now() - started;
-  const finalReplayTotal = adapter.api.replayTotal.value;
+  const finalReplayTotal =
+    scenario === "markdown-append-burst-framed"
+      ? adapter.api.captureReplayLog().events.length
+      : adapter.api.replayTotal.value;
   const expectedAdded =
     scenario === "search-large-history" || scenario === "markdown-toggle-large-history"
       ? 0
-      : scenario === "tail-stream-steady" ||
-          scenario === "stream-scroll-interaction" ||
-          scenario === "markdown-stream-steady"
-        ? steadyCount
-        : appendCount;
+      : scenario === "markdown-append-burst-framed"
+        ? appendCount
+        : scenario === "stream-scroll-interaction"
+          ? Math.min(steadyCount, Math.max(1, Math.floor(3_000 / Math.max(cadenceMs, 1))))
+          : scenario === "tail-stream-steady" || scenario === "markdown-stream-steady"
+            ? steadyCount
+            : appendCount;
   const eventsAdded = finalReplayTotal - initialReplayTotal;
   correctness.eventCount = eventsAdded;
   correctness.eventCountCorrect = eventsAdded === expectedAdded;

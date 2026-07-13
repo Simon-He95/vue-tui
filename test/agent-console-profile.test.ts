@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createMarkdownPublicationController } from "../examples/agent-console/src/AgentConsoleSurface.js";
 import { AGENT_CONSOLE_PROFILE_SCENARIOS } from "../examples/agent-console/src/perf-harness.js";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
@@ -50,6 +51,7 @@ describe("Agent Console profile harness", () => {
       "search-large-history",
       "stream-scroll-interaction",
       "markdown-toggle-large-history",
+      "markdown-append-burst-framed",
       "markdown-stream-steady",
     ]);
   });
@@ -136,6 +138,64 @@ describe("Agent Console profile harness", () => {
     expect(verificationInputHashes()).not.toHaveProperty(
       "examples/agent-console/src/perf-harness.ts",
     );
+  });
+
+  it("coalesces Markdown publication and accepts legacy undefined", () => {
+    let mode: "log" | "markdown" = "markdown";
+    let task: (() => void) | undefined;
+    let syncs = 0;
+    const controller = createMarkdownPublicationController({
+      scheduler: {
+        queueFrameTask(next) {
+          task = next.run;
+          return undefined;
+        },
+      },
+      getMode: () => mode,
+      syncMarkdownBlocks: () => syncs++,
+    });
+    controller.request();
+    controller.request();
+    expect(syncs).toBe(0);
+    task?.();
+    expect(syncs).toBe(1);
+    mode = "log";
+    controller.request();
+    expect(syncs).toBe(1);
+  });
+
+  it("cancels hidden, disposed, and stale Markdown publication tasks", () => {
+    let mode: "log" | "markdown" = "markdown";
+    const tasks: Array<() => void> = [];
+    const cancelled: string[] = [];
+    let syncs = 0;
+    const controller = createMarkdownPublicationController({
+      scheduler: {
+        queueFrameTask(task) {
+          tasks.push(task.run);
+          return true;
+        },
+        cancelFrameTask(id) {
+          cancelled.push(id);
+          return true;
+        },
+      },
+      getMode: () => mode,
+      syncMarkdownBlocks: () => syncs++,
+    });
+    controller.request();
+    mode = "log";
+    controller.setMode(mode);
+    tasks[0]?.();
+    expect(syncs).toBe(0);
+    expect(cancelled.length).toBeGreaterThan(0);
+    mode = "markdown";
+    controller.setMode(mode);
+    expect(syncs).toBe(1);
+    controller.request();
+    controller.dispose();
+    tasks.at(-1)?.();
+    expect(syncs).toBe(1);
   });
 
   it("summarizes frame distributions and coalescing", () => {

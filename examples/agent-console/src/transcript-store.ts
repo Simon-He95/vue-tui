@@ -37,7 +37,12 @@ export type AgentTranscriptStore = Readonly<{
   logStore: AppendOnlyLogStore;
   markdown: Ref<string>;
   markdownBlocks: Ref<readonly TuiMarkdownBlock[]>;
+  peekMarkdownBlocks: () => readonly TuiMarkdownBlock[];
+  peekMarkdownBlockCount: () => number;
   syncMarkdownBlocks: () => readonly TuiMarkdownBlock[];
+  getMarkdownMaterializationCount: () => number;
+  resetMarkdownMaterializationCount: () => void;
+  getMarkdownRevision: () => number;
   links: Ref<readonly TranscriptLink[]>;
   stats: Ref<TranscriptStats>;
   eventLog: Ref<readonly AgentEvent[]>;
@@ -118,6 +123,8 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
     eagerMarkdown ? markdownSource.blocks : [],
   );
   let markdownBlocksDirty = variant === "C";
+  let markdownMaterializationCount = eagerMarkdown ? 1 : 0;
+  let markdownRevision = 0;
   const links = ref<readonly TranscriptLink[]>([]);
   const stats = ref<TranscriptStats>({
     chunks: 0,
@@ -144,22 +151,45 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
   function appendMarkdown(text: string): void {
     markdown.value += text;
     markdownSource.appendDelta(text);
+    markdownRevision++;
     markdownBlocksDirty = true;
     if (eagerMarkdown) syncMarkdownBlocks();
   }
 
   function finalizeMarkdownBlock(): void {
     markdownSource.finalizeBlock();
+    markdownRevision++;
     markdownBlocksDirty = true;
     if (eagerMarkdown) syncMarkdownBlocks();
+  }
+
+  function peekMarkdownBlocks(): readonly TuiMarkdownBlock[] {
+    return markdownBlocks.value;
+  }
+
+  function peekMarkdownBlockCount(): number {
+    return markdownBlocks.value.length;
   }
 
   function syncMarkdownBlocks(): readonly TuiMarkdownBlock[] {
     if (markdownBlocksDirty) {
       markdownBlocks.value = markdownSource.blocks;
       markdownBlocksDirty = false;
+      markdownMaterializationCount++;
     }
     return markdownBlocks.value;
+  }
+
+  function getMarkdownMaterializationCount(): number {
+    return markdownMaterializationCount;
+  }
+
+  function resetMarkdownMaterializationCount(): void {
+    markdownMaterializationCount = 0;
+  }
+
+  function getMarkdownRevision(): number {
+    return markdownRevision;
   }
 
   function closeAssistantLine(): void {
@@ -185,8 +215,15 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
     logStore.clear();
     markdown.value = "";
     markdownSource.clear();
+    markdownRevision = 0;
     markdownBlocksDirty = true;
-    markdownBlocks.value = eagerMarkdown ? markdownSource.blocks : [];
+    if (eagerMarkdown) {
+      markdownBlocks.value = markdownSource.blocks;
+      markdownBlocksDirty = false;
+      markdownMaterializationCount++;
+    } else {
+      markdownBlocks.value = [];
+    }
     links.value = [];
     assistantOpen = false;
     toolFenceOpen = false;
@@ -331,7 +368,12 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
     logStore,
     markdown,
     markdownBlocks,
+    peekMarkdownBlocks,
+    peekMarkdownBlockCount,
     syncMarkdownBlocks,
+    getMarkdownMaterializationCount,
+    resetMarkdownMaterializationCount,
+    getMarkdownRevision,
     links,
     stats,
     eventLog,

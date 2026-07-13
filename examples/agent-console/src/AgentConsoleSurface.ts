@@ -78,7 +78,11 @@ export type AgentConsoleApi = Readonly<{
   searchState: Ref<TLogViewSearchState>;
   seed: (count?: number) => number;
   appendSyntheticChunk: (index: number) => void;
+  applyProfileEvent: (event: AgentEvent) => void;
   appendBurst: (count: number) => Promise<void>;
+  startStream: () => void;
+  stopStream: () => void;
+  getStreamIntervalMs: () => number;
   captureReplayLog: () => AgentReplayLog;
   loadReplayLog: (log: AgentReplayLog, eventIndex?: number) => void;
   seekReplay: (eventIndex: number) => void;
@@ -102,12 +106,79 @@ export type AgentConsoleApi = Readonly<{
   getCopiedText: () => string;
   getInputValue: () => string;
   getTranscriptRows: () => readonly string[];
-  getMarkdownBlockCount: () => number;
-  getMarkdownPublicationCount: () => number;
+  peekMarkdownBlocks: () => readonly unknown[];
+  peekMarkdownBlockCount: () => number;
+  syncMarkdownBlocks: () => readonly unknown[];
+  getMarkdownMaterializationCount: () => number;
+  resetMarkdownMaterializationCount: () => void;
+  getMarkdownRevision: () => number;
   getMarkdownLength: () => number;
   getChromeRows: () => readonly string[];
   getTerminalSnapshot: () => readonly string[];
 }>;
+
+const MARKDOWN_PUBLICATION_TASK_ID = "AgentConsoleSurface:markdown-publication";
+type AgentConsoleMode = "log" | "markdown";
+type MarkdownPublicationScheduler = Readonly<{
+  queueFrameTask: (task: {
+    id: string;
+    reason: "stream";
+    priority: "low";
+    sync: false;
+    run: () => void;
+  }) => boolean | void;
+  cancelFrameTask?: (id: string) => boolean | void;
+}>;
+
+export function createMarkdownPublicationController(options: {
+  scheduler: MarkdownPublicationScheduler;
+  getMode: () => AgentConsoleMode;
+  syncMarkdownBlocks: () => void;
+}) {
+  let publicationVersion = 0;
+  let pending = false;
+  let alive = true;
+  function cancel(): void {
+    publicationVersion++;
+    pending = false;
+    options.scheduler.cancelFrameTask?.(MARKDOWN_PUBLICATION_TASK_ID);
+  }
+  function request(): void {
+    if (!alive || options.getMode() !== "markdown" || pending) return;
+    pending = true;
+    const version = ++publicationVersion;
+    const accepted = options.scheduler.queueFrameTask({
+      id: MARKDOWN_PUBLICATION_TASK_ID,
+      reason: "stream",
+      priority: "low",
+      sync: false,
+      run: () => {
+        if (
+          !alive ||
+          options.getMode() !== "markdown" ||
+          version !== publicationVersion ||
+          !pending
+        )
+          return;
+        pending = false;
+        options.syncMarkdownBlocks();
+      },
+    });
+    if (accepted === false) {
+      pending = false;
+      options.syncMarkdownBlocks();
+    }
+  }
+  function setMode(mode: AgentConsoleMode): void {
+    cancel();
+    if (mode === "markdown" && alive) options.syncMarkdownBlocks();
+  }
+  function dispose(): void {
+    alive = false;
+    cancel();
+  }
+  return { request, setMode, cancel, dispose, isPending: () => pending };
+}
 
 function fit(value: string, width: number): string {
   return padEndByCells(truncate(value, width), width);
@@ -140,10 +211,17 @@ function rowTextFromTerminal(
     .trimEnd();
 }
 
+export const AGENT_CONSOLE_DEFAULT_STREAM_INTERVAL_MS = 12;
+
 export const AgentConsoleSurface = defineComponent({
   name: "AgentConsoleSurface",
   props: {
     autoStart: { type: Boolean, default: false },
+    streamIntervalMs: {
+      type: Number,
+      default: AGENT_CONSOLE_DEFAULT_STREAM_INTERVAL_MS,
+      validator: (value: number) => Number.isFinite(value) && value > 0,
+    },
     onReady: {
       type: Function as PropType<(api: AgentConsoleApi) => void>,
       default: undefined,
@@ -163,7 +241,6 @@ export const AgentConsoleSurface = defineComponent({
     const searchDraft = ref("ERROR");
     const markdownScrollTop = ref(1_000_000);
     const markdownStickToBottom = ref(true);
-    let markdownPublicationCount = 0;
     const metrics = ref<TLogViewScrollMetrics | null>(null);
     const searchState = ref<TLogViewSearchState>(searchStateFor(""));
     const visibleLinks = ref<readonly TLogViewVisibleLink[]>([]);
@@ -508,7 +585,7 @@ export const AgentConsoleSurface = defineComponent({
       streamState.value = "connected";
       transcript.apply({ type: "status", state: "connected" });
       syncReplayCursor();
-      timer = setInterval(applyNextEvent, 64);
+      timer = setInterval(applyNextEvent, props.streamIntervalMs);
     }
 
     function stopStream(): void {
@@ -1107,7 +1184,11 @@ export const AgentConsoleSurface = defineComponent({
       searchState,
       seed,
       appendSyntheticChunk,
+      applyProfileEvent: (event) => transcript.apply(event),
       appendBurst,
+      startStream,
+      stopStream,
+      getStreamIntervalMs: () => props.streamIntervalMs,
       captureReplayLog: transcript.captureReplayLog,
       loadReplayLog,
       seekReplay,
@@ -1157,8 +1238,12 @@ export const AgentConsoleSurface = defineComponent({
         Array.from({ length: AGENT_CONSOLE_LAYOUT.transcript.h }, (_, index) =>
           rowTextFromTerminal(terminalContext.terminal, AGENT_CONSOLE_LAYOUT.transcript.y + index),
         ),
-      getMarkdownBlockCount: () => transcript.syncMarkdownBlocks().length,
-      getMarkdownPublicationCount: () => markdownPublicationCount,
+      peekMarkdownBlocks: () => transcript.peekMarkdownBlocks(),
+      peekMarkdownBlockCount: () => transcript.peekMarkdownBlockCount(),
+      syncMarkdownBlocks: () => transcript.syncMarkdownBlocks(),
+      getMarkdownMaterializationCount: () => transcript.getMarkdownMaterializationCount(),
+      resetMarkdownMaterializationCount: () => transcript.resetMarkdownMaterializationCount(),
+      getMarkdownRevision: () => transcript.getMarkdownRevision(),
       getMarkdownLength: () => transcript.markdown.value.length,
       getChromeRows: () =>
         Array.from({ length: AGENT_CONSOLE_LAYOUT.chrome.h }, (_, index) =>
@@ -1167,42 +1252,21 @@ export const AgentConsoleSurface = defineComponent({
       getTerminalSnapshot: () => terminalContext.terminal.snapshot().lines,
     };
 
-    let markdownPublicationPending = false;
-    let markdownPublicationAlive = true;
-    function publishMarkdownBlocks(): void {
-      markdownPublicationPending = false;
-      transcript.syncMarkdownBlocks();
-      markdownPublicationCount++;
-    }
-    function requestMarkdownBlockPublication(): void {
-      if (mode.value !== "markdown" || markdownPublicationPending) return;
-      markdownPublicationPending = true;
-      const accepted = terminalContext.scheduler.queueFrameTask({
-        id: "AgentConsoleSurface:markdown-publication",
-        reason: "stream",
-        priority: "low",
-        sync: false,
-        run: () => {
-          if (!markdownPublicationAlive) return;
-          publishMarkdownBlocks();
-        },
-      });
-      if (!accepted) publishMarkdownBlocks();
-    }
+    const markdownPublication = createMarkdownPublicationController({
+      scheduler: terminalContext.scheduler,
+      getMode: () => mode.value,
+      syncMarkdownBlocks: () => {
+        transcript.syncMarkdownBlocks();
+      },
+    });
 
     watch(
       () => transcript.markdown.value,
-      () => requestMarkdownBlockPublication(),
+      () => markdownPublication.request(),
       { flush: "sync" },
     );
-    watch(mode, (value, previous) => {
-      if (previous === "markdown" && markdownPublicationPending) publishMarkdownBlocks();
-      if (value === "markdown") publishMarkdownBlocks();
-    });
-    onBeforeUnmount(() => {
-      if (markdownPublicationPending) publishMarkdownBlocks();
-      markdownPublicationAlive = false;
-    });
+    watch(mode, (value) => markdownPublication.setMode(value));
+    onBeforeUnmount(() => markdownPublication.dispose());
 
     watch(
       () => transcript.markdownBlocks.value,

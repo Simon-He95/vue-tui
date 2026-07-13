@@ -4,6 +4,9 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { AGENT_CONSOLE_PROFILE_SCENARIOS } from "../examples/agent-console/src/perf-harness.js";
 import {
+  AGENT_CONSOLE_MEASUREMENT_INPUTS,
+  AGENT_CONSOLE_VERIFICATION_INPUTS,
+  inputHashesAtRef,
   measurementInputHashes,
   verificationInputHashes,
 } from "./agent-console-profile-environment.js";
@@ -19,10 +22,24 @@ if (
   !/^[0-9a-f]{40}$/.test(data.verificationRef)
 )
   fail("schema/provenance refs");
+const measurementAtRef = inputHashesAtRef(data.measurementRef, AGENT_CONSOLE_MEASUREMENT_INPUTS);
+const verificationAtRef = inputHashesAtRef(data.verificationRef, AGENT_CONSOLE_VERIFICATION_INPUTS);
+const refIsAvailable = (values: Record<string, string | null>) =>
+  Object.values(values).every((value) => value != null);
+if (
+  refIsAvailable(measurementAtRef) &&
+  JSON.stringify(data.measurementInputs) !== JSON.stringify(measurementAtRef)
+)
+  fail("measurementRef does not contain the recorded measurement inputs");
+if (
+  refIsAvailable(verificationAtRef) &&
+  JSON.stringify(data.verificationInputs) !== JSON.stringify(verificationAtRef)
+)
+  fail("verificationRef does not contain the recorded verification inputs");
 if (JSON.stringify(data.measurementInputs) !== JSON.stringify(measurementInputHashes()))
-  fail("measurement input content hashes changed");
+  fail("measurement input content hashes changed after measurementRef");
 if (JSON.stringify(data.verificationInputs) !== JSON.stringify(verificationInputHashes()))
-  fail("verification input content hashes changed");
+  fail("verification input content hashes changed after verificationRef");
 for (const variant of ["A", "B", "C"]) {
   const value = data.variants?.[variant];
   if (!value || value.productionRef !== data.measurementRef) fail(`${variant} productionRef`);

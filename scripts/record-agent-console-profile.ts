@@ -6,6 +6,8 @@ import { dirname, resolve } from "node:path";
 import { AGENT_CONSOLE_PROFILE_DEFAULTS } from "../examples/agent-console/src/perf-harness.js";
 import { pairedComparison } from "./agent-console-profile-stats.js";
 import {
+  AGENT_CONSOLE_VERIFICATION_INPUTS,
+  inputHashesAtRef,
   measurementInputHashes,
   verificationInputHashes,
 } from "./agent-console-profile-environment.js";
@@ -26,6 +28,12 @@ for (const variant of ["A", "B", "C"])
       .results,
   };
 const verificationRef = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+const verificationInputs = verificationInputHashes();
+if (
+  JSON.stringify(verificationInputs) !==
+  JSON.stringify(inputHashesAtRef(verificationRef, AGENT_CONSOLE_VERIFICATION_INPUTS))
+)
+  throw new Error(`verification inputs do not match verificationRef ${verificationRef}`);
 let measurementRef: string | undefined;
 for (const variant of ["A", "B", "C"]) {
   const cliEnvironment = JSON.parse(
@@ -85,7 +93,7 @@ const output = {
   measurementRef,
   measurementInputs: measurementInputHashes(),
   verificationRef,
-  verificationInputs: verificationInputHashes(),
+  verificationInputs,
   canonicalConfig: { ...AGENT_CONSOLE_PROFILE_DEFAULTS, runs: 6, orders: audit.orders },
   variants,
   comparisons,

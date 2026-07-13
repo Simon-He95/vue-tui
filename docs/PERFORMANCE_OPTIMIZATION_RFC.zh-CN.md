@@ -1,7 +1,7 @@
 # vue-tui 性能优化 RFC
 
 **文档类型**: RFC / 路线图
-**状态**: 当前性能专项完成（Phase 1–3 complete；Phase 4.0 no-change；真实 workload profile complete in #123）
+**状态**: 当前 Agent Console 性能专项完成（Phase 1–3 complete；Phase 4.0 checkpoint no-change；Phase 4.1–4.4 deferred / unmeasured）
 **创建日期**: 2026-07-09
 **最后更新**: 2026-07-11 (#122 production strip；#123 Agent Console production workload)
 **修订版本**: v6 (final measured decision)
@@ -27,7 +27,7 @@
 
 **Note**: Phase 4.0 completed the Cell-cache tuning decision checkpoint. Current cache implementation unchanged. Comprehensive cache validation (4.1+) and original Phase 4 work (long-text, provider, virtual-scroll) remain deferred or unmeasured.
 
-**Final decision**: #122 removes instrumentation from standard production artifacts. #123 profiles the production Agent Console workload and accepts two measured Agent Console application-level optimizations: mutable shallow replay-history backing and lazy Markdown-block publication in Log mode. Cache、long-text、provider 与 virtual-scroll 均没有 measured workload 证据支持修改；当前性能专项结束。
+**Final decision**: #122 removes instrumentation from standard production artifacts. #123 profiles the production Agent Console workload and accepts two measured Agent Console application-level optimizations: mutable shallow replay-history backing and lazy Markdown-block publication in Log mode. 对本次 Agent Console workload，cache、long-text、provider 与 virtual-scroll 均没有证据支持修改；当前 Agent Console 专项结束，Phase 4.1–4.4 仍为 deferred / unmeasured。
 
 ---
 
@@ -41,9 +41,9 @@
 
 - ✅ **Phase 1-3 完成** - Unicode correctness、baseline、instrumentation validation 与 production strip 均完成
 - ✅ **Phase 4.0 checkpoint 完成** - Cell-cache 决策：当前证据不足以支持调整，暂不改动
-- ✅ **Phase 4.1–4.4 当前专项 no-change 关闭** - 仅在未来独立观测到新的 production regression 时重新评估
+- ⏸️ **Phase 4.1–4.4 保持 deferred / unmeasured** - 本次 Agent Console workload 不支持修改这些区域；未来仅在独立 production evidence 出现时重启评估
 - ✅ **Phase 3 overhead 已由 #122 production strip 与 #123 workload closure 解决**
-- 📊 当前专项在 #123 结束；未来独立新证据可开启新的评估，但不存在本专项待实施清单
+- 📊 当前 Agent Console 专项在 #123 结束；这不是对 Phase 4.1–4.4 的全局实现或永久关闭
 - 📊 所有收益预期基于代码审查，需要真实 baseline 数据验证
 
 ---
@@ -514,7 +514,7 @@ const useRenderPassCache =
 ---
 
 **文档状态**: ✅ Roadmap / 执行记录
-**实施状态**: Phase 1-3 完成；#119 已由 #122 关闭；Phase 4.0 checkpoint 维持 no-change；#123 完成真实 workload profile 与局部 Agent Console history 优化
+**实施状态**: Phase 1-3 完成；#119 已由 #122 关闭；Phase 4.0 checkpoint 维持 no-change；#123 完成 Agent Console workload 与局部应用层优化；Phase 4.1–4.4 仍为 deferred / unmeasured
 **验证方式**: 真实 baseline + profiler 数据驱动
 **Unicode 版本**: 17.0.0
 

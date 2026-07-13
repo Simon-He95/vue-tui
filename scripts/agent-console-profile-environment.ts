@@ -66,6 +66,18 @@ export const AGENT_CONSOLE_VERIFICATION_INPUTS = [
 function hashes(paths: readonly string[]) {
   return Object.fromEntries(paths.map((path) => [path, sha256(path)]));
 }
+export function inputHashesAtRef(ref: string, paths: readonly string[]) {
+  return Object.fromEntries(
+    paths.map((path) => {
+      try {
+        const content = execFileSync("git", ["show", `${ref}:${path}`]);
+        return [path, createHash("sha256").update(content).digest("hex")];
+      } catch {
+        return [path, null];
+      }
+    }),
+  );
+}
 export const measurementInputHashes = () => hashes(AGENT_CONSOLE_MEASUREMENT_INPUTS);
 export const verificationInputHashes = () => hashes(AGENT_CONSOLE_VERIFICATION_INPUTS);
 /** Compatibility aggregate for callers outside the profile recorder. */
