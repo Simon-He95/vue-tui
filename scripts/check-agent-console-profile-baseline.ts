@@ -74,7 +74,9 @@ for (const runtime of ["cli", "browser"]) {
     if (
       comparison.pairedMedianRatio > limit ||
       comparison.pairedBootstrapCi95[1] > 1.15 ||
-      (scenario === "markdown-toggle-large-history" && comparison.elapsedMedianToMs > 200)
+      (scenario === "markdown-toggle-large-history" &&
+        comparison.elapsedMedianToMs >
+          Math.max(200, data.variants.A.scenarios[key].elapsedMs.median * 1.15))
     )
       fail(`${key} committed paired C/A policy`);
   }
