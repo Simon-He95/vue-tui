@@ -17,7 +17,15 @@ export function createMarkdownPublicationController(options: {
   scheduler: MarkdownPublicationScheduler;
   getMode: () => AgentConsoleMode;
   syncMarkdownBlocks: () => void;
+  eagerAfterMs?: number;
+  now?: () => number;
 }) {
+  const now = options.now ?? (() => Date.now());
+  let lastPublicationAt = Number.NEGATIVE_INFINITY;
+  function publish(): void {
+    options.syncMarkdownBlocks();
+    lastPublicationAt = now();
+  }
   let publicationVersion = 0;
   let pending = false;
   let alive = true;
@@ -28,6 +36,10 @@ export function createMarkdownPublicationController(options: {
   }
   function request(): void {
     if (!alive || options.getMode() !== "markdown" || pending) return;
+    if (options.eagerAfterMs != null && now() - lastPublicationAt >= options.eagerAfterMs) {
+      publish();
+      return;
+    }
     pending = true;
     const version = ++publicationVersion;
     const accepted = options.scheduler.queueFrameTask({
@@ -44,17 +56,17 @@ export function createMarkdownPublicationController(options: {
         )
           return;
         pending = false;
-        options.syncMarkdownBlocks();
+        publish();
       },
     });
     if (accepted === false) {
       pending = false;
-      options.syncMarkdownBlocks();
+      publish();
     }
   }
   function setMode(mode: AgentConsoleMode): void {
     cancel();
-    if (mode === "markdown" && alive) options.syncMarkdownBlocks();
+    if (mode === "markdown" && alive) publish();
   }
   function dispose(): void {
     alive = false;

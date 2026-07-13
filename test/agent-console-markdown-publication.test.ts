@@ -36,6 +36,34 @@ describe("Agent Console Markdown publication", () => {
     expect(value.sync).toHaveBeenCalledTimes(1);
   });
 
+  it("bounds visible streaming work without losing burst coalescing", () => {
+    let now = 0;
+    const taskRuns: Array<() => void> = [];
+    const sync = vi.fn();
+    const controller = createMarkdownPublicationController({
+      scheduler: {
+        queueFrameTask(task) {
+          taskRuns.push(task.run);
+          return true;
+        },
+      },
+      getMode: () => "markdown",
+      syncMarkdownBlocks: sync,
+      eagerAfterMs: 32,
+      now: () => now,
+    });
+    controller.setMode("markdown");
+    sync.mockClear();
+    controller.request();
+    controller.request();
+    expect(sync).not.toHaveBeenCalled();
+    taskRuns.at(-1)?.();
+    expect(sync).toHaveBeenCalledTimes(1);
+    now = 40;
+    controller.request();
+    expect(sync).toHaveBeenCalledTimes(2);
+  });
+
   it("falls back synchronously only on explicit rejection", () => {
     const value = harness(false);
     value.controller.request();

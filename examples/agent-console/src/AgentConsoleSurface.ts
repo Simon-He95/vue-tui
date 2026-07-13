@@ -1196,6 +1196,8 @@ export const AgentConsoleSurface = defineComponent({
       syncMarkdownBlocks: () => {
         transcript.syncMarkdownBlocks();
       },
+      eagerAfterMs: 32,
+      now: () => performance.now(),
     });
 
     watch(
