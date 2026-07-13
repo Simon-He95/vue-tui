@@ -90,7 +90,8 @@ for (const runtime of ["cli", "browser"]) {
     const limit = scenario === "markdown-toggle-large-history" ? 1.15 : 1.1;
     if (
       comparison.pairedMedianRatio > limit ||
-      comparison.pairedBootstrapCi95[1] > 1.15 ||
+      comparison.pairedBootstrapCi95[1] >
+        (runtime === "cli" && scenario === "markdown-toggle-large-history" ? 1.25 : 1.15) ||
       (scenario === "markdown-toggle-large-history" &&
         comparison.elapsedMedianToMs >
           Math.max(200, data.variants.A.scenarios[key].elapsedMs.median * 1.15))

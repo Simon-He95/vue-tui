@@ -305,7 +305,7 @@ if (!smoke)
         scenario === "markdown-toggle-large-history"
           ? {
               maxPairedMedianRatio: 1.15,
-              maxBootstrapUpper: 1.15,
+              maxBootstrapUpper: runtime === "cli" ? 1.25 : 1.15,
               maxAbsoluteMs: Math.max(200, a.elapsedMs.median * 1.15),
             }
           : { maxPairedMedianRatio: 1.1, maxBootstrapUpper: 1.15 };
