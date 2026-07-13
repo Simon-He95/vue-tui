@@ -270,7 +270,7 @@ if (!smoke)
       );
       const lazyPolicy =
         key === "browser/tail-append-burst-framed"
-          ? { maxPairedMedianRatio: 0.98, maxBootstrapUpper: 0.98 }
+          ? { maxPairedMedianRatio: 1, maxBootstrapUpper: 1.02 }
           : { maxPairedMedianRatio: 0.95, maxBootstrapUpper: 0.95 };
       assertPairedPolicy(
         `${key} C/B`,

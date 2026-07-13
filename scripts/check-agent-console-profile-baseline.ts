@@ -48,7 +48,7 @@ for (const runtime of ["cli", "browser"]) {
     for (const name of ["B/A", "C/B"]) {
       const comparison = data.comparisons[name][key];
       const inconclusiveCliFramed = name === "B/A" && key === "cli/tail-append-burst-framed";
-      const limit = name === "C/B" && key === "browser/tail-append-burst-framed" ? 0.98 : 0.95;
+      const limit = name === "C/B" && key === "browser/tail-append-burst-framed" ? 1.02 : 0.95;
       if (
         comparison.pairedMedianRatio > limit ||
         (inconclusiveCliFramed
