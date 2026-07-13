@@ -90,6 +90,14 @@ for (const variant of variants) {
           payload.finalState?.visualIndexStatus !== "exact"
         )
           fail(`${variant}/${key} raw visual index is not exact`);
+        if (scenario === "markdown-append-burst-framed" && variant === "C") {
+          const diagnostics = payload.diagnostics ?? {};
+          if (
+            diagnostics.markdownMaterializations > 2 ||
+            diagnostics.markdownMaterializations >= diagnostics.markdownMutations
+          )
+            fail(`${variant}/${key} Markdown publication was not coalesced`);
+        }
         if (scenario === "stream-scroll-interaction") {
           const c = payload.correctness ?? {};
           if (
