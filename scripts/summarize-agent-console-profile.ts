@@ -131,6 +131,8 @@ function summarizeRoot(root: string) {
             (v) => v === false || v === "error",
           ),
       ).length,
+      correctness: runs.map((r) => r.correctness ?? r.profileResult?.correctness ?? {}),
+      diagnostics: runs.map((r) => r.diagnostics ?? r.profileResult?.diagnostics ?? {}),
       elapsedMs: summarizeRunStability(runs.map(elapsedOf)),
       actionElapsedMs: summarizeRunStability(
         runs.map(

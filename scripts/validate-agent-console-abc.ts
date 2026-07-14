@@ -7,6 +7,7 @@ import {
   AGENT_CONSOLE_PROFILE_DEFAULTS,
   AGENT_CONSOLE_PROFILE_SCENARIOS,
 } from "../examples/agent-console/src/perf-harness.js";
+import { agentConsoleScenarioEvidence } from "./agent-console-profile-evidence.js";
 import {
   assertPairedPolicy,
   bootstrapMedianCi95,
@@ -90,7 +91,7 @@ for (const variant of variants) {
           payload.finalState?.visualIndexStatus !== "exact"
         )
           fail(`${variant}/${key} raw visual index is not exact`);
-        if (scenario === "markdown-append-burst-framed" && variant === "C") {
+        if (scenario === "markdown-publication-burst-diagnostic" && variant === "C") {
           const diagnostics = payload.diagnostics ?? {};
           if (
             diagnostics.markdownMaterializations > 2 ||
@@ -98,7 +99,27 @@ for (const variant of variants) {
           )
             fail(`${variant}/${key} Markdown publication was not coalesced`);
         }
-        if (scenario === "stream-scroll-interaction") {
+        if (scenario.startsWith("product-")) {
+          const c = payload.correctness ?? {};
+          if (
+            !c.productStreamInterval12ms ||
+            !c.productStreamTicksExact ||
+            !c.usedProductStreamTimer ||
+            !c.inputPreserved ||
+            payload.diagnostics?.productStreamTicks !== expectedProfile.steadyCount ||
+            payload.diagnostics?.targetCadenceMs !== 12
+          )
+            fail(`${variant}/${key} product timer evidence incomplete`);
+          if (
+            scenario === "product-markdown-stream-12ms" &&
+            (!c.markdownBlocksPublished || !c.finalPausedMarkerPublished)
+          )
+            fail(`${variant}/${key} final Markdown publication missing`);
+        }
+        if (
+          scenario === "stream-scroll-interaction" ||
+          scenario === "product-stream-scroll-interaction-12ms"
+        ) {
           const c = payload.correctness ?? {};
           if (
             !c.scrollChanged ||
@@ -206,37 +227,31 @@ if (!smoke)
       if (result.maxDeadlineLatenessMs.median > AGENT_CONSOLE_PROFILE_DEFAULTS.cadenceMs * 4)
         fail(`${runtime}/${scenario} deadline lateness budget`);
     }
-    const perRoundLatency = (variant: string, field: string) =>
+    const perRoundLatency = (variant: string, scenario: string, field: string) =>
       new Map(
         raws[variant][runtime]
-          .filter((run: any) => (run.scenario ?? run.name) === "stream-scroll-interaction")
+          .filter((run: any) => (run.scenario ?? run.name) === scenario)
           .map((run: any) => {
             const values = ((run.profileResult ?? run).diagnostics?.[field] ?? []) as number[];
             const sorted = [...values].sort((a, b) => a - b);
             return [run.round, sorted[Math.max(0, Math.ceil(sorted.length * 0.95) - 1)] ?? 0];
           }),
       );
-    for (const [field, tolerance, absoluteBudget] of [
-      ["inputToCommitMs", 1, 25],
-      ["inputToDomFlushMs", 2, 35],
-      ["inputToPaintOpportunityMs", 2, 50],
-    ] as const) {
-      if (runtime === "cli" && field !== "inputToCommitMs") continue;
-      const before = perRoundLatency("A", field),
-        after = perRoundLatency("C", field);
-      const ratios = [...before.keys()].map(
-        (round) => (after.get(round) ?? 0) / (before.get(round) ?? 1),
-      );
-      const deltas = [...before.keys()].map(
-        (round) => (after.get(round) ?? 0) - (before.get(round) ?? 0),
-      );
-      if (
-        median(ratios) > 1.1 &&
-        median(deltas) > tolerance &&
-        median([...after.values()]) > absoluteBudget
-      )
-        fail(`${runtime}/${field} latency regression`);
-    }
+    for (const scenario of ["stream-scroll-interaction", "product-stream-scroll-interaction-12ms"])
+      for (const [field, tolerance] of [
+        ["inputToCommitMs", 1],
+        ["inputToDomFlushMs", 2],
+        ["inputToPaintOpportunityMs", 2],
+      ] as const) {
+        if (runtime === "cli" && field !== "inputToCommitMs") continue;
+        const before = perRoundLatency("A", scenario, field),
+          after = perRoundLatency("C", scenario, field);
+        const exceeded = [...before.keys()].map(
+          (round) => (after.get(round) ?? 0) > (before.get(round) ?? 0) * 1.1 + tolerance,
+        );
+        if (exceeded.filter(Boolean).length > expectedRuns / 2)
+          fail(`${runtime}/${scenario}/${field} latency regression`);
+      }
     if (runtime === "browser")
       for (const scenario of AGENT_CONSOLE_PROFILE_SCENARIOS) {
         const perRound = (variant: string) =>
@@ -261,7 +276,8 @@ if (!smoke)
         const cMedianCount = median(cRounds.map((item: any) => item.count));
         if (
           (aMedianCount === 0 && cMedianCount > 0) ||
-          (median(countDeltas) > 0 && median(totalDeltas) > 5)
+          median(countDeltas) > 0 ||
+          median(totalDeltas) > 5
         )
           fail(`browser/${scenario} long-task regression`);
       }
@@ -286,14 +302,7 @@ if (!smoke)
         lazyPolicy,
       );
     }
-    for (const scenario of [
-      "tail-stream-steady",
-      "detached-append",
-      "search-large-history",
-      "stream-scroll-interaction",
-      "markdown-toggle-large-history",
-      "markdown-stream-steady",
-    ]) {
+    for (const scenario of AGENT_CONSOLE_PROFILE_SCENARIOS) {
       const key = `${runtime}/${scenario}`,
         a = summaries.A.scenarios[key],
         c = summaries.C.scenarios[key];
@@ -326,13 +335,17 @@ if (!smoke)
           });
       const frameA = frameP95ByRound("A"),
         frameC = frameP95ByRound("C");
-      const frameRatios = frameA.map(
-        (value: number, index: number) => frameC[index] / Math.max(value, 0.001),
-      );
       const frameDeltas = frameA.map((value: number, index: number) => frameC[index] - value);
-      const frameCi = bootstrapMedianCi95(frameRatios);
-      if ((median(frameRatios) > 1.1 || frameCi[0] > 1.1) && median(frameDeltas) > 2)
-        fail(`${key} paired C/A frame p95 gate`);
+      if (scenario === "tail-append-burst-single-task") {
+        if (median(frameDeltas) > 2) fail(`${key} sparse-frame absolute p95 gate`);
+      } else {
+        const frameRatios = frameA.map(
+          (value: number, index: number) => frameC[index] / Math.max(value, 0.001),
+        );
+        const frameCi = bootstrapMedianCi95(frameRatios);
+        if ((median(frameRatios) > 1.1 || frameCi[1] > 1.15) && median(frameDeltas) > 2)
+          fail(`${key} paired C/A frame p95 gate`);
+      }
       const longFramesByRound = (variant: string) =>
         raws[variant][runtime]
           .filter((run: any) => (run.scenario ?? run.name) === scenario)
@@ -352,8 +365,35 @@ if (!smoke)
           longC[index].reduce((sum: number, value: number) => sum + value, 0) -
           items.reduce((sum: number, value: number) => sum + value, 0),
       );
-      if (median(countDeltas) > 0 && median(durationDeltas) > 5)
+      const aMedianCount = median(longA.map((items: number[]) => items.length));
+      const cMedianCount = median(longC.map((items: number[]) => items.length));
+      if (
+        (aMedianCount === 0 && cMedianCount > 0) ||
+        median(countDeltas) > 0 ||
+        median(durationDeltas) > 5
+      )
         fail(`${key} long-frame regression`);
+
+      const evidence = agentConsoleScenarioEvidence(
+        raws.A[runtime],
+        raws.C[runtime],
+        runtime,
+        scenario,
+      );
+      for (const [field, values] of Object.entries(evidence.amplification) as [string, any][]) {
+        const absoluteSlack =
+          field === "writesPerEvent" || field === "flushesPerEvent"
+            ? 1
+            : field === "domFlushDurationPerEvent"
+              ? 5
+              : 10;
+        if (
+          values.pairedMedianRatio > 1.1 &&
+          values.pairedBootstrapCi95[1] > 1.15 &&
+          values.pairedMedianDelta > absoluteSlack
+        )
+          fail(`${key}/${field} amplification regression`);
+      }
     }
   }
 console.log("Agent Console A/B/C performance and correctness validation passed");

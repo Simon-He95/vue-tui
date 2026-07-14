@@ -50,8 +50,11 @@ describe("Agent Console profile harness", () => {
       "detached-append",
       "search-large-history",
       "stream-scroll-interaction",
+      "product-tail-stream-12ms",
+      "product-markdown-stream-12ms",
+      "product-stream-scroll-interaction-12ms",
       "markdown-toggle-large-history",
-      "markdown-append-burst-framed",
+      "markdown-publication-burst-diagnostic",
       "markdown-stream-steady",
     ]);
   });
@@ -132,9 +135,12 @@ describe("Agent Console profile harness", () => {
     expect(measurementInputHashes()).not.toHaveProperty(
       "scripts/check-agent-console-profile-baseline.ts",
     );
+    expect(measurementInputHashes()).toHaveProperty("examples/agent-console/src/theme.ts");
+    expect(measurementInputHashes()).toHaveProperty("pnpm-lock.yaml");
     expect(verificationInputHashes()).toHaveProperty(
       "scripts/check-agent-console-profile-baseline.ts",
     );
+    expect(verificationInputHashes()).toHaveProperty("scripts/agent-console-profile-evidence.ts");
     expect(verificationInputHashes()).not.toHaveProperty(
       "examples/agent-console/src/perf-harness.ts",
     );

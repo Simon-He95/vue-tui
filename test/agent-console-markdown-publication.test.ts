@@ -36,35 +36,74 @@ describe("Agent Console Markdown publication", () => {
     expect(value.sync).toHaveBeenCalledTimes(1);
   });
 
-  it("bounds visible streaming work without losing burst coalescing", () => {
+  it("enforces a 32ms minimum interval across a continuous 12ms producer", () => {
     let now = 0;
-    const taskRuns: Array<() => void> = [];
-    const sync = vi.fn();
+    const frameTasks: Array<() => void> = [];
+    const timers: Array<{ callback: () => void; deadline: number; cleared: boolean }> = [];
+    const publications: number[] = [];
     const controller = createMarkdownPublicationController({
       scheduler: {
         queueFrameTask(task) {
-          taskRuns.push(task.run);
+          frameTasks.push(task.run);
           return true;
         },
       },
       getMode: () => "markdown",
-      syncMarkdownBlocks: sync,
-      eagerAfterMs: 32,
+      syncMarkdownBlocks: () => publications.push(now),
+      minPublicationIntervalMs: 32,
       now: () => now,
+      setTimer(callback, delayMs) {
+        const timer = { callback, deadline: now + delayMs, cleared: false };
+        timers.push(timer);
+        return timer as unknown as ReturnType<typeof setTimeout>;
+      },
+      clearTimer(handle) {
+        (handle as unknown as (typeof timers)[number]).cleared = true;
+      },
     });
+    const runDueTimers = () => {
+      for (const timer of timers)
+        if (!timer.cleared && timer.deadline <= now) {
+          timer.cleared = true;
+          timer.callback();
+        }
+    };
+    const runFrame = () => frameTasks.shift()?.();
+
     controller.setMode("markdown");
-    sync.mockClear();
+    expect(publications).toEqual([0]);
+
+    now = 12;
     controller.request();
+    now = 16;
+    runDueTimers();
+    runFrame();
+    expect(publications).toEqual([0]);
+
+    now = 24;
     controller.request();
-    expect(sync).not.toHaveBeenCalled();
-    taskRuns.at(-1)?.();
-    expect(sync).toHaveBeenCalledTimes(1);
-    now = 40;
+    now = 32;
+    runDueTimers();
+    runFrame();
+    expect(publications).toEqual([0, 32]);
+
+    now = 36;
     controller.request();
-    expect(sync).toHaveBeenCalledTimes(2);
+    now = 48;
+    runDueTimers();
+    runFrame();
+    expect(publications).toEqual([0, 32]);
+
+    now = 64;
+    runDueTimers();
+    runFrame();
+    expect(publications).toEqual([0, 32, 64]);
+    expect(publications.slice(1).every((value, index) => value - publications[index]! >= 32)).toBe(
+      true,
+    );
   });
 
-  it("falls back synchronously only on explicit rejection", () => {
+  it("falls back synchronously only on explicit scheduler rejection", () => {
     const value = harness(false);
     value.controller.request();
     expect(value.sync).toHaveBeenCalledTimes(1);
@@ -81,11 +120,52 @@ describe("Agent Console Markdown publication", () => {
     expect(value.sync).not.toHaveBeenCalled();
   });
 
-  it("cancels unmount work without materialization", () => {
-    const value = harness();
-    value.controller.request();
-    value.controller.dispose();
-    value.run();
-    expect(value.sync).not.toHaveBeenCalled();
+  it("cancels both timers and frame tasks on mode exit and dispose", () => {
+    let mode: "log" | "markdown" = "markdown";
+    let now = 0;
+    let timer: (() => void) | undefined;
+    let frame: (() => void) | undefined;
+    const clearTimer = vi.fn();
+    const cancelFrameTask = vi.fn();
+    const sync = vi.fn();
+    const controller = createMarkdownPublicationController({
+      scheduler: {
+        queueFrameTask(task) {
+          frame = task.run;
+          return true;
+        },
+        cancelFrameTask,
+      },
+      getMode: () => mode,
+      syncMarkdownBlocks: sync,
+      minPublicationIntervalMs: 32,
+      now: () => now,
+      setTimer(callback) {
+        timer = callback;
+        return 1 as unknown as ReturnType<typeof setTimeout>;
+      },
+      clearTimer,
+    });
+
+    controller.setMode("markdown");
+    sync.mockClear();
+    now = 12;
+    controller.request();
+    mode = "log";
+    controller.setMode("log");
+    expect(clearTimer).toHaveBeenCalledTimes(1);
+    timer?.();
+    frame?.();
+    expect(sync).not.toHaveBeenCalled();
+
+    mode = "markdown";
+    now = 40;
+    controller.setMode("markdown");
+    now = 72;
+    controller.request();
+    controller.dispose();
+    frame?.();
+    expect(cancelFrameTask).toHaveBeenCalled();
+    expect(sync).toHaveBeenCalledTimes(1);
   });
 });

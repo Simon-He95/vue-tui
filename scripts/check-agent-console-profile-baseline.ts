@@ -17,7 +17,7 @@ function fail(message: string): never {
   throw new Error(`Committed Agent Console baseline invalid: ${message}`);
 }
 if (
-  data.schemaVersion !== 4 ||
+  data.schemaVersion !== 5 ||
   !/^[0-9a-f]{40}$/.test(data.measurementRef) ||
   !/^[0-9a-f]{40}$/.test(data.verificationRef)
 )
@@ -53,11 +53,43 @@ for (const variant of ["A", "B", "C"]) {
         result.finalState?.visualIndexStatus !== "exact"
       )
         fail(`${variant}/${runtime}/${scenario} exact state`);
+      if (scenario.startsWith("product-")) {
+        if (
+          result.correctness?.length !== 6 ||
+          result.diagnostics?.length !== 6 ||
+          result.correctness.some(
+            (item: any) =>
+              !item.productStreamInterval12ms ||
+              !item.productStreamTicksExact ||
+              !item.usedProductStreamTimer ||
+              !item.inputPreserved,
+          ) ||
+          result.diagnostics.some(
+            (item: any) =>
+              item.productStreamTicks !== data.canonicalConfig.steadyCount ||
+              item.targetCadenceMs !== 12,
+          )
+        )
+          fail(`${variant}/${runtime}/${scenario} product timer evidence`);
+        if (
+          scenario === "product-markdown-stream-12ms" &&
+          result.correctness.some(
+            (item: any) => !item.markdownBlocksPublished || !item.finalPausedMarkerPublished,
+          )
+        )
+          fail(`${variant}/${runtime}/${scenario} final Markdown publication`);
+      }
     }
 }
 for (const comparison of ["B/A", "C/B", "C/A"])
   for (const value of Object.values(data.comparisons[comparison]) as any[])
-    if (value.pairedRatios?.length !== 6 || value.pairedBootstrapCi95?.length !== 2)
+    if (
+      value.pairedRatios?.length !== 6 ||
+      value.pairedBootstrapCi95?.length !== 2 ||
+      value.evidence?.frameP95?.ratios?.length !== 6 ||
+      value.evidence?.longFrames?.countDeltas?.length !== 6 ||
+      !Object.keys(value.evidence?.amplification ?? {}).length
+    )
       fail(`${comparison} paired evidence`);
 for (const runtime of ["cli", "browser"]) {
   for (const scenario of ["tail-append-burst-framed", "tail-append-burst-single-task"]) {
@@ -77,14 +109,7 @@ for (const runtime of ["cli", "browser"]) {
         fail(`${key} ${name} paired target gate`);
     }
   }
-  for (const scenario of [
-    "tail-stream-steady",
-    "detached-append",
-    "search-large-history",
-    "stream-scroll-interaction",
-    "markdown-toggle-large-history",
-    "markdown-stream-steady",
-  ]) {
+  for (const scenario of AGENT_CONSOLE_PROFILE_SCENARIOS) {
     const key = `${runtime}/${scenario}`,
       comparison = data.comparisons["C/A"][key];
     const limit = scenario === "markdown-toggle-large-history" ? 1.15 : 1.1;
@@ -101,6 +126,47 @@ for (const runtime of ["cli", "browser"]) {
           Math.max(200, data.variants.A.scenarios[key].elapsedMs.median * 1.15))
     )
       fail(`${key} committed paired C/A policy`);
+
+    const evidence = comparison.evidence;
+    const frame = evidence.frameP95;
+    if (
+      scenario === "tail-append-burst-single-task"
+        ? frame.pairedMedianDelta > 2
+        : (frame.pairedMedianRatio > 1.1 || frame.pairedBootstrapCi95[1] > 1.15) &&
+          frame.pairedMedianDelta > 2
+    )
+      fail(`${key} committed frame p95 policy`);
+    const longFrames = evidence.longFrames;
+    if (
+      (longFrames.beforeMedianCount === 0 && longFrames.afterMedianCount > 0) ||
+      (Math.max(...longFrames.countDeltas) > 0 &&
+        longFrames.countDeltas.filter((value: number) => value > 0).length > 3) ||
+      longFrames.totalDurationDeltas.filter((value: number) => value > 5).length > 3
+    )
+      fail(`${key} committed long-frame policy`);
+    if (runtime === "browser") {
+      const longTasks = evidence.longTasks;
+      if (
+        (longTasks.beforeMedianCount === 0 && longTasks.afterMedianCount > 0) ||
+        longTasks.countDeltas.filter((value: number) => value > 0).length > 3 ||
+        longTasks.totalDurationDeltas.filter((value: number) => value > 5).length > 3
+      )
+        fail(`${key} committed long-task policy`);
+    }
+    for (const [field, values] of Object.entries(evidence.amplification) as [string, any][]) {
+      const absoluteSlack =
+        field === "writesPerEvent" || field === "flushesPerEvent"
+          ? 1
+          : field === "domFlushDurationPerEvent"
+            ? 5
+            : 10;
+      if (
+        values.pairedMedianRatio > 1.1 &&
+        values.pairedBootstrapCi95[1] > 1.15 &&
+        values.pairedMedianDelta > absoluteSlack
+      )
+        fail(`${key}/${field} committed amplification policy`);
+    }
   }
 }
 const docs = readFileSync(resolve("docs/perf/AGENT_CONSOLE_PROFILE.md"), "utf8");

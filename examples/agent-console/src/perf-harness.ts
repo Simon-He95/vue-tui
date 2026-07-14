@@ -8,8 +8,11 @@ export const AGENT_CONSOLE_PROFILE_SCENARIOS = [
   "detached-append",
   "search-large-history",
   "stream-scroll-interaction",
+  "product-tail-stream-12ms",
+  "product-markdown-stream-12ms",
+  "product-stream-scroll-interaction-12ms",
   "markdown-toggle-large-history",
-  "markdown-append-burst-framed",
+  "markdown-publication-burst-diagnostic",
   "markdown-stream-steady",
 ] as const;
 export type AgentConsoleProfileScenario = (typeof AGENT_CONSOLE_PROFILE_SCENARIOS)[number];
@@ -17,6 +20,8 @@ export const AGENT_CONSOLE_CPU_PROFILE_SCENARIOS = [
   "tail-append-burst-framed",
   "tail-append-burst-single-task",
   "stream-scroll-interaction",
+  "product-stream-scroll-interaction-12ms",
+  "product-markdown-stream-12ms",
   "markdown-stream-steady",
 ] as const satisfies readonly AgentConsoleProfileScenario[];
 export const AGENT_CONSOLE_PROFILE_DEFAULTS = Object.freeze({
@@ -182,11 +187,71 @@ interface ScenarioPreparedState {
   markdownMaterializationCount?: number;
   markdownRevision?: number;
 }
+
+async function runProductStream(adapter: AgentConsoleProfileAdapter, targetTicks: number) {
+  const intervalMs = adapter.api.getStreamIntervalMs();
+  if (intervalMs !== 12)
+    throw new Error(`product stream interval must be 12ms, received ${intervalMs}`);
+  const beforeIndex = adapter.api.getStreamIndex();
+  const started = adapter.now();
+  const timeoutAt = started + Math.max(5_000, targetTicks * intervalMs * 4);
+  adapter.api.startStream();
+  try {
+    while (adapter.api.getStreamIndex() - beforeIndex < targetTicks) {
+      if (adapter.now() >= timeoutAt)
+        throw new Error(`product stream timed out before ${targetTicks} ticks`);
+      await adapter.sleepUntil(Math.min(timeoutAt, adapter.now() + 1));
+    }
+  } finally {
+    adapter.api.stopStream();
+  }
+  return {
+    productStreamTicks: adapter.api.getStreamIndex() - beforeIndex,
+    producerElapsedMs: adapter.now() - started,
+    targetCadenceMs: intervalMs,
+    usedProductStreamTimer: 1,
+  };
+}
+
+async function collectScrollInteraction(
+  adapter: AgentConsoleProfileAdapter,
+  diagnostics: Record<string, number | string | readonly number[] | readonly string[]>,
+) {
+  const inputLatencies: AgentConsoleProfileInputLatency[] = [];
+  const wheelCadenceMs = 16;
+  const maxAttempts = 250;
+  let deadline = adapter.now();
+  let attempts = 0;
+  while (inputLatencies.length < 100 && attempts < maxAttempts) {
+    const direction = inputLatencies.length % 2 === 0 ? -1 : 1;
+    const sample = await adapter.dispatchWheel(direction * 5);
+    attempts++;
+    if (sample.scrollChanged && sample.scrollFrameObserved && sample.dispatchAccepted)
+      inputLatencies.push(sample);
+    deadline += wheelCadenceMs;
+    await adapter.sleepUntil(deadline);
+  }
+  diagnostics.inputAttempts = attempts;
+  diagnostics.wheelCadenceMs = wheelCadenceMs;
+  diagnostics.wheelDirections = inputLatencies.map((sample) => sample.direction);
+  diagnostics.inputToCommitMs = inputLatencies.map((sample) => sample.inputToCommitMs);
+  diagnostics.inputToDomFlushMs = inputLatencies.flatMap((sample) =>
+    sample.inputToDomFlushMs == null ? [] : [sample.inputToDomFlushMs],
+  );
+  diagnostics.inputToPaintOpportunityMs = inputLatencies.flatMap((sample) =>
+    sample.inputToPaintOpportunityMs == null ? [] : [sample.inputToPaintOpportunityMs],
+  );
+  return inputLatencies;
+}
 async function prepareMeasuredScenario(
   adapter: AgentConsoleProfileAdapter,
   scenario: AgentConsoleProfileScenario,
 ): Promise<ScenarioPreparedState> {
-  if (scenario === "markdown-stream-steady" || scenario === "markdown-append-burst-framed") {
+  if (
+    scenario === "markdown-stream-steady" ||
+    scenario === "product-markdown-stream-12ms" ||
+    scenario === "markdown-publication-burst-diagnostic"
+  ) {
     adapter.api.mode.value = "markdown";
     await adapter.waitUntilSettled();
     return {
@@ -195,7 +260,10 @@ async function prepareMeasuredScenario(
       markdownRevision: adapter.api.getMarkdownRevision(),
     };
   }
-  if (scenario === "stream-scroll-interaction") {
+  if (
+    scenario === "stream-scroll-interaction" ||
+    scenario === "product-stream-scroll-interaction-12ms"
+  ) {
     await adapter.dispatchWheel(-20);
     await adapter.waitUntilSettled();
     return {};
@@ -258,6 +326,67 @@ export async function runPreparedAgentConsoleProfileScenario(
         await appendSteady(adapter, appendStartIndex, steadyCount, cadenceMs),
       );
       correctness.atBottom = adapter.api.metrics.value?.atBottom === true;
+    } else if (scenario === "product-tail-stream-12ms") {
+      const inputBefore = adapter.api.getInputValue();
+      Object.assign(diagnostics, await runProductStream(adapter, steadyCount));
+      await adapter.waitUntilSettled();
+      correctness.productStreamInterval12ms = adapter.api.getStreamIntervalMs() === 12;
+      correctness.productStreamTicksExact = diagnostics.productStreamTicks === steadyCount;
+      correctness.usedProductStreamTimer = diagnostics.usedProductStreamTimer === 1;
+      correctness.atBottom = adapter.api.metrics.value?.atBottom === true;
+      correctness.inputPreserved = adapter.api.getInputValue() === inputBefore;
+    } else if (scenario === "product-markdown-stream-12ms") {
+      const inputBefore = adapter.api.getInputValue();
+      const beforeLength = scenarioPrepared.markdownLength!;
+      Object.assign(diagnostics, await runProductStream(adapter, steadyCount));
+      await adapter.sleepUntil(adapter.now() + 40);
+      await adapter.waitUntilSettled();
+      const afterLength = adapter.api.getMarkdownLength();
+      const finalBlocks = JSON.stringify(adapter.api.peekMarkdownBlocks());
+      correctness.productStreamInterval12ms = adapter.api.getStreamIntervalMs() === 12;
+      correctness.productStreamTicksExact = diagnostics.productStreamTicks === steadyCount;
+      correctness.usedProductStreamTimer = diagnostics.usedProductStreamTimer === 1;
+      correctness.markdownMode = adapter.api.mode.value === "markdown";
+      correctness.markdownGrew = afterLength > beforeLength;
+      correctness.markdownBlocksPublished = adapter.api.peekMarkdownBlockCount() > 0;
+      correctness.finalPausedMarkerPublished = finalBlocks.includes("Status: paused");
+      correctness.inputPreserved = adapter.api.getInputValue() === inputBefore;
+      diagnostics.markdownLengthBefore = beforeLength;
+      diagnostics.markdownLengthAfter = afterLength;
+      diagnostics.markdownBlockCount = adapter.api.peekMarkdownBlockCount();
+      diagnostics.markdownMaterializations =
+        adapter.api.getMarkdownMaterializationCount() -
+        (scenarioPrepared.markdownMaterializationCount ?? 0);
+      diagnostics.markdownMutations =
+        adapter.api.getMarkdownRevision() - (scenarioPrepared.markdownRevision ?? 0);
+    } else if (scenario === "product-stream-scroll-interaction-12ms") {
+      const inputBefore = adapter.api.getInputValue();
+      const [productTiming, inputLatencies] = await Promise.all([
+        runProductStream(adapter, steadyCount),
+        collectScrollInteraction(adapter, diagnostics),
+      ]);
+      Object.assign(diagnostics, productTiming);
+      correctness.productStreamInterval12ms = adapter.api.getStreamIntervalMs() === 12;
+      correctness.productStreamTicksExact = productTiming.productStreamTicks === steadyCount;
+      correctness.usedProductStreamTimer = productTiming.usedProductStreamTimer === 1;
+      correctness.inputPreserved = adapter.api.getInputValue() === inputBefore;
+      correctness.inputSamples = inputLatencies.length;
+      correctness.inputAttempts = Number(diagnostics.inputAttempts);
+      correctness.inputSamplesCorrect = inputLatencies.length >= 100;
+      correctness.inputDirectionReversed =
+        inputLatencies.some((sample) => sample.direction === -1) &&
+        inputLatencies.some((sample) => sample.direction === 1);
+      const correlatedInputs = inputLatencies.filter(
+        (sample) => sample.scrollChanged && sample.scrollFrameObserved && sample.dispatchAccepted,
+      );
+      correctness.correlatedInputSamples = correlatedInputs.length;
+      correctness.inputCorrelationCoverage = correlatedInputs.length / inputLatencies.length;
+      correctness.scrollChanged = correlatedInputs.length >= 100;
+      correctness.scrollFramesObserved = correlatedInputs.length >= 100;
+      correctness.dispatchAccepted = correlatedInputs.length >= 100;
+      correctness.domFlushesObserved =
+        !adapter.requiresDomFlush || inputLatencies.every((sample) => sample.domFlushObserved);
+      correctness.contentVisible = adapter.api.getTranscriptRows().some((row) => row.length > 0);
     } else if (scenario === "tail-append-burst-framed") {
       await appendFramed(adapter, appendStartIndex, appendCount, batchSize);
       correctness.atBottom = adapter.api.metrics.value?.atBottom === true;
@@ -299,7 +428,7 @@ export async function runPreparedAgentConsoleProfileScenario(
       correctness.contentVisible = adapter.api.getTranscriptRows().some((row) => row.length > 0);
       diagnostics.markdownLength = markdownLength;
       diagnostics.markdownBlockCount = blockCount;
-    } else if (scenario === "markdown-append-burst-framed") {
+    } else if (scenario === "markdown-publication-burst-diagnostic") {
       adapter.api.mode.value = "markdown";
       await adapter.waitUntilSettled();
       adapter.api.resetMarkdownMaterializationCount();
@@ -414,19 +543,23 @@ export async function runPreparedAgentConsoleProfileScenario(
   }
   const elapsedMs = adapter.now() - started;
   const finalReplayTotal =
-    scenario === "markdown-append-burst-framed"
+    scenario === "markdown-publication-burst-diagnostic"
       ? adapter.api.captureReplayLog().events.length
       : adapter.api.replayTotal.value;
   const expectedAdded =
     scenario === "search-large-history" || scenario === "markdown-toggle-large-history"
       ? 0
-      : scenario === "markdown-append-burst-framed"
+      : scenario === "markdown-publication-burst-diagnostic"
         ? appendCount
-        : scenario === "stream-scroll-interaction"
-          ? Math.min(steadyCount, Math.max(1, Math.floor(4_000 / Math.max(cadenceMs, 1))))
-          : scenario === "tail-stream-steady" || scenario === "markdown-stream-steady"
-            ? steadyCount
-            : appendCount;
+        : scenario === "product-tail-stream-12ms" ||
+            scenario === "product-markdown-stream-12ms" ||
+            scenario === "product-stream-scroll-interaction-12ms"
+          ? steadyCount + 2
+          : scenario === "stream-scroll-interaction"
+            ? Math.min(steadyCount, Math.max(1, Math.floor(4_000 / Math.max(cadenceMs, 1))))
+            : scenario === "tail-stream-steady" || scenario === "markdown-stream-steady"
+              ? steadyCount
+              : appendCount;
   const eventsAdded = finalReplayTotal - initialReplayTotal;
   correctness.eventCount = eventsAdded;
   correctness.eventCountCorrect = eventsAdded === expectedAdded;

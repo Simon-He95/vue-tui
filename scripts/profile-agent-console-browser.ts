@@ -281,6 +281,7 @@ async function main(): Promise<void> {
       }
       if (
         result.name === "tail-stream-steady" ||
+        result.name === "product-tail-stream-12ms" ||
         result.name === "tail-append-burst-framed" ||
         result.name === "tail-append-burst-single-task"
       ) {

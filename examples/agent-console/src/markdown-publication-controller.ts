@@ -13,35 +13,38 @@ type MarkdownPublicationScheduler = Readonly<{
   cancelFrameTask?: (id: string) => boolean | void;
 }>;
 
+type TimerHandle = ReturnType<typeof setTimeout>;
+
 export function createMarkdownPublicationController(options: {
   scheduler: MarkdownPublicationScheduler;
   getMode: () => AgentConsoleMode;
   syncMarkdownBlocks: () => void;
-  eagerAfterMs?: number;
+  minPublicationIntervalMs?: number;
   now?: () => number;
+  setTimer?: (callback: () => void, delayMs: number) => TimerHandle;
+  clearTimer?: (handle: TimerHandle) => void;
 }) {
   const now = options.now ?? (() => Date.now());
+  const setTimer = options.setTimer ?? ((callback, delayMs) => setTimeout(callback, delayMs));
+  const clearTimer = options.clearTimer ?? ((handle) => clearTimeout(handle));
+  const minInterval = options.minPublicationIntervalMs ?? 0;
   let lastPublicationAt = Number.NEGATIVE_INFINITY;
+  let publicationVersion = 0;
+  let pendingFrame = false;
+  let pendingTimer: TimerHandle | undefined;
+  let dirty = false;
+  let alive = true;
+
   function publish(): void {
+    if (!dirty) return;
+    dirty = false;
     options.syncMarkdownBlocks();
     lastPublicationAt = now();
   }
-  let publicationVersion = 0;
-  let pending = false;
-  let alive = true;
-  function cancel(): void {
-    publicationVersion++;
-    pending = false;
-    options.scheduler.cancelFrameTask?.(MARKDOWN_PUBLICATION_TASK_ID);
-  }
-  function request(): void {
-    if (!alive || options.getMode() !== "markdown" || pending) return;
-    if (options.eagerAfterMs != null && now() - lastPublicationAt >= options.eagerAfterMs) {
-      publish();
-      return;
-    }
-    pending = true;
-    const version = ++publicationVersion;
+
+  function queuePublicationFrame(version: number): void {
+    if (!alive || options.getMode() !== "markdown" || pendingFrame || !dirty) return;
+    pendingFrame = true;
     const accepted = options.scheduler.queueFrameTask({
       id: MARKDOWN_PUBLICATION_TASK_ID,
       reason: "stream",
@@ -52,25 +55,79 @@ export function createMarkdownPublicationController(options: {
           !alive ||
           options.getMode() !== "markdown" ||
           version !== publicationVersion ||
-          !pending
+          !pendingFrame
         )
           return;
-        pending = false;
+        pendingFrame = false;
         publish();
+        schedule();
       },
     });
     if (accepted === false) {
-      pending = false;
+      pendingFrame = false;
+      publish();
+      schedule();
+    }
+  }
+
+  function schedule(): void {
+    if (
+      !alive ||
+      options.getMode() !== "markdown" ||
+      !dirty ||
+      pendingFrame ||
+      pendingTimer != null
+    )
+      return;
+    const version = publicationVersion;
+    const elapsed = now() - lastPublicationAt;
+    const remaining = Number.isFinite(lastPublicationAt) ? Math.max(0, minInterval - elapsed) : 0;
+    if (remaining > 0) {
+      pendingTimer = setTimer(() => {
+        pendingTimer = undefined;
+        if (!alive || options.getMode() !== "markdown" || version !== publicationVersion) return;
+        queuePublicationFrame(version);
+      }, remaining);
+      return;
+    }
+    queuePublicationFrame(version);
+  }
+
+  function cancel(): void {
+    publicationVersion++;
+    dirty = false;
+    pendingFrame = false;
+    if (pendingTimer != null) {
+      clearTimer(pendingTimer);
+      pendingTimer = undefined;
+    }
+    options.scheduler.cancelFrameTask?.(MARKDOWN_PUBLICATION_TASK_ID);
+  }
+
+  function request(): void {
+    if (!alive || options.getMode() !== "markdown") return;
+    dirty = true;
+    schedule();
+  }
+
+  function setMode(mode: AgentConsoleMode): void {
+    cancel();
+    if (mode === "markdown" && alive) {
+      dirty = true;
       publish();
     }
   }
-  function setMode(mode: AgentConsoleMode): void {
-    cancel();
-    if (mode === "markdown" && alive) publish();
-  }
+
   function dispose(): void {
     alive = false;
     cancel();
   }
-  return { request, setMode, cancel, dispose, isPending: () => pending };
+
+  return {
+    request,
+    setMode,
+    cancel,
+    dispose,
+    isPending: () => pendingFrame || pendingTimer != null,
+  };
 }

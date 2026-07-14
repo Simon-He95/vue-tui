@@ -84,6 +84,7 @@ export type AgentConsoleApi = Readonly<{
   startStream: () => void;
   stopStream: () => void;
   getStreamIntervalMs: () => number;
+  getStreamIndex: () => number;
   captureReplayLog: () => AgentReplayLog;
   loadReplayLog: (log: AgentReplayLog, eventIndex?: number) => void;
   seekReplay: (eventIndex: number) => void;
@@ -1127,6 +1128,7 @@ export const AgentConsoleSurface = defineComponent({
       startStream,
       stopStream,
       getStreamIntervalMs: () => props.streamIntervalMs,
+      getStreamIndex: () => streamIndex.value,
       captureReplayLog: transcript.captureReplayLog,
       loadReplayLog,
       seekReplay,
@@ -1196,7 +1198,7 @@ export const AgentConsoleSurface = defineComponent({
       syncMarkdownBlocks: () => {
         transcript.syncMarkdownBlocks();
       },
-      eagerAfterMs: 32,
+      minPublicationIntervalMs: 32,
       now: () => performance.now(),
     });
 

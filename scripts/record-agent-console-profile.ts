@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { AGENT_CONSOLE_PROFILE_DEFAULTS } from "../examples/agent-console/src/perf-harness.js";
+import { agentConsoleScenarioEvidence } from "./agent-console-profile-evidence.js";
 import { pairedComparison } from "./agent-console-profile-stats.js";
 import {
   AGENT_CONSOLE_VERIFICATION_INPUTS,
@@ -85,11 +86,17 @@ for (const [name, from, to] of [
       ratio: after / before,
       improvementPercent: (1 - after / before) * 100,
       ...paired,
+      evidence: agentConsoleScenarioEvidence(
+        raw[from][runtime],
+        raw[to][runtime],
+        runtime,
+        scenario,
+      ),
     };
   }
 }
 const output = {
-  schemaVersion: 4,
+  schemaVersion: 5,
   measurementRef,
   measurementInputs: measurementInputHashes(),
   verificationRef,

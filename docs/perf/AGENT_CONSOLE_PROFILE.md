@@ -23,13 +23,15 @@ Replay copying was a real application hotspot. Lazy Markdown publication removed
 | CLI single-task burst     | 1,776 ms |   737 ms |    76 ms | 95.7% faster |
 | Browser single-task burst | 1,526 ms |   663 ms |    36 ms | 97.7% faster |
 
-In C's default Log burst, `mergeGroups` no longer dominates CPU samples. Scenario-specific preludes occur before counters reset and timing starts. Visible Markdown publication is frame-coalesced, and Markdown steady is included in CPU diagnostics. The canonical synthetic producer target is 64 ms; the product stream default remains 12 ms and is covered separately: C producer median is 25.601 s CLI (interval p95 65.7 ms, 18 median misses, 114.9 ms max lateness) and 25.600 s Browser (65.6 ms, 0 misses, 3.0 ms lateness), all run-level medians within absolute budgets; per-run maxima remain diagnostic. Formal benefits use the inner workload `totalElapsedMs`, paired by round; Playwright controller time remains diagnostic only. `validate:agent-console:abc` is the complete raw gate for cadence, paired frame/latency, Long Tasks, CPU artifacts, correctness and provenance. `check:agent-console-profile-baseline` is intentionally the cheap committed provenance/summary consistency checker.
+In C's default Log burst, `mergeGroups` no longer dominates CPU samples. Scenario-specific preludes occur before counters reset and timing starts. Visible Markdown publication is rate-limited to a 32 ms minimum interval through one timer and one fixed-id low-priority frame task; mode exit and disposal cancel both stages. The controlled synthetic producer remains at 64 ms. Three separate product scenarios execute the real `startStream()` / `stopStream()` 12 ms timer for fixed tick counts. Formal benefits use the inner workload `totalElapsedMs`, paired by round; Playwright controller time remains diagnostic only. `validate:agent-console:abc` gates cadence, frames, interaction latency, Long Tasks, DOM/stdout amplification, CPU artifacts, correctness, and provenance. The committed schema-5 baseline retains paired frame, long-frame, Long Task, latency, and amplification evidence for independent checking.
 
 For the canonical Agent Console workload measured here, no evidence justifies changing core Cell/text/wrap/provider caches, renderer architecture, long-text admission, or virtual scrolling. The current initiative closes with those areas unchanged.
 
 ## Canonical workloads
 
 All CLI and Browser runners use the same validated config: seed 6,000; append 1,000; steady 400; cadence 64 ms; batch size 10; six paired runs.
+
+Controlled synthetic application workloads:
 
 1. `tail-stream-steady`
 2. `tail-append-burst-framed`
@@ -38,10 +40,19 @@ All CLI and Browser runners use the same validated config: seed 6,000; append 1,
 5. `search-large-history`
 6. `stream-scroll-interaction`
 7. `markdown-toggle-large-history`
-8. `markdown-append-burst-framed`
-9. `markdown-stream-steady`
+8. `markdown-stream-steady`
 
-Synthetic append indices use an explicit post-seed cursor. Prepared and final visual indices must be `exact`. Detached append compares the complete visible viewport. The concurrent interaction workload records at least 100 fully correlated wheel samples per run; every recorded sample changes scrollTop, matches a `reason: scroll` frame, and—on Browser—matches a subsequent DOM flush. It drives wheel input independently at 16 ms while the synthetic producer runs at 64 ms and repeatedly reverses direction.
+Real product-timer workloads:
+
+9. `product-tail-stream-12ms`
+10. `product-markdown-stream-12ms`
+11. `product-stream-scroll-interaction-12ms`
+
+Controller diagnostic (not represented as a complete application workload):
+
+12. `markdown-publication-burst-diagnostic`
+
+Synthetic append indices use an explicit post-seed cursor. Product scenarios call `startStream()` and `stopStream()`, verify the 12 ms product default, stop after exactly 400 timer ticks, preserve input, and account for the connected/paused status events. Prepared and final visual indices must be `exact`; the product Markdown scenario also verifies that the final paused marker was published. Detached append compares the complete visible viewport. Both concurrent interaction workloads record at least 100 fully correlated wheel samples per run; every recorded sample changes scrollTop, matches a `reason: scroll` frame, and—on Browser—matches a subsequent DOM flush. Wheel input runs independently at 16 ms and repeatedly reverses direction.
 
 ## Production and diagnostics
 
