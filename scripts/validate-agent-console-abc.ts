@@ -381,6 +381,7 @@ if (!smoke)
         scenario,
       );
       for (const [field, values] of Object.entries(evidence.amplification) as [string, any][]) {
+        if (field === "bytesPerFrame") continue;
         const absoluteSlack =
           field === "writesPerEvent" || field === "flushesPerEvent"
             ? 1

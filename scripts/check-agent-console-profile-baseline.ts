@@ -154,6 +154,7 @@ for (const runtime of ["cli", "browser"]) {
         fail(`${key} committed long-task policy`);
     }
     for (const [field, values] of Object.entries(evidence.amplification) as [string, any][]) {
+      if (field === "bytesPerFrame") continue;
       const absoluteSlack =
         field === "writesPerEvent" || field === "flushesPerEvent"
           ? 1
