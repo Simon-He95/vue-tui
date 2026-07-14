@@ -1,5 +1,6 @@
 import type { TerminalRenderPlane } from "@simon_he/vue-tui/core";
 import type { FramePerfSample } from "@simon_he/vue-tui/observability";
+import type { DomRendererDebugStats } from "../../../src/renderer/dom/dom-renderer.js";
 import type { TerminalKeyboardEvent } from "@simon_he/vue-tui/runtime";
 import type {
   TLogViewHandle,
@@ -30,7 +31,12 @@ import { padEndByCells, sliceByCells, textCellWidth } from "../../shared/text-ut
 import { TVirtualMarkdown } from "@simon_he/vue-tui/markdown";
 import { TLogView } from "@simon_he/vue-tui/experimental";
 import { handleAgentConsoleKeymap } from "./keymap";
-import { createMockAgentStream, type AgentEvent } from "./mock-agent-stream";
+import { createMarkdownPublicationController } from "./markdown-publication-controller";
+import {
+  createMockAgentStream,
+  nextSyntheticAgentIndexAfterSeed,
+  type AgentEvent,
+} from "./mock-agent-stream";
 import {
   createAgentTranscriptStore,
   type AgentReplayLog,
@@ -71,13 +77,20 @@ export type AgentConsoleApi = Readonly<{
   replayTotal: Ref<number>;
   metrics: Ref<TLogViewScrollMetrics | null>;
   searchState: Ref<TLogViewSearchState>;
-  seed: (count?: number) => void;
+  seed: (count?: number) => number;
   appendSyntheticChunk: (index: number) => void;
+  applyProfileEvent: (event: AgentEvent) => void;
   appendBurst: (count: number) => Promise<void>;
+  startStream: (stopAtStreamIndex?: number) => void;
+  stopStream: () => void;
+  getStreamIntervalMs: () => number;
+  getStreamIndex: () => number;
   captureReplayLog: () => AgentReplayLog;
   loadReplayLog: (log: AgentReplayLog, eventIndex?: number) => void;
   seekReplay: (eventIndex: number) => void;
   jumpToBottom: () => void;
+  scrollBy: (delta: number) => void;
+  dispatchProfileWheel: (deltaY: number, time: number) => boolean;
   openSearch: (query?: string) => void;
   openLinks: () => void;
   openPalette: (query?: string) => void;
@@ -88,11 +101,20 @@ export type AgentConsoleApi = Readonly<{
   focusNextLink: () => boolean;
   getVisibleLinks: () => readonly TLogViewVisibleLink[];
   getFramePerfSamples: () => readonly FramePerfSample[];
+  getRendererDebugStats: () => DomRendererDebugStats | null;
+  subscribeFramePerf: (listener: (sample: FramePerfSample) => void) => () => void;
   clearFramePerf: () => void;
   getCommandRows: () => readonly string[];
   getCopiedText: () => string;
   getInputValue: () => string;
   getTranscriptRows: () => readonly string[];
+  peekMarkdownBlocks: () => readonly unknown[];
+  peekMarkdownBlockCount: () => number;
+  syncMarkdownBlocks: () => readonly unknown[];
+  getMarkdownMaterializationCount: () => number;
+  resetMarkdownMaterializationCount: () => void;
+  getMarkdownRevision: () => number;
+  getMarkdownLength: () => number;
   getChromeRows: () => readonly string[];
   getTerminalSnapshot: () => readonly string[];
 }>;
@@ -128,10 +150,17 @@ function rowTextFromTerminal(
     .trimEnd();
 }
 
+export const AGENT_CONSOLE_DEFAULT_STREAM_INTERVAL_MS = 12;
+
 export const AgentConsoleSurface = defineComponent({
   name: "AgentConsoleSurface",
   props: {
     autoStart: { type: Boolean, default: false },
+    streamIntervalMs: {
+      type: Number,
+      default: AGENT_CONSOLE_DEFAULT_STREAM_INTERVAL_MS,
+      validator: (value: number) => Number.isFinite(value) && value > 0,
+    },
     onReady: {
       type: Function as PropType<(api: AgentConsoleApi) => void>,
       default: undefined,
@@ -167,6 +196,7 @@ export const AgentConsoleSurface = defineComponent({
     const streamIndex = ref(0);
     let replaySource: readonly AgentEvent[] | null = null;
     let timer: ReturnType<typeof setInterval> | null = null;
+    let stopAtStreamIndex: number | undefined;
     let ready = false;
 
     terminalContext.observability.framePerf.enabled.value = true;
@@ -480,6 +510,7 @@ export const AgentConsoleSurface = defineComponent({
     function applyNextEvent(): void {
       transcript.apply(stream.next());
       streamIndex.value++;
+      if (stopAtStreamIndex != null && streamIndex.value >= stopAtStreamIndex) stopStream();
       syncReplayCursor();
       if (mode.value === "markdown" && markdownStickToBottom.value) {
         markdownScrollTop.value = 1_000_000;
@@ -490,24 +521,31 @@ export const AgentConsoleSurface = defineComponent({
       });
     }
 
-    function startStream(): void {
+    function startStream(targetStreamIndex?: number): void {
       if (timer) return;
+      if (
+        targetStreamIndex != null &&
+        (!Number.isInteger(targetStreamIndex) || targetStreamIndex <= streamIndex.value)
+      )
+        throw new Error("targetStreamIndex must be an integer above the current stream index");
+      stopAtStreamIndex = targetStreamIndex;
       streamState.value = "connected";
       transcript.apply({ type: "status", state: "connected" });
       syncReplayCursor();
-      timer = setInterval(applyNextEvent, 12);
+      timer = setInterval(applyNextEvent, props.streamIntervalMs);
     }
 
     function stopStream(): void {
       if (!timer) return;
       clearInterval(timer);
       timer = null;
+      stopAtStreamIndex = undefined;
       streamState.value = "paused";
       transcript.apply({ type: "status", state: "paused" });
       syncReplayCursor();
     }
 
-    function seed(count = 36): void {
+    function seed(count = 36): number {
       stopStream();
       stream.reset();
       streamIndex.value = 0;
@@ -520,6 +558,7 @@ export const AgentConsoleSurface = defineComponent({
         refreshSearchState();
         refreshLinks();
       });
+      return nextSyntheticAgentIndexAfterSeed(count);
     }
 
     function appendSyntheticChunk(index: number): void {
@@ -1093,11 +1132,39 @@ export const AgentConsoleSurface = defineComponent({
       searchState,
       seed,
       appendSyntheticChunk,
+      applyProfileEvent: (event) => transcript.apply(event),
       appendBurst,
+      startStream,
+      stopStream,
+      getStreamIntervalMs: () => props.streamIntervalMs,
+      getStreamIndex: () => streamIndex.value,
       captureReplayLog: transcript.captureReplayLog,
       loadReplayLog,
       seekReplay,
       jumpToBottom,
+      scrollBy: (delta) => {
+        logView.value?.scrollBy(delta);
+        refreshMetrics();
+      },
+      dispatchProfileWheel: (deltaY, _time) => {
+        const container = (terminalContext.renderer.value as { container?: HTMLElement } | null)
+          ?.container;
+        if (!container || typeof WheelEvent === "undefined") return false;
+        const rect = container.getBoundingClientRect();
+        const size = terminalContext.terminal.size();
+        const cellX = AGENT_CONSOLE_LAYOUT.transcript.x + 2;
+        const cellY = AGENT_CONSOLE_LAYOUT.transcript.y + 2;
+        return !container.dispatchEvent(
+          new WheelEvent("wheel", {
+            bubbles: true,
+            cancelable: true,
+            clientX: rect.left + ((cellX + 0.5) * rect.width) / size.cols,
+            clientY: rect.top + ((cellY + 0.5) * rect.height) / size.rows,
+            deltaY,
+            deltaMode: WheelEvent.DOM_DELTA_LINE,
+          }),
+        );
+      },
       openSearch,
       openLinks,
       openPalette,
@@ -1108,6 +1175,10 @@ export const AgentConsoleSurface = defineComponent({
       focusNextLink,
       getVisibleLinks: () => logView.value?.getVisibleLinks() ?? [],
       getFramePerfSamples: () => terminalContext.observability.framePerf.list(),
+      getRendererDebugStats: () =>
+        (terminalContext.renderer.value?.debugStats as DomRendererDebugStats | undefined) ?? null,
+      subscribeFramePerf: (listener) =>
+        terminalContext.observability.framePerf.addSink({ onFramePerf: listener }),
       clearFramePerf: () => terminalContext.observability.framePerf.clear(),
       getCommandRows: () => filteredCommandRows().map((row) => `${row.command} ${row.label}`),
       getCopiedText: () => copiedText.value,
@@ -1116,12 +1187,37 @@ export const AgentConsoleSurface = defineComponent({
         Array.from({ length: AGENT_CONSOLE_LAYOUT.transcript.h }, (_, index) =>
           rowTextFromTerminal(terminalContext.terminal, AGENT_CONSOLE_LAYOUT.transcript.y + index),
         ),
+      peekMarkdownBlocks: () => transcript.peekMarkdownBlocks(),
+      peekMarkdownBlockCount: () => transcript.peekMarkdownBlockCount(),
+      syncMarkdownBlocks: () => transcript.syncMarkdownBlocks(),
+      getMarkdownMaterializationCount: () => transcript.getMarkdownMaterializationCount(),
+      resetMarkdownMaterializationCount: () => transcript.resetMarkdownMaterializationCount(),
+      getMarkdownRevision: () => transcript.getMarkdownRevision(),
+      getMarkdownLength: () => transcript.markdown.value.length,
       getChromeRows: () =>
         Array.from({ length: AGENT_CONSOLE_LAYOUT.chrome.h }, (_, index) =>
           rowTextFromTerminal(terminalContext.terminal, AGENT_CONSOLE_LAYOUT.chrome.y + index),
         ),
       getTerminalSnapshot: () => terminalContext.terminal.snapshot().lines,
     };
+
+    const markdownPublication = createMarkdownPublicationController({
+      scheduler: terminalContext.scheduler,
+      getMode: () => mode.value,
+      syncMarkdownBlocks: () => {
+        transcript.syncMarkdownBlocks();
+      },
+      minPublicationIntervalMs: 32,
+      now: () => performance.now(),
+    });
+
+    watch(
+      () => transcript.markdown.value,
+      () => markdownPublication.request(),
+      { flush: "sync" },
+    );
+    watch(mode, (value) => markdownPublication.setMode(value));
+    onBeforeUnmount(() => markdownPublication.dispose());
 
     watch(
       () => transcript.markdownBlocks.value,

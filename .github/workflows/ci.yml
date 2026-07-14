@@ -81,6 +81,22 @@ jobs:
 
       - run: pnpm exec playwright install --with-deps chromium firefox webkit
 
+      - run: pnpm run check:agent-console-profile-baseline
+
+      - run: pnpm run profile:agent-console:smoke
+
+      - run: pnpm run profile:agent-console:abc:smoke
+
+      - name: Upload Agent Console profile smoke artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-console-profile-smoke
+          path: |
+            .tmp/perf/agent-console
+            .tmp/perf/agent-console-abc
+          if-no-files-found: error
+
       - run: pnpm run e2e:charts
 
       - run: pnpm run e2e:component-terminal-charts
@@ -123,3 +139,26 @@ jobs:
       - name: Timing baseline
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.benchmark == 'true' }}
         run: pnpm run bench:baseline:timing
+
+  canonical-agent-console:
+    if: ${{ github.event_name == 'pull_request' && github.head_ref == 'perf/agent-console-workload-profile' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm run profile:agent-console:abc
+      - run: pnpm run validate:agent-console:abc
+      - name: Upload canonical Agent Console artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-console-profile-abc-${{ github.sha }}
+          path: .tmp/perf/agent-console-abc
+          if-no-files-found: error

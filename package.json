@@ -234,6 +234,13 @@
     "example:agent-console:smoke": "pnpm run build && pnpm -C examples/agent-console smoke",
     "example:agent-console:terminal": "pnpm run build && pnpm -C examples/agent-console terminal",
     "example:agent-console:terminal:smoke": "pnpm run build && pnpm -C examples/agent-console terminal:smoke",
+    "profile:agent-console:cli": "tsx scripts/profile-agent-console-cli.ts",
+    "profile:agent-console:browser": "tsx scripts/profile-agent-console-browser.ts",
+    "profile:agent-console:summarize": "tsx scripts/summarize-agent-console-profile.ts",
+    "profile:agent-console": "tsx scripts/profile-agent-console.ts",
+    "profile:agent-console:smoke": "AGENT_CONSOLE_PROFILE_SMOKE=1 pnpm run profile:agent-console",
+    "profile:agent-console:abc": "tsx scripts/profile-agent-console-abc.ts",
+    "profile:agent-console:abc:smoke": "AGENT_CONSOLE_PROFILE_SMOKE=1 tsx scripts/profile-agent-console-abc.ts",
     "example:tlog-view-lab": "pnpm run build && VT_SMOKE=1 tsx examples/tlog-view-lab.ts",
     "run:basic:terminal": "pnpm run build && pnpm -C examples/basic terminal",
     "run:agent-console:terminal": "pnpm run build && pnpm -C examples/agent-console terminal",
@@ -318,7 +325,10 @@
     "bench:profiler:gc": "node --expose-gc --import=tsx scripts/bench-profiler-complete.ts",
     "bench:profiler:legacy": "tsx scripts/bench-profiler-legacy.ts",
     "bench:overhead": "tsx scripts/bench-instrumentation-overhead.ts",
-    "bench:bundle-size": "tsx scripts/bench-bundle-size.ts"
+    "bench:bundle-size": "tsx scripts/bench-bundle-size.ts",
+    "validate:agent-console:abc": "tsx scripts/validate-agent-console-abc.ts",
+    "profile:agent-console:record": "tsx scripts/record-agent-console-profile.ts",
+    "check:agent-console-profile-baseline": "tsx scripts/check-agent-console-profile-baseline.ts"
   },
   "dependencies": {
     "katex": "^0.16.47",

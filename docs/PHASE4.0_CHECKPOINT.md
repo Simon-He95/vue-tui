@@ -4,7 +4,7 @@
 
 **Phase 4.0 checkpoint complete: no runtime cache change proposed.**
 
-**Comprehensive cache validation is not complete.**
+**Final measured decision**: #123's production Agent Console workload does not justify a cache change. This is not a claim of global optimality.
 
 ---
 
@@ -229,38 +229,9 @@ The current synthetic measurements do not provide sufficient evidence to justify
 
 ---
 
-## Required Follow-up: Disabled-Path Instrumentation Overhead
+## Completed Follow-up: Production Instrumentation Overhead
 
-**This is mandatory** because Phase 3 instrumentation hooks are already present in production hot paths (`createCell`, `textCellWidth`, `wrapByCells`).
-
-### Problem
-
-The current "without instrumentation" arm disables metric collection, but still executes all instrumentation hook functions. Therefore, it does not measure the production cost of adding the instrumentation foundation itself (pre-Phase-3 vs post-Phase-3).
-
-### Required Validation
-
-Compare:
-
-- Commit immediately before Phase 3 instrumentation
-- Current main with instrumentation disabled
-
-**Requirements**:
-
-- Isolated processes or separate worktrees
-- Identical Node/V8/hardware
-- Alternating or randomized execution order
-- Warmup + multiple samples
-- p50/p95 comparison
-- Use Phase 2 baseline harness
-
-**Workloads**:
-
-- createCell hit/miss scenarios
-- Repeated CJK terminal.write
-- textCellWidth ASCII/non-ASCII
-- wrapByCells workloads
-
-**This validation is required independently of cache tuning decisions.**
+#122 compiled instrumentation out of standard ESM/CJS artifacts and validated built-dist plus packed-consumer A/B/C. #119 is closed. #123 then profiled the production Agent Console workload and found no measured justification for cache, long-text, provider, renderer-architecture, or virtual-scroll changes.
 
 ---
 
@@ -330,3 +301,7 @@ Before claiming comprehensive cache validation, add:
 **Note**: Profiler data collected at c4182b6c. Workload definitions and counter-collection logic used by this report have not changed since that data commit. Later commits removed invalid timing/heap/control-arm measurements from the profiler tool and updated documentation and output labeling.
 
 **Output**: `docs/perf/phase4-profiler-output-c4182b6c-annotated.txt` (annotated historical transcript)
+
+## Production workload follow-up
+
+PR #123 completed the Agent Console production workload profile. It found and contained replay-history publication and hidden eager Markdown-block publication hotspots, but supplied no evidence for changing Cell cache capacity, eviction, text/wrap caches, provider caches, or virtual scrolling. Phase 4.0 remains a no-change decision for those areas.

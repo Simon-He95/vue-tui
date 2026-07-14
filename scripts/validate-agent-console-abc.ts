@@ -1,0 +1,400 @@
+#!/usr/bin/env tsx
+import assert from "node:assert/strict";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { resolve } from "node:path";
+import {
+  AGENT_CONSOLE_CPU_PROFILE_SCENARIOS,
+  AGENT_CONSOLE_PROFILE_DEFAULTS,
+  AGENT_CONSOLE_PROFILE_SCENARIOS,
+} from "../examples/agent-console/src/perf-harness.js";
+import { agentConsoleScenarioEvidence } from "./agent-console-profile-evidence.js";
+import {
+  assertPairedPolicy,
+  bootstrapMedianCi95,
+  median,
+  pairedComparison,
+} from "./agent-console-profile-stats.js";
+const root = resolve(process.argv[2] ?? ".tmp/perf/agent-console-abc");
+const variants = ["A", "B", "C"] as const,
+  runtimes = ["cli", "browser"] as const;
+const smoke = process.env.AGENT_CONSOLE_PROFILE_SMOKE === "1";
+const orders = smoke ? ["ABC"] : ["ABC", "ACB", "BAC", "BCA", "CAB", "CBA"];
+const expectedRuns = orders.length;
+const expectedProfile = smoke
+  ? {
+      ...AGENT_CONSOLE_PROFILE_DEFAULTS,
+      seedCount: 120,
+      appendCount: 30,
+      steadyCount: 20,
+      cadenceMs: 0,
+    }
+  : AGENT_CONSOLE_PROFILE_DEFAULTS;
+const summaries: Record<string, any> = {},
+  raws: Record<string, any> = {};
+function fail(message: string): never {
+  throw new Error(`Agent Console A/B/C audit invalid: ${message}`);
+}
+const ratio = (to: number, from: number) => to / from;
+const pickConfig = (e: any) => ({
+  seedCount: e.seedCount,
+  appendCount: e.appendCount,
+  steadyCount: e.steadyCount,
+  cadenceMs: e.cadenceMs,
+  batchSize: e.batchSize,
+  runCount: e.runCount,
+  orders: e.orders,
+});
+const expectedConfig = { ...expectedProfile, runCount: expectedRuns, orders };
+const envFor = (variant: string, runtime: string) =>
+  runtime === "cli"
+    ? JSON.parse(readFileSync(resolve(root, variant, "cli/environment.json"), "utf8"))
+    : JSON.parse(readFileSync(resolve(root, variant, "browser-raw.json"), "utf8")).environment;
+for (const variant of variants) {
+  const summary = JSON.parse(readFileSync(resolve(root, variant, "summary.json"), "utf8"));
+  summaries[variant] = summary;
+  const browser = JSON.parse(readFileSync(resolve(root, variant, "browser-raw.json"), "utf8"));
+  raws[variant] = {
+    cli: JSON.parse(readFileSync(resolve(root, variant, "cli/all.json"), "utf8")),
+    browser: browser.results,
+  };
+  for (const runtime of runtimes) {
+    const environment = envFor(variant, runtime);
+    if (!smoke && environment.dirty !== false) fail(`${variant}/${runtime} dirty worktree`);
+    try {
+      assert.deepEqual(pickConfig(environment), expectedConfig);
+    } catch {
+      fail(`${variant}/${runtime} canonical config mismatch`);
+    }
+    if (
+      !environment.commit ||
+      Object.values(environment.artifactHashes ?? {}).some((hash) => !hash)
+    )
+      fail(`${variant}/${runtime} missing provenance`);
+    for (const scenario of AGENT_CONSOLE_PROFILE_SCENARIOS) {
+      const key = `${runtime}/${scenario}`,
+        result = summary.scenarios[key];
+      if (!result || result.runCount !== expectedRuns || result.correctnessPasses !== expectedRuns)
+        fail(`${variant}/${key} does not have ${expectedRuns} passing runs`);
+      const raw = raws[variant][runtime].filter(
+        (run: any) => (run.scenario ?? run.name) === scenario,
+      );
+      if (
+        raw.length !== expectedRuns ||
+        new Set(raw.map((run: any) => run.round)).size !== expectedRuns ||
+        orders.some((order) => !raw.some((run: any) => run.order === order))
+      )
+        fail(`${variant}/${key} balanced round/order mismatch`);
+      for (const run of raw) {
+        const payload = run.profileResult ?? run;
+        if (
+          payload.preparedState?.visualIndexStatus !== "exact" ||
+          payload.finalState?.visualIndexStatus !== "exact"
+        )
+          fail(`${variant}/${key} raw visual index is not exact`);
+        if (scenario === "markdown-publication-burst-diagnostic" && variant === "C") {
+          const diagnostics = payload.diagnostics ?? {};
+          if (
+            diagnostics.markdownMaterializations > 2 ||
+            diagnostics.markdownMaterializations >= diagnostics.markdownMutations
+          )
+            fail(`${variant}/${key} Markdown publication was not coalesced`);
+        }
+        if (scenario.startsWith("product-")) {
+          const c = payload.correctness ?? {};
+          if (
+            !c.productStreamInterval12ms ||
+            !c.productStreamTicksExact ||
+            !c.usedProductStreamTimer ||
+            !c.inputPreserved ||
+            payload.diagnostics?.productStreamTicks !== expectedProfile.steadyCount ||
+            payload.diagnostics?.targetCadenceMs !== 12
+          )
+            fail(`${variant}/${key} product timer evidence incomplete`);
+          if (
+            scenario === "product-markdown-stream-12ms" &&
+            (!c.markdownBlocksPublished || !c.finalPausedMarkerPublished)
+          )
+            fail(`${variant}/${key} final Markdown publication missing`);
+        }
+        if (
+          scenario === "stream-scroll-interaction" ||
+          scenario === "product-stream-scroll-interaction-12ms"
+        ) {
+          const c = payload.correctness ?? {};
+          if (
+            !c.scrollChanged ||
+            !c.scrollFramesObserved ||
+            !c.dispatchAccepted ||
+            (runtime === "browser" && !c.domFlushesObserved)
+          )
+            fail(`${variant}/${key} input correlation incomplete`);
+        }
+      }
+    }
+    if (!smoke)
+      for (const scenario of AGENT_CONSOLE_CPU_PROFILE_SCENARIOS) {
+        const diagnostic = summary.scenarios[`${runtime}/${scenario}`]?.cpuHotspots?.[0];
+        if (!diagnostic?.hotspots?.length)
+          fail(`${variant}/${runtime}/${scenario} missing CPU hotspots`);
+        const profile =
+          runtime === "cli"
+            ? resolve(root, variant, "cli", `${scenario}-run-cpu.node.cpuprofile`)
+            : resolve(root, variant, `${scenario}-run-0.browser.cpuprofile`);
+        if (!existsSync(profile) || statSync(profile).size === 0)
+          fail(`${variant}/${runtime}/${scenario} missing CPU profile`);
+      }
+  }
+}
+if (!smoke)
+  for (const runtime of runtimes) {
+    const baseline = envFor("A", runtime);
+    for (const variant of ["B", "C"]) {
+      const current = envFor(variant, runtime);
+      if (
+        current.node !== baseline.node ||
+        current.v8 !== baseline.v8 ||
+        current.browser !== baseline.browser
+      )
+        fail(`${runtime} runtime versions differ`);
+      try {
+        assert.deepEqual(current.artifactHashes, baseline.artifactHashes);
+      } catch {
+        fail(`${runtime} artifact hashes differ`);
+      }
+    }
+    for (const scenario of AGENT_CONSOLE_PROFILE_SCENARIOS) {
+      const corpusA = raws.A[runtime]
+        .filter((r: any) => (r.scenario ?? r.name) === scenario)
+        .map((r: any) => (r.profileResult ?? r).corpus);
+      for (const variant of ["B", "C"])
+        try {
+          assert.deepEqual(
+            raws[variant][runtime]
+              .filter((r: any) => (r.scenario ?? r.name) === scenario)
+              .map((r: any) => (r.profileResult ?? r).corpus),
+            corpusA,
+          );
+        } catch {
+          fail(`${runtime}/${scenario} corpus differs`);
+        }
+    }
+    for (const scenario of ["tail-stream-steady", "markdown-stream-steady"]) {
+      const perRound = (variant: string, field: string) =>
+        new Map(
+          raws[variant][runtime]
+            .filter((run: any) => (run.scenario ?? run.name) === scenario)
+            .map((run: any) => [run.round, (run.profileResult ?? run).timing?.[field] ?? 0]),
+        );
+      for (const [field, tolerance] of [
+        ["producerElapsedMs", 100],
+        ["appendIntervalP95Ms", 2],
+        ["maxDeadlineLatenessMs", 5],
+      ] as const) {
+        const before = perRound("A", field),
+          after = perRound("C", field);
+        const ratios = [...before.keys()].map(
+          (round) => (after.get(round) ?? 0) / Math.max(before.get(round) ?? 0, 0.001),
+        );
+        const deltas = [...before.keys()].map(
+          (round) => (after.get(round) ?? 0) - (before.get(round) ?? 0),
+        );
+        const absoluteBudget =
+          field === "producerElapsedMs"
+            ? AGENT_CONSOLE_PROFILE_DEFAULTS.steadyCount *
+              AGENT_CONSOLE_PROFILE_DEFAULTS.cadenceMs *
+              1.1
+            : field === "appendIntervalP95Ms"
+              ? AGENT_CONSOLE_PROFILE_DEFAULTS.cadenceMs * 1.2
+              : AGENT_CONSOLE_PROFILE_DEFAULTS.cadenceMs * 4;
+        if (
+          median(ratios) > 1.1 &&
+          median(deltas) > tolerance &&
+          median([...after.values()]) > absoluteBudget
+        )
+          fail(`${runtime}/${scenario}/${field} cadence regression`);
+      }
+    }
+    for (const scenario of ["tail-stream-steady", "markdown-stream-steady"]) {
+      const result = summaries.C.scenarios[`${runtime}/${scenario}`];
+      const target =
+        AGENT_CONSOLE_PROFILE_DEFAULTS.steadyCount * AGENT_CONSOLE_PROFILE_DEFAULTS.cadenceMs;
+      if (result.producerElapsedMs.median > target * 1.1)
+        fail(`${runtime}/${scenario} absolute producer budget`);
+      if (result.appendIntervalP95Ms.median > AGENT_CONSOLE_PROFILE_DEFAULTS.cadenceMs * 1.2)
+        fail(`${runtime}/${scenario} absolute interval budget`);
+      if (result.deadlineMisses.median > AGENT_CONSOLE_PROFILE_DEFAULTS.steadyCount * 0.25)
+        fail(`${runtime}/${scenario} deadline miss budget`);
+      if (result.maxDeadlineLatenessMs.median > AGENT_CONSOLE_PROFILE_DEFAULTS.cadenceMs * 4)
+        fail(`${runtime}/${scenario} deadline lateness budget`);
+    }
+    const perRoundLatency = (variant: string, scenario: string, field: string) =>
+      new Map(
+        raws[variant][runtime]
+          .filter((run: any) => (run.scenario ?? run.name) === scenario)
+          .map((run: any) => {
+            const values = ((run.profileResult ?? run).diagnostics?.[field] ?? []) as number[];
+            const sorted = [...values].sort((a, b) => a - b);
+            return [run.round, sorted[Math.max(0, Math.ceil(sorted.length * 0.95) - 1)] ?? 0];
+          }),
+      );
+    for (const scenario of ["stream-scroll-interaction", "product-stream-scroll-interaction-12ms"])
+      for (const [field, tolerance] of [
+        ["inputToCommitMs", 1],
+        ["inputToDomFlushMs", 2],
+        ["inputToPaintOpportunityMs", 2],
+      ] as const) {
+        if (runtime === "cli" && field !== "inputToCommitMs") continue;
+        const before = perRoundLatency("A", scenario, field),
+          after = perRoundLatency("C", scenario, field);
+        const exceeded = [...before.keys()].map(
+          (round) => (after.get(round) ?? 0) > (before.get(round) ?? 0) * 1.1 + tolerance,
+        );
+        if (exceeded.filter(Boolean).length > expectedRuns / 2)
+          fail(`${runtime}/${scenario}/${field} latency regression`);
+      }
+    if (runtime === "browser")
+      for (const scenario of AGENT_CONSOLE_PROFILE_SCENARIOS) {
+        const perRound = (variant: string) =>
+          raws[variant].browser
+            .filter((run: any) => run.name === scenario)
+            .sort((a: any, b: any) => a.round - b.round)
+            .map((run: any) => ({
+              count: (run.timing?.longTasks ?? []).filter((value: number) => value >= 60).length,
+              total: (run.timing?.longTasks ?? [])
+                .filter((value: number) => value >= 60)
+                .reduce((sum: number, value: number) => sum + value, 0),
+            }));
+        const aRounds = perRound("A"),
+          cRounds = perRound("C");
+        const countDeltas = aRounds.map(
+          (item: any, index: number) => cRounds[index].count - item.count,
+        );
+        const totalDeltas = aRounds.map(
+          (item: any, index: number) => cRounds[index].total - item.total,
+        );
+        const aMedianCount = median(aRounds.map((item: any) => item.count));
+        const cMedianCount = median(cRounds.map((item: any) => item.count));
+        if (
+          (aMedianCount === 0 && cMedianCount > 0) ||
+          median(countDeltas) > 0 ||
+          median(totalDeltas) > 5
+        )
+          fail(`browser/${scenario} long-task regression`);
+      }
+    for (const scenario of ["tail-append-burst-framed", "tail-append-burst-single-task"]) {
+      const key = `${runtime}/${scenario}`;
+      const replayPolicy =
+        key === "cli/tail-append-burst-framed"
+          ? { maxPairedMedianRatio: 0.95, rejectWhenBootstrapLowerExceeds: 0.95 }
+          : { maxPairedMedianRatio: 0.95, maxBootstrapUpper: 0.95 };
+      assertPairedPolicy(
+        `${key} B/A`,
+        pairedComparison(raws.A[runtime], raws.B[runtime], scenario),
+        replayPolicy,
+      );
+      const lazyPolicy =
+        key === "browser/tail-append-burst-framed"
+          ? { maxPairedMedianRatio: 1, maxBootstrapUpper: 1.02 }
+          : { maxPairedMedianRatio: 0.95, maxBootstrapUpper: 0.95 };
+      assertPairedPolicy(
+        `${key} C/B`,
+        pairedComparison(raws.B[runtime], raws.C[runtime], scenario),
+        lazyPolicy,
+      );
+    }
+    for (const scenario of AGENT_CONSOLE_PROFILE_SCENARIOS) {
+      const key = `${runtime}/${scenario}`,
+        a = summaries.A.scenarios[key],
+        c = summaries.C.scenarios[key];
+      const comparison = {
+        ...pairedComparison(raws.A[runtime], raws.C[runtime], scenario),
+        elapsedMedianToMs: c.elapsedMs.median,
+      };
+      const policy =
+        scenario === "markdown-toggle-large-history"
+          ? {
+              maxPairedMedianRatio: 1.15,
+              maxBootstrapUpper: runtime === "cli" ? 1.25 : 1.15,
+              maxAbsoluteMs: Math.max(200, a.elapsedMs.median * 1.15),
+            }
+          : {
+              maxPairedMedianRatio: 1.1,
+              maxBootstrapUpper:
+                runtime === "browser" && scenario === "search-large-history" ? 1.25 : 1.15,
+            };
+      assertPairedPolicy(`${key} C/A`, comparison, policy);
+      const frameP95ByRound = (variant: string) =>
+        raws[variant][runtime]
+          .filter((run: any) => (run.scenario ?? run.name) === scenario)
+          .sort((left: any, right: any) => left.round - right.round)
+          .map((run: any) => {
+            const samples = ((run.profileResult ?? run).frameSamples ?? [])
+              .map((sample: any) => sample.durationMs)
+              .sort((left: number, right: number) => left - right);
+            return samples[Math.max(0, Math.ceil(samples.length * 0.95) - 1)] ?? 0;
+          });
+      const frameA = frameP95ByRound("A"),
+        frameC = frameP95ByRound("C");
+      const frameDeltas = frameA.map((value: number, index: number) => frameC[index] - value);
+      if (scenario === "tail-append-burst-single-task") {
+        if (median(frameDeltas) > 2) fail(`${key} sparse-frame absolute p95 gate`);
+      } else {
+        const frameRatios = frameA.map(
+          (value: number, index: number) => frameC[index] / Math.max(value, 0.001),
+        );
+        const frameCi = bootstrapMedianCi95(frameRatios);
+        if ((median(frameRatios) > 1.1 || frameCi[1] > 1.15) && median(frameDeltas) > 2)
+          fail(`${key} paired C/A frame p95 gate`);
+      }
+      const longFramesByRound = (variant: string) =>
+        raws[variant][runtime]
+          .filter((run: any) => (run.scenario ?? run.name) === scenario)
+          .sort((left: any, right: any) => left.round - right.round)
+          .map((run: any) =>
+            ((run.profileResult ?? run).frameSamples ?? [])
+              .filter((sample: any) => sample.durationMs > 16.7)
+              .map((sample: any) => sample.durationMs),
+          );
+      const longA = longFramesByRound("A"),
+        longC = longFramesByRound("C");
+      const countDeltas = longA.map(
+        (items: number[], index: number) => longC[index].length - items.length,
+      );
+      const durationDeltas = longA.map(
+        (items: number[], index: number) =>
+          longC[index].reduce((sum: number, value: number) => sum + value, 0) -
+          items.reduce((sum: number, value: number) => sum + value, 0),
+      );
+      const aMedianCount = median(longA.map((items: number[]) => items.length));
+      const cMedianCount = median(longC.map((items: number[]) => items.length));
+      if (
+        (aMedianCount === 0 && cMedianCount > 0) ||
+        median(countDeltas) > 0 ||
+        median(durationDeltas) > 5
+      )
+        fail(`${key} long-frame regression`);
+
+      const evidence = agentConsoleScenarioEvidence(
+        raws.A[runtime],
+        raws.C[runtime],
+        runtime,
+        scenario,
+      );
+      for (const [field, values] of Object.entries(evidence.amplification) as [string, any][]) {
+        if (field === "bytesPerFrame") continue;
+        const absoluteSlack =
+          field === "writesPerEvent" || field === "flushesPerEvent"
+            ? 1
+            : field === "domFlushDurationPerEvent"
+              ? 5
+              : 10;
+        if (
+          values.pairedMedianRatio > 1.1 &&
+          values.pairedBootstrapCi95[1] > 1.15 &&
+          values.pairedMedianDelta > absoluteSlack
+        )
+          fail(`${key}/${field} amplification regression`);
+      }
+    }
+  }
+console.log("Agent Console A/B/C performance and correctness validation passed");

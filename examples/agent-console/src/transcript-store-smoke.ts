@@ -1,0 +1,142 @@
+import assert from "node:assert/strict";
+import { nextTick, watch, watchEffect } from "vue";
+import { createSyntheticAgentEvent } from "./mock-agent-stream";
+import { createAgentTranscriptStore } from "./transcript-store";
+
+process.env.AGENT_CONSOLE_PROFILE_VARIANT = "A";
+delete process.env.AGENT_CONSOLE_PROFILE_MODE;
+const store = createAgentTranscriptStore();
+delete process.env.AGENT_CONSOLE_PROFILE_VARIANT;
+const observedLengths: number[] = [];
+const observedTailTypes: Array<string | undefined> = [];
+const stopEffect = watchEffect(() => observedTailTypes.push(store.eventLog.value.at(-1)?.type), {
+  flush: "sync",
+});
+const stop = watch(
+  () => store.eventLog.value.length,
+  (length) => observedLengths.push(length),
+  { flush: "sync" },
+);
+
+store.appendSyntheticChunk(1);
+store.appendSyntheticChunk(2);
+assert.equal(store.markdownBlocks.value.length, 0, "log-mode append keeps Markdown blocks lazy");
+const firstBlocks = store.syncMarkdownBlocks();
+assert.ok(firstBlocks.length > 0, "visible Markdown sync publishes blocks");
+store.appendSyntheticChunk(3);
+assert.equal(
+  store.markdownBlocks.value,
+  firstBlocks,
+  "later appends do not eagerly rematerialize hidden Markdown blocks",
+);
+assert.notEqual(
+  store.syncMarkdownBlocks(),
+  firstBlocks,
+  "next visible sync publishes fresh blocks",
+);
+const marker = "LATESTMARKDOWNMARKER123";
+store.apply({ type: "assistant-delta", text: marker });
+store.apply({ type: "status", state: "paused" });
+await nextTick();
+assert.ok(store.markdown.value.includes(marker), "latest marker reaches Markdown source");
+assert.ok(
+  JSON.stringify(store.syncMarkdownBlocks()).includes(marker),
+  "latest marker reaches the published Markdown blocks",
+);
+const markerSnapshot = store.captureReplayLog();
+store.apply({ type: "assistant-delta", text: " later" });
+assert.equal(
+  markerSnapshot.events.length + 1,
+  store.captureReplayLog().events.length,
+  "captured replay snapshots remain immutable after later appends",
+);
+await nextTick();
+assert.deepEqual(
+  observedLengths,
+  [1, 2, 3, 4, 5, 6],
+  "append must notify eventLog length watchers",
+);
+assert.equal(store.captureReplayLog().events.length, 6, "capture includes every appended event");
+assert.equal(
+  observedTailTypes.at(-1),
+  "assistant-delta",
+  "effects observe items with stable identity",
+);
+
+store.clear();
+await nextTick();
+assert.equal(store.eventLog.value.length, 0, "clear resets the backing array and ref");
+assert.equal(observedLengths.at(-1), 0, "clear notifies eventLog watchers");
+
+const replay = {
+  version: 1 as const,
+  events: Array.from({ length: 12 }, (_, index) => createSyntheticAgentEvent(index + 20)),
+};
+store.loadReplayLog(replay, 7);
+assert.equal(store.eventLog.value.length, 7, "loadReplayLog restores the requested cursor");
+assert.deepEqual(store.captureReplayLog().events, replay.events.slice(0, 7));
+
+const beforeExpansion = store.captureReplayLog();
+store.setFixtureExpansion({ thinkingExpanded: false, toolCallExpanded: false });
+assert.deepEqual(
+  store.captureReplayLog(),
+  beforeExpansion,
+  "fixture expansion toggles must not mutate replay history",
+);
+store.setFixtureExpansion({ thinkingExpanded: true, toolCallExpanded: true });
+assert.deepEqual(store.captureReplayLog(), beforeExpansion);
+
+store.loadReplayLog(replay, 3);
+const seekSnapshot = store.captureReplayLog();
+assert.deepEqual(seekSnapshot.events, replay.events.slice(0, 3), "seek snapshot is stable");
+store.loadReplayLog(replay);
+assert.deepEqual(store.captureReplayLog().events, replay.events, "full replay restores all events");
+store.loadReplayLog(seekSnapshot);
+assert.deepEqual(
+  store.captureReplayLog(),
+  seekSnapshot,
+  "load → seek → restore preserves the replay snapshot",
+);
+
+stop();
+stopEffect();
+process.env.AGENT_CONSOLE_PROFILE_MODE = "1";
+for (const variant of ["A", "B", "C"] as const) {
+  process.env.AGENT_CONSOLE_PROFILE_VARIANT = variant;
+  const variantStore = createAgentTranscriptStore();
+  const variantLengths: number[] = [];
+  const stopVariantWatch = watch(
+    () => variantStore.eventLog.value.length,
+    (length) => variantLengths.push(length),
+    { flush: "sync" },
+  );
+  const beforeAppend = variantStore.eventLog.value;
+  variantStore.appendSyntheticChunk(1);
+  const afterAppend = variantStore.eventLog.value;
+  variantStore.appendSyntheticChunk(2);
+  if (variant === "A") {
+    assert.notEqual(afterAppend, beforeAppend, "profile A replaces the event array per append");
+    assert.notEqual(
+      variantStore.eventLog.value,
+      afterAppend,
+      "profile A preserves exact copied-ref replay semantics",
+    );
+  } else {
+    assert.equal(afterAppend, beforeAppend, `profile ${variant} retains its mutable backing array`);
+    assert.equal(
+      variantStore.eventLog.value,
+      afterAppend,
+      `profile ${variant} keeps array identity after later appends`,
+    );
+  }
+  assert.deepEqual(variantLengths, [1, 2], `profile ${variant} notifies length watchers`);
+  assert.equal(
+    variantStore.markdownBlocks.value.length > 0,
+    variant !== "C",
+    `profile ${variant} uses the expected Markdown publication mode`,
+  );
+  stopVariantWatch();
+}
+delete process.env.AGENT_CONSOLE_PROFILE_MODE;
+delete process.env.AGENT_CONSOLE_PROFILE_VARIANT;
+process.stdout.write("Agent transcript store smoke passed\n");

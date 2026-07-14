@@ -238,6 +238,17 @@ try {
   await nextTick();
   app.scheduler.flushNow();
   assert.ok(api, "agent console API did not mount");
+  assert.equal(api.getStreamIntervalMs(), 12, "product stream cadence default changed");
+  const timerReplayBefore = api.replayTotal.value;
+  const timerInputBefore = api.getInputValue();
+  api.startStream();
+  await new Promise<void>((resolve) => setTimeout(resolve, 120));
+  api.stopStream();
+  assert.ok(
+    api.replayTotal.value >= timerReplayBefore + 2,
+    "12ms product timer did not deliver events",
+  );
+  assert.equal(api.getInputValue(), timerInputBefore, "product timer changed input state");
 
   api.seed(60);
   await nextTick();

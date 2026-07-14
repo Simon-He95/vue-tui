@@ -2,7 +2,7 @@ import type { AppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
 import type { TuiMarkdownBlock } from "@simon_he/vue-tui/markdown";
 import type { AgentEvent, AgentFixtureExpansion } from "./mock-agent-stream";
 import type { Ref } from "vue";
-import { ref } from "vue";
+import { ref, shallowRef, triggerRef } from "vue";
 import { createAppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
 import { createMarkdownBlockSource } from "@simon_he/vue-tui/markdown";
 import {
@@ -37,6 +37,12 @@ export type AgentTranscriptStore = Readonly<{
   logStore: AppendOnlyLogStore;
   markdown: Ref<string>;
   markdownBlocks: Ref<readonly TuiMarkdownBlock[]>;
+  peekMarkdownBlocks: () => readonly TuiMarkdownBlock[];
+  peekMarkdownBlockCount: () => number;
+  syncMarkdownBlocks: () => readonly TuiMarkdownBlock[];
+  getMarkdownMaterializationCount: () => number;
+  resetMarkdownMaterializationCount: () => void;
+  getMarkdownRevision: () => number;
   links: Ref<readonly TranscriptLink[]>;
   stats: Ref<TranscriptStats>;
   eventLog: Ref<readonly AgentEvent[]>;
@@ -94,11 +100,31 @@ export function parseAgentReplayLog(raw: string): AgentReplayLog {
   return createAgentReplayLog(value.events);
 }
 
+type AgentConsoleProfileVariant = "A" | "B" | "C";
+function profileVariant(): AgentConsoleProfileVariant {
+  const profileMode =
+    (globalThis as any).__AGENT_CONSOLE_PROFILE_MODE__ === true ||
+    (globalThis as any).process?.env?.AGENT_CONSOLE_PROFILE_MODE === "1";
+  if (!profileMode) return "C";
+  const value =
+    (globalThis as any).__AGENT_CONSOLE_PROFILE_VARIANT__ ??
+    (globalThis as any).process?.env?.AGENT_CONSOLE_PROFILE_VARIANT;
+  return value === "A" || value === "B" ? value : "C";
+}
+
 export function createAgentTranscriptStore(): AgentTranscriptStore {
+  const variant = profileVariant();
+  const eagerMarkdown = variant !== "C";
+  const copiedEventLog = variant === "A";
   const logStore = createAppendOnlyLogStore({ maxLines: 8_000 });
   const markdownSource = createMarkdownBlockSource({ theme: markdownTheme });
   const markdown = ref("");
-  const markdownBlocks = ref<readonly TuiMarkdownBlock[]>(markdownSource.blocks);
+  const markdownBlocks = ref<readonly TuiMarkdownBlock[]>(
+    eagerMarkdown ? markdownSource.blocks : [],
+  );
+  let markdownBlocksDirty = variant === "C";
+  let markdownMaterializationCount = eagerMarkdown ? 1 : 0;
+  let markdownRevision = 0;
   const links = ref<readonly TranscriptLink[]>([]);
   const stats = ref<TranscriptStats>({
     chunks: 0,
@@ -107,7 +133,10 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
     toolErrors: 0,
     approxTokens: 0,
   });
-  const eventLog = ref<readonly AgentEvent[]>([]);
+  let eventLogBacking: AgentEvent[] = [];
+  const eventLog = copiedEventLog
+    ? ref<readonly AgentEvent[]>([])
+    : shallowRef<readonly AgentEvent[]>(eventLogBacking);
   let assistantOpen = false;
   let toolFenceOpen = false;
   let fixtureExpansion: AgentFixtureExpansion = {
@@ -122,12 +151,45 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
   function appendMarkdown(text: string): void {
     markdown.value += text;
     markdownSource.appendDelta(text);
-    markdownBlocks.value = markdownSource.blocks;
+    markdownRevision++;
+    markdownBlocksDirty = true;
+    if (eagerMarkdown) syncMarkdownBlocks();
   }
 
   function finalizeMarkdownBlock(): void {
     markdownSource.finalizeBlock();
-    markdownBlocks.value = markdownSource.blocks;
+    markdownRevision++;
+    markdownBlocksDirty = true;
+    if (eagerMarkdown) syncMarkdownBlocks();
+  }
+
+  function peekMarkdownBlocks(): readonly TuiMarkdownBlock[] {
+    return markdownBlocks.value;
+  }
+
+  function peekMarkdownBlockCount(): number {
+    return markdownBlocks.value.length;
+  }
+
+  function syncMarkdownBlocks(): readonly TuiMarkdownBlock[] {
+    if (markdownBlocksDirty) {
+      markdownBlocks.value = markdownSource.blocks;
+      markdownBlocksDirty = false;
+      markdownMaterializationCount++;
+    }
+    return markdownBlocks.value;
+  }
+
+  function getMarkdownMaterializationCount(): number {
+    return markdownMaterializationCount;
+  }
+
+  function resetMarkdownMaterializationCount(): void {
+    markdownMaterializationCount = 0;
+  }
+
+  function getMarkdownRevision(): number {
+    return markdownRevision;
   }
 
   function closeAssistantLine(): void {
@@ -153,7 +215,15 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
     logStore.clear();
     markdown.value = "";
     markdownSource.clear();
-    markdownBlocks.value = markdownSource.blocks;
+    markdownRevision = 0;
+    markdownBlocksDirty = true;
+    if (eagerMarkdown) {
+      markdownBlocks.value = markdownSource.blocks;
+      markdownBlocksDirty = false;
+      markdownMaterializationCount++;
+    } else {
+      markdownBlocks.value = [];
+    }
     links.value = [];
     assistantOpen = false;
     toolFenceOpen = false;
@@ -172,7 +242,14 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
   }
 
   function applyEvent(event: AgentEvent, record: boolean): void {
-    if (record) eventLog.value = [...eventLog.value, event];
+    if (record) {
+      if (copiedEventLog) {
+        eventLog.value = [...eventLog.value, event];
+      } else {
+        eventLogBacking.push(event);
+        triggerRef(eventLog);
+      }
+    }
 
     if (event.type === "user") {
       closeAssistantLine();
@@ -260,7 +337,12 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
 
   function clear(): void {
     resetDerived();
-    eventLog.value = [];
+    if (copiedEventLog) {
+      eventLog.value = [];
+    } else {
+      eventLogBacking = [];
+      eventLog.value = eventLogBacking;
+    }
   }
 
   function seed(count = 28): void {
@@ -286,6 +368,12 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
     logStore,
     markdown,
     markdownBlocks,
+    peekMarkdownBlocks,
+    peekMarkdownBlockCount,
+    syncMarkdownBlocks,
+    getMarkdownMaterializationCount,
+    resetMarkdownMaterializationCount,
+    getMarkdownRevision,
     links,
     stats,
     eventLog,

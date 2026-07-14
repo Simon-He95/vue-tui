@@ -1,10 +1,23 @@
 # Phase 3.3: Instrumentation Overhead Validation - Results
 
-**Status**: ⚠️ Initial Run Complete; Acceptance Criteria Not Met  
-**Date**: 2026-07-10  
-**Issue**: #119 (reopened)
+**Status**: ✅ Closed by production-strip and production-workload validation
+**Date**: 2026-07-11
+**Issue**: #119 (closed); remediation #122; final workload #123
 
 ---
+
+## Status clarification
+
+The source-path experiment below is a **historical conclusion as of 2026-07-10** and remains INCONCLUSIVE on its own terms. The engineering gaps are now closed:
+
+| Historical gap           | Resolution                       |
+| ------------------------ | -------------------------------- |
+| Built dist missing       | #122                             |
+| Consumer closure missing | #122                             |
+| Real workload missing    | #123                             |
+| Disabled-path overhead   | production compile strip in #122 |
+
+**Final engineering status: PASS / CLOSED BY REMEDIATION.**
 
 ## Executive Summary
 
@@ -74,7 +87,7 @@
 
 ### Primary Hypotheses (Not Proven)
 
-**ASCII fast path**: Additional branch check  
+**ASCII fast path**: Additional branch check
 **Wrap path**: Unconditional dispatch to internal check
 
 Formal attribution requires targeted ablation tests (A vs B vs C with built artifacts).
@@ -104,7 +117,7 @@ Formal attribution requires targeted ablation tests (A vs B vs C with built arti
 
 ## Overall Status Per #119
 
-**Conclusion**: Initial run complete; acceptance criteria not met; **#119 reopened** pending remediation and proper validation.
+**Historical conclusion (2026-07-10)**: The initial source-path run was inconclusive. **Final closure**: #122 compiled instrumentation out of production artifacts, built-dist and packed-consumer A/B/C passed, #119 closed, and #123 completed the production Agent Console workload profile.
 
 ---
 
@@ -149,3 +162,9 @@ Profile real usage before cache tuning.
 ---
 
 **This audit record documents scope, findings, and next requirements.**
+
+---
+
+## Final closure
+
+The exploratory source-path regression was remediated by #122's production strip. #123 provides the real production workload closure and generated audit summary. Phase 3 instrumentation remains available for source profiling but imposes no standard package cost. The current performance initiative is complete.

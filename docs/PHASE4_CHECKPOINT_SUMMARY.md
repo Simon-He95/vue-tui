@@ -6,7 +6,7 @@
 
 **Decision**: No runtime cache change proposed
 
-**Comprehensive validation**: ❌ Not complete
+**Production workload closure**: ✅ #123 accepts shallow replay backing plus lazy Markdown publication; no core cache/renderer/virtual-scroll change justified
 
 ---
 
@@ -104,26 +104,9 @@ No per-style Cell cache capacity or eviction change is justified by the currentl
 
 ## Next Steps
 
-### Required: Phase 3 Disabled-Path Overhead Validation
+### Completed: Phase 3 Production Overhead Validation
 
-**This is mandatory** and independent of cache-tuning decisions.
-
-Phase 3 instrumentation hooks are in production hot paths (`createCell`, `textCellWidth`, `wrapByCells`). The disabled-path production overhead must be validated.
-
-**Compare**:
-
-- Pre-Phase-3 commit (before PR #116)
-- Current main with instrumentation disabled
-
-**Requirements**:
-
-- Isolated processes or separate worktrees
-- Randomized/alternating execution order
-- Warmup + multiple samples
-- p50/p95 comparison with confidence intervals
-- Use Phase 2 baseline harness
-
-**Tracked in #119**.
+#122 removed instrumentation from production artifacts and passed built-dist/consumer validation; #119 is closed. #123 completed the production Agent Console profile and accepted two contained Agent Console optimizations: mutable shallow replay-history backing and lazy Markdown-block publication in Log mode. Cache/long-text/provider/renderer-architecture/virtual-scroll remain no-change for the measured workload.
 
 ---
 
@@ -154,3 +137,7 @@ Required before:
 Engineering decision: Keep implementation unchanged due to insufficient evidence for change.
 
 **Not a validation** that current cache is optimal or adequate for all scenarios.
+
+## Final workload status
+
+Agent Console production profiling completed in #123. The measured replay-history optimization is accepted. Cache, long-text, provider, renderer architecture, and virtual-scroll changes remain unjustified by the measured workload. The current performance initiative is closed.

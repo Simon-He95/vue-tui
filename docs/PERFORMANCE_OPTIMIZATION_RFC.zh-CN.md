@@ -1,32 +1,33 @@
 # vue-tui 性能优化 RFC
 
-**文档类型**: RFC / 路线图  
-**状态**: Phase 1-2 完成；Phase 3.1-3.2 实现完成、3.3 验证待完成；Phase 4.0 checkpoint 完成  
-**创建日期**: 2026-07-09  
-**最后更新**: 2026-07-10 (Phase 4.0 checkpoint)  
-**修订版本**: v5 (Phase roadmap 更新)  
+**文档类型**: RFC / 路线图
+**状态**: 当前 Agent Console 性能专项完成（Phase 1–3 complete；Phase 4.0 checkpoint no-change；Phase 4.1–4.4 deferred / unmeasured）
+**创建日期**: 2026-07-09
+**最后更新**: 2026-07-11 (#122 production strip；#123 Agent Console production workload)
+**修订版本**: v6 (final measured decision)
 **Unicode 版本**: 17.0.0
 
 ---
 
 ## Phase Status
 
-| Phase | Scope                              | Status                                | PR   |
-| ----- | ---------------------------------- | ------------------------------------- | ---- |
-| 1     | Unicode width correctness          | ✅ Complete                           | #114 |
-| 2     | Statistical baseline harness       | ✅ Complete                           | #115 |
-| 3.1   | Instrumentation foundation         | ✅ Complete                           | #116 |
-| 3.2   | Complete instrumentation           | ✅ Complete                           | #117 |
-| 4.0   | Cell-cache tuning decision gate    | ✅ Checkpoint: no change              | #118 |
-| 4.1   | Targeted cache workload validation | ⏸️ Optional for tuning / deferred     | -    |
-| 4.2   | Long-text cache admission          | ⏸️ Not measured                       | -    |
-| 4.3   | Provider-aware cache               | ⏸️ No reproducible issue              | -    |
-| 4.4   | Virtual-scroll optimization        | ⏸️ Requires browser profiler evidence | -    |
-| -     | **Phase 3 disabled-path overhead** | ⚠️ **Required** (independent)         | #119 |
+| Phase | Scope                                  | Status                                      | PR          |
+| ----- | -------------------------------------- | ------------------------------------------- | ----------- |
+| 1     | Unicode width correctness              | ✅ Complete                                 | #114        |
+| 2     | Statistical baseline harness           | ✅ Complete                                 | #115        |
+| 3.1   | Instrumentation foundation             | ✅ Complete                                 | #116        |
+| 3.2   | Complete instrumentation               | ✅ Complete                                 | #117        |
+| 3.3   | Overhead validation + production strip | ✅ Complete                                 | #119 / #122 |
+| 4.0   | Cell-cache tuning decision gate        | ✅ Checkpoint: no change                    | #118        |
+| 4.1   | Targeted cache workload validation     | ⏸️ Optional for tuning / deferred           | -           |
+| 4.2   | Long-text cache admission              | ⏸️ Not measured                             | -           |
+| 4.3   | Provider-aware cache                   | ⏸️ No reproducible issue                    | -           |
+| 4.4   | Virtual-scroll optimization            | ⏸️ Requires browser profiler evidence       | -           |
+| -     | Agent Console production workload      | ✅ Complete; contained history optimization | #123        |
 
 **Note**: Phase 4.0 completed the Cell-cache tuning decision checkpoint. Current cache implementation unchanged. Comprehensive cache validation (4.1+) and original Phase 4 work (long-text, provider, virtual-scroll) remain deferred or unmeasured.
 
-**Critical**: Phase 3 instrumentation hooks are in production hot paths. Disabled-path overhead validation is required independently of cache tuning decisions.
+**Final decision**: #122 removes instrumentation from standard production artifacts. #123 profiles the production Agent Console workload and accepts two measured Agent Console application-level optimizations: mutable shallow replay-history backing and lazy Markdown-block publication in Log mode. 对本次 Agent Console workload，cache、long-text、provider 与 virtual-scroll 均没有证据支持修改；当前 Agent Console 专项结束，Phase 4.1–4.4 仍为 deferred / unmeasured。
 
 ---
 
@@ -38,11 +39,11 @@
 
 本 RFC 基于代码审查和多轮 review 反馈，提出 vue-tui 性能优化方向和实施建议。
 
-- ✅ **Phase 1-2 完成；Phase 3 实现已合并但验证未完成** - Unicode correctness, baseline, instrumentation
+- ✅ **Phase 1-3 完成** - Unicode correctness、baseline、instrumentation validation 与 production strip 均完成
 - ✅ **Phase 4.0 checkpoint 完成** - Cell-cache 决策：当前证据不足以支持调整，暂不改动
-- ⏳ **Phase 4.1+ 待实施** - 目标 cache 工作负载（若继续 cache 优化）
-- ⚠️ **Phase 3 overhead 验证必需** - 独立于 cache 工作
-- 📊 后续优化应拆分为多个小 PR，每个 PR 配真实性能数据
+- ⏸️ **Phase 4.1–4.4 保持 deferred / unmeasured** - 本次 Agent Console workload 不支持修改这些区域；未来仅在独立 production evidence 出现时重启评估
+- ✅ **Phase 3 overhead 已由 #122 production strip 与 #123 workload closure 解决**
+- 📊 当前 Agent Console 专项在 #123 结束；这不是对 Phase 4.1–4.4 的全局实现或永久关闭
 - 📊 所有收益预期基于代码审查，需要真实 baseline 数据验证
 
 ---
@@ -118,8 +119,8 @@ expect(charCellWidth("⏱️")).toBe(2); // 有 VS16 时宽
 // Box drawing 在 cjk mode 仍然窄 (现有行为)
 ```
 
-**优先级**: P1 (功能正确性)  
-**预期难度**: 中等  
+**优先级**: P1 (功能正确性)
+**预期难度**: 中等
 **建议实施**: 独立 PR，不依赖性能优化
 
 ---
@@ -289,7 +290,7 @@ const useRenderPassCache =
 // 同一长文本多次渲染，验证限制长度不会误伤真实复用收益
 ```
 
-**优先级**: P2 (性能优化)  
+**优先级**: P2 (性能优化)
 **建议实施**: Profiler 确认 `textCellWidth` 是热点后再实施
 
 ---
@@ -432,25 +433,25 @@ const useRenderPassCache =
 
 ### 1. Unicode 完整性
 
-❌ **错误**: 只添加部分 Extension，使用过时 Unicode 版本  
+❌ **错误**: 只添加部分 Extension，使用过时 Unicode 版本
 ✅ **正确**: Pin Unicode 17.0.0，测试所有 Extension (B-J)，添加反例
 
-❌ **错误**: 把所有补充平面字符都判宽  
+❌ **错误**: 把所有补充平面字符都判宽
 ✅ **正确**: 基于 EastAsianWidth.txt，保留 terminal tailoring 优先级
 
 ### 2. 破坏 Grapheme
 
-❌ **错误**: 按 UTF-16 index 直接切分文本  
+❌ **错误**: 按 UTF-16 index 直接切分文本
 ✅ **正确**: 基于 grapheme 边界
 
 ### 3. 过度优化
 
-❌ **错误**: 没有 profiler 数据就调 cache 参数或做 chunking  
+❌ **错误**: 没有 profiler 数据就调 cache 参数或做 chunking
 ✅ **正确**: Profiler 先行，数据驱动决策
 
 ### 4. 验收标准不足
 
-❌ **错误**: 只报 cache hit rate 提升  
+❌ **错误**: 只报 cache hit rate 提升
 ✅ **正确**: 提供完整指标（live styles、allocation、p50/p95、heap）
 
 ---
@@ -512,9 +513,9 @@ const useRenderPassCache =
 
 ---
 
-**文档状态**: ✅ Roadmap / 执行记录  
-**实施状态**: Phase 1-2 完成；Phase 3 实现已合并但验证未完成（#119）；Phase 4.0 checkpoint 完成；Phase 4.1+ 推迟  
-**验证方式**: 真实 baseline + profiler 数据驱动  
+**文档状态**: ✅ Roadmap / 执行记录
+**实施状态**: Phase 1-3 完成；#119 已由 #122 关闭；Phase 4.0 checkpoint 维持 no-change；#123 完成 Agent Console workload 与局部应用层优化；Phase 4.1–4.4 仍为 deferred / unmeasured
+**验证方式**: 真实 baseline + profiler 数据驱动
 **Unicode 版本**: 17.0.0
 
-**最后更新**: 2026-07-10 (v5, Phase 1-4.0 执行完成，Phase 3.3 跟踪中)
+**最后更新**: 2026-07-11 (v6, #114–#123 当前性能专项完成)
