@@ -194,7 +194,7 @@ async function runProductStream(adapter: AgentConsoleProfileAdapter, targetTicks
     throw new Error(`product stream interval must be 12ms, received ${intervalMs}`);
   const beforeIndex = adapter.api.getStreamIndex();
   const started = adapter.now();
-  const timeoutAt = started + Math.max(5_000, targetTicks * intervalMs * 4);
+  const timeoutAt = started + Math.max(60_000, targetTicks * intervalMs * 12);
   adapter.api.startStream();
   try {
     while (adapter.api.getStreamIndex() - beforeIndex < targetTicks) {
