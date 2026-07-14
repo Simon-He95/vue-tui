@@ -29,7 +29,7 @@
     "scripts/profile-agent-console-cli.ts": "f990d7d144b6c8830c09339ebb8145624569eff85dbee9046ad122edbaa01544",
     "scripts/tsconfig.agent-console-profile-dist.json": "43f8b7a5af20c2c15bd025e0e0ee6e6dc35f6bd09a64e07fb6324fdbdfcb10f6"
   },
-  "verificationRef": "ca3107a6541ed1c906b97e944b17ebca40df5534",
+  "verificationRef": "ad2bd88fe11a50e85184aa0daaea8915cef7e911",
   "verificationInputs": {
     "scripts/agent-console-cpu-profile.ts": "20330b5fae6506344a36c5d2703f745a7ac3376f996d50ce54653c41e488de1f",
     "scripts/agent-console-profile-environment.ts": "5b2df314bfe1afeab5e7c5af9c457212a366c76e56d4fa9fa584fa016fcc9504",
@@ -38,7 +38,7 @@
     "scripts/check-agent-console-profile-baseline.ts": "3a4fc45f72c5fcec5acb03f482759cc98a49103d8c844ef782c9ae419ce5f12f",
     "scripts/record-agent-console-profile.ts": "e025a845f79f389825e8064a67e32940f0e25ee16cab87076fa78b99a3c589f3",
     "scripts/summarize-agent-console-profile.ts": "f5e42e8f91904b116d89b6d036a4684b57694cd6cf69a638c42b9ce79339f1c5",
-    "scripts/validate-agent-console-abc.ts": "2344084efab0347e75182964d716ddb78aabb9c985666649c33ba01714ebe062"
+    "scripts/validate-agent-console-abc.ts": "84a4e5ad414c6867641c85d1e2fad230e1fd7764f292a1fc392203a9e2a89440"
   },
   "canonicalConfig": {
     "seedCount": 6000,
