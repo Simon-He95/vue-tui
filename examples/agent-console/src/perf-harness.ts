@@ -195,7 +195,7 @@ async function runProductStream(adapter: AgentConsoleProfileAdapter, targetTicks
   const beforeIndex = adapter.api.getStreamIndex();
   const started = adapter.now();
   const timeoutAt = started + Math.max(60_000, targetTicks * intervalMs * 12);
-  adapter.api.startStream();
+  adapter.api.startStream(beforeIndex + targetTicks);
   try {
     while (adapter.api.getStreamIndex() - beforeIndex < targetTicks) {
       if (adapter.now() >= timeoutAt)

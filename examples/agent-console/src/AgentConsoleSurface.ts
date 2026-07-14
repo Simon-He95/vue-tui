@@ -81,7 +81,7 @@ export type AgentConsoleApi = Readonly<{
   appendSyntheticChunk: (index: number) => void;
   applyProfileEvent: (event: AgentEvent) => void;
   appendBurst: (count: number) => Promise<void>;
-  startStream: () => void;
+  startStream: (stopAtStreamIndex?: number) => void;
   stopStream: () => void;
   getStreamIntervalMs: () => number;
   getStreamIndex: () => number;
@@ -196,6 +196,7 @@ export const AgentConsoleSurface = defineComponent({
     const streamIndex = ref(0);
     let replaySource: readonly AgentEvent[] | null = null;
     let timer: ReturnType<typeof setInterval> | null = null;
+    let stopAtStreamIndex: number | undefined;
     let ready = false;
 
     terminalContext.observability.framePerf.enabled.value = true;
@@ -509,6 +510,7 @@ export const AgentConsoleSurface = defineComponent({
     function applyNextEvent(): void {
       transcript.apply(stream.next());
       streamIndex.value++;
+      if (stopAtStreamIndex != null && streamIndex.value >= stopAtStreamIndex) stopStream();
       syncReplayCursor();
       if (mode.value === "markdown" && markdownStickToBottom.value) {
         markdownScrollTop.value = 1_000_000;
@@ -519,8 +521,14 @@ export const AgentConsoleSurface = defineComponent({
       });
     }
 
-    function startStream(): void {
+    function startStream(targetStreamIndex?: number): void {
       if (timer) return;
+      if (
+        targetStreamIndex != null &&
+        (!Number.isInteger(targetStreamIndex) || targetStreamIndex <= streamIndex.value)
+      )
+        throw new Error("targetStreamIndex must be an integer above the current stream index");
+      stopAtStreamIndex = targetStreamIndex;
       streamState.value = "connected";
       transcript.apply({ type: "status", state: "connected" });
       syncReplayCursor();
@@ -531,6 +539,7 @@ export const AgentConsoleSurface = defineComponent({
       if (!timer) return;
       clearInterval(timer);
       timer = null;
+      stopAtStreamIndex = undefined;
       streamState.value = "paused";
       transcript.apply({ type: "status", state: "paused" });
       syncReplayCursor();
