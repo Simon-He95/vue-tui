@@ -4136,7 +4136,7 @@ export function createStdoutRenderer(
         const visibleRect = clipGraphicRectToViewport(rect, size);
         if (isDebugEnabled()) {
           getDebugLog().render(
-            `terminal graphic render draw: id=${payload.id}, x=${rect.x}, y=${rect.y}, w=${rect.w}, h=${rect.h}, visible=${visibleRect ? `${visibleRect.x},${visibleRect.y},${visibleRect.w},${visibleRect.h}` : "none"}, resizeRedraw=${payload.resizeRedraw ? "true" : "false"}, previous=${previous ? `${previous.x},${previous.y},${previous.w},${previous.h}` : "none"}`,
+            `terminal graphic render draw: id=${payload.id}, x=${rect.x}, y=${rect.y}, w=${rect.w}, h=${rect.h}, visible=${visibleRect ? `${visibleRect.x},${visibleRect.y},${visibleRect.w},${visibleRect.h}` : "none"}, resizeRedraw=${payload.resizeRedraw || payload.terminalResizeRedraw ? "true" : "false"}, previous=${previous ? `${previous.x},${previous.y},${previous.w},${previous.h}` : "none"}`,
           );
         }
         const clearRect = visibleRect ? clearGraphicRectForRowsNotPainted(visibleRect) : "";
