@@ -51,6 +51,7 @@ import { createTuiProfiler } from "../../observability/tui-profiler.js";
 import { firstNonEmptyEnv } from "../../utils/env.js";
 import { STDOUT_RENDERER_CAPABILITIES } from "../capabilities.js";
 import {
+  createKittyDeleteGraphicsSequence,
   detectTerminalGraphicsCapabilities,
   hashTerminalGraphicsString,
   isSafeTerminalGraphicsSequence,
@@ -520,6 +521,7 @@ export function createStdoutRenderer(
     sequence: string;
     resizeSequence?: string;
     clearSequence?: string;
+    allowTextOverlay?: boolean;
   }>;
   type RetainedTerminalGraphic = Readonly<{
     active: ActiveTerminalGraphic;
@@ -534,6 +536,7 @@ export function createStdoutRenderer(
   const pendingGraphicSignatures = new Map<string, string>();
   const activeGraphicSignatures = new Map<string, string>();
   const retainedGraphics = new Map<string, RetainedTerminalGraphic>();
+  const knownKittyImageIds = new Set<number>();
   const terminalResizeDirtyGraphics = new Set<string>();
   let nextGraphicsOrder = 0;
   let terminalGraphicsFlushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -578,6 +581,7 @@ export function createStdoutRenderer(
       sequence: string;
       resizeSequence?: string;
       clearSequence?: string;
+      allowTextOverlay?: boolean;
     }>,
   ): string {
     return [
@@ -590,6 +594,7 @@ export function createStdoutRenderer(
       hashTerminalGraphicsString(payload.sequence),
       hashTerminalGraphicsString(payload.resizeSequence ?? ""),
       hashTerminalGraphicsString(payload.clearSequence ?? ""),
+      payload.allowTextOverlay ? "1" : "0",
     ].join(":");
   }
   function kittyClearSequenceKeepsImageData(sequence: string): boolean {
@@ -652,6 +657,24 @@ export function createStdoutRenderer(
     if (imageId === "0" || placementId === "0") return null;
     return `${imageId}:${placementId}`;
   }
+
+  function kittyImageId(sequence: string | undefined): number | null {
+    if (!sequence) return null;
+
+    const start = sequence.indexOf("\u001B_G");
+    if (start < 0) return null;
+    const end = sequence.indexOf("\u001B\\", start + 3);
+    if (end < 0) return null;
+
+    const body = sequence.slice(start + 3, end);
+    const controlsRaw = body.slice(0, body.indexOf(";") < 0 ? body.length : body.indexOf(";"));
+    for (const part of controlsRaw.split(",")) {
+      if (!part.startsWith("i=")) continue;
+      const imageId = Number(part.slice(2));
+      return Number.isInteger(imageId) && imageId > 0 ? imageId : null;
+    }
+    return null;
+  }
   function canReplaceKittyPlacementWithoutClear(
     previous: ActiveTerminalGraphic,
     payload: QueuedTerminalGraphicsPayload,
@@ -674,7 +697,10 @@ export function createStdoutRenderer(
         }))
     );
   }
-  function queueTerminalGraphicClear(id: string): boolean {
+  function queueTerminalGraphicClear(
+    id: string,
+    options: Readonly<{ retainOnClear?: boolean }> = {},
+  ): boolean {
     if (disposed) return false;
 
     const removedPendingDraw = pendingGraphics.delete(`${id}:draw`);
@@ -683,7 +709,7 @@ export function createStdoutRenderer(
 
     const active = activeGraphics.get(id);
     if (!active) {
-      retainedGraphics.delete(id);
+      if (!options.retainOnClear) retainedGraphics.delete(id);
       return removedPendingDraw;
     }
 
@@ -696,6 +722,7 @@ export function createStdoutRenderer(
         h: active.h,
         protocol: active.protocol,
         sequence: active.clearSequence,
+        retainOnClear: options.retainOnClear,
         op: "clear",
         order: nextGraphicsOrder++,
       };
@@ -710,6 +737,81 @@ export function createStdoutRenderer(
 
     pendingGraphicClears.add(id);
     recordTerminalGraphicTrace({ type: "clear", id });
+    requestTerminalGraphicsFlush();
+    return true;
+  }
+
+  function clearAllTerminalGraphics(): boolean {
+    if (disposed || graphicsCapabilities.preferredProtocol !== "kitty") return false;
+
+    const imageIds = new Set(knownKittyImageIds);
+    let needsVisibleFallback = false;
+    const rememberImageId = (...sequences: Array<string | undefined>): void => {
+      for (const sequence of sequences) {
+        const imageId = kittyImageId(sequence);
+        if (imageId != null) {
+          imageIds.add(imageId);
+          return;
+        }
+      }
+      needsVisibleFallback = true;
+    };
+    for (const active of activeGraphics.values()) {
+      rememberImageId(active.sequence, active.resizeSequence, active.clearSequence);
+    }
+    for (const retained of retainedGraphics.values()) {
+      rememberImageId(
+        retained.active.sequence,
+        retained.active.resizeSequence,
+        retained.active.clearSequence,
+      );
+    }
+    for (const payload of pendingGraphics.values()) {
+      rememberImageId(payload.sequence, payload.resizeSequence, payload.clearSequence);
+    }
+
+    pendingGraphics.clear();
+    pendingGraphicClears.clear();
+    activeGraphics.clear();
+    pendingGraphicSignatures.clear();
+    activeGraphicSignatures.clear();
+    retainedGraphics.clear();
+    knownKittyImageIds.clear();
+    terminalResizeDirtyGraphics.clear();
+
+    for (const imageId of imageIds) {
+      const payload: QueuedTerminalGraphicsPayload = {
+        id: `__terminal_graphics_clear_image_${imageId}__`,
+        x: 0,
+        y: 0,
+        w: 1,
+        h: 1,
+        protocol: "kitty",
+        sequence: createKittyDeleteGraphicsSequence({ imageId, freeImageData: true }),
+        op: "clear",
+        order: nextGraphicsOrder++,
+      };
+      if (validateTerminalGraphicsPayload(payload, graphicsCapabilities)) {
+        pendingGraphics.set(`${payload.id}:clear`, payload);
+      }
+    }
+    if (needsVisibleFallback) {
+      const payload: QueuedTerminalGraphicsPayload = {
+        id: "__terminal_graphics_clear_visible__",
+        x: 0,
+        y: 0,
+        w: 1,
+        h: 1,
+        protocol: "kitty",
+        sequence: createKittyDeleteGraphicsSequence({ allVisible: true, freeImageData: true }),
+        op: "clear",
+        order: nextGraphicsOrder++,
+      };
+      if (validateTerminalGraphicsPayload(payload, graphicsCapabilities)) {
+        pendingGraphics.set(`${payload.id}:clear`, payload);
+      }
+    }
+    if (pendingGraphics.size === 0) return false;
     requestTerminalGraphicsFlush();
     return true;
   }
@@ -746,6 +848,7 @@ export function createStdoutRenderer(
         sequence,
         resizeSequence: active.resizeSequence,
         clearSequence: active.clearSequence,
+        allowTextOverlay: active.allowTextOverlay,
         op: "draw",
         order: nextGraphicsOrder++,
         resizeRedraw: true,
@@ -779,6 +882,7 @@ export function createStdoutRenderer(
         sequence: active.resizeSequence ?? active.sequence,
         resizeSequence: active.resizeSequence,
         clearSequence: active.clearSequence,
+        allowTextOverlay: active.allowTextOverlay,
         op: "draw",
         order: nextGraphicsOrder++,
         resizeRedraw: true,
@@ -831,6 +935,8 @@ export function createStdoutRenderer(
           height: normalized.h ?? 1,
         });
         if (!frame) return false;
+        const imageId = kittyImageId(frame.sequence) ?? kittyImageId(normalized.resizeSequence);
+        if (imageId != null) knownKittyImageIds.add(imageId);
         if (isDebugEnabled()) {
           const size = terminal.size();
           getDebugLog().render(
@@ -849,7 +955,7 @@ export function createStdoutRenderer(
               `terminal graphic queue draw rejected offscreen: id=${frame.id}, x=${normalized.x}, y=${normalized.y}, w=${frame.width}, h=${frame.height}, viewport=${size.cols}x${size.rows}`,
             );
           }
-          queueTerminalGraphicClear(frame.id);
+          queueTerminalGraphicClear(frame.id, { retainOnClear: normalized.retainOnClear });
           return false;
         }
 
@@ -917,6 +1023,52 @@ export function createStdoutRenderer(
           return true;
         }
 
+        const active = activeGraphics.get(frame.id);
+        const activeCanReplacePlacement =
+          active &&
+          resizeSequence &&
+          canReplaceKittyPlacementWithoutClear(active, {
+            ...normalized,
+            id: frame.id,
+            w: frame.width,
+            h: frame.height,
+            sequence: resizeSequence,
+            resizeSequence,
+            clearSequence,
+            fallbackText: frame.fallbackText,
+            resizeRedraw: true,
+            placementMoveWithoutClear: true,
+          });
+        if (
+          !forceTerminalResizeRedraw &&
+          !normalized.forceDraw &&
+          !normalized.resizeRedraw &&
+          activeCanReplacePlacement &&
+          resizeSequence
+        ) {
+          pendingGraphics.set(`${frame.id}:draw`, {
+            ...normalized,
+            id: frame.id,
+            w: frame.width,
+            h: frame.height,
+            sequence: resizeSequence,
+            resizeSequence,
+            clearSequence,
+            fallbackText: frame.fallbackText,
+            resizeRedraw: true,
+            placementMoveWithoutClear: false,
+          });
+          pendingGraphicSignatures.set(frame.id, signature);
+          recordTerminalGraphicTrace({
+            type: "queue",
+            id: frame.id,
+            protocol: normalized.protocol,
+            bytes: resizeSequence.length,
+          });
+          requestTerminalGraphicsFlush(Boolean(normalized.deferFlush));
+          return true;
+        }
+
         const retained = retainedGraphics.get(frame.id);
         const retainedCanReplacePlacement =
           retained &&
@@ -952,7 +1104,7 @@ export function createStdoutRenderer(
             clearSequence,
             fallbackText: frame.fallbackText,
             resizeRedraw: true,
-            placementMoveWithoutClear: true,
+            placementMoveWithoutClear: false,
             terminalResizeRedraw: forceTerminalResizeRedraw,
           });
           pendingGraphicSignatures.set(frame.id, signature);
@@ -1024,6 +1176,9 @@ export function createStdoutRenderer(
     },
     clear(id) {
       return queueTerminalGraphicClear(id);
+    },
+    clearAll() {
+      return clearAllTerminalGraphics();
     },
   };
   const unregisterGraphicsOutput = registerTerminalGraphicsOutput(terminal, graphicsOutput);
@@ -2775,6 +2930,7 @@ export function createStdoutRenderer(
           sequence: active.sequence,
           resizeSequence: active.resizeSequence,
           clearSequence: active.clearSequence,
+          allowTextOverlay: active.allowTextOverlay,
           op: "draw",
           order: nextGraphicsOrder++,
         });
@@ -2787,7 +2943,7 @@ export function createStdoutRenderer(
       if (explicitGraphicClears.has(id)) continue;
       if (pendingGraphicIds.has(id)) continue;
       if (intersectsScrollOperations(active)) continue;
-      addTerminalGraphicTextPreserveSpans(active);
+      if (!active.allowTextOverlay) addTerminalGraphicTextPreserveSpans(active);
     }
 
     if (normalizedScrollOperations?.length && activeGraphics.size > 0) {
@@ -4163,6 +4319,7 @@ export function createStdoutRenderer(
           sequence: payload.sequence,
           resizeSequence: payload.resizeSequence ?? previous?.resizeSequence,
           clearSequence: payload.clearSequence,
+          allowTextOverlay: payload.allowTextOverlay ?? previous?.allowTextOverlay,
         });
         nextActiveGraphicSignatures.set(payload.id, nextSignature);
         nextPendingGraphicSignatures.delete(payload.id);
@@ -4983,6 +5140,7 @@ export function createStdoutRenderer(
     pendingGraphicClears.clear();
     pendingGraphicSignatures.clear();
     retainedGraphics.clear();
+    knownKittyImageIds.clear();
     terminalResizeDirtyGraphics.clear();
     try {
       if (activeGraphics.size > 0) {

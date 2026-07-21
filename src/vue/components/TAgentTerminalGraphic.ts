@@ -391,6 +391,7 @@ type LastDrawnGraphic = Readonly<{
   clearSequence?: string;
   resizeSequence?: string;
   retainOnClear?: boolean;
+  allowTextOverlay?: boolean;
   drawKey: string;
   activityVersion: number;
   scrollVersion: number;
@@ -912,6 +913,7 @@ export const TAgentTerminalGraphic = defineComponent({
           sequence: canReusePlacementSequence && resizeSequence ? resizeSequence : current.sequence,
           resizeSequence,
           clearSequence,
+          retainOnClear: Boolean(props.cacheKey && resizeSequence),
           resizeRedraw: canReusePlacementSequence,
           placementMoveWithoutClear: canMoveWithoutClear,
           allowTextOverlay: options.allowTextOverlay,
@@ -945,6 +947,7 @@ export const TAgentTerminalGraphic = defineComponent({
         clearSequence,
         resizeSequence,
         retainOnClear: Boolean(props.cacheKey && resizeSequence),
+        allowTextOverlay: Boolean(options.allowTextOverlay),
         drawKey,
         activityVersion: graphicsActivityVersion.value,
         scrollVersion,
@@ -1478,7 +1481,8 @@ export const TAgentTerminalGraphic = defineComponent({
               allowTextOverlay = retainedRawCoveredByHigherRenderNode(r);
               forceActiveRawRedraw =
                 preserveActiveRawGraphic &&
-                (previous.activityVersion !== graphicsActivityVersion.value || allowTextOverlay);
+                (previous.activityVersion !== graphicsActivityVersion.value ||
+                  previous.allowTextOverlay !== allowTextOverlay);
             }
           }
           const preserveActiveRawGraphicForPaint = preserveActiveRawGraphic;

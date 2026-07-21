@@ -949,10 +949,11 @@ describe("markdown image fallback and sizing", () => {
           (renderer as any).render(undefined, true);
 
           const clearIndex = stdout.indexOf("a=d");
-          const drawIndex = stdout.indexOf("a=T");
+          const drawIndex = stdout.indexOf("a=p");
           expect(clearIndex).toBeGreaterThanOrEqual(0);
           expect(drawIndex).toBeGreaterThanOrEqual(0);
           expect(clearIndex).toBeLessThan(drawIndex);
+          expect(stdout).not.toContain("a=T");
         } finally {
           renderer.dispose();
           mounted.unmount();

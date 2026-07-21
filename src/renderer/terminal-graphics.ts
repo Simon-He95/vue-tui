@@ -88,6 +88,7 @@ export type TerminalGraphicsOutput = Readonly<{
   capabilities: TerminalGraphicsCapabilities;
   queue: (payload: TerminalGraphicsPayload) => boolean;
   clear?: (id: string) => boolean;
+  clearAll?: () => boolean;
   isActive?: (id: string) => boolean;
 }>;
 

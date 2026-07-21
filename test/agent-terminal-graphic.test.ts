@@ -1238,6 +1238,114 @@ describe("TAgentTerminalGraphic", () => {
     }
   });
 
+  it("re-places cached Kitty data when a retained clear and remount share a TTY frame", () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 6,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 6,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = withEnv(
+      {
+        VUE_TUI_TERMINAL_GRAPHICS: "kitty",
+        VUE_TUI_GRAPHICS_FORCE: "1",
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+    const graphics = getTerminalGraphicsOutput(app.terminal);
+    const sequence = createKittyGraphicsSequence("QUJD", {
+      imageId: 123,
+      placementId: 456,
+      columns: 4,
+      rows: 2,
+    });
+    const placementSequence = createKittyPlacementSequence({
+      imageId: 123,
+      placementId: 456,
+      columns: 4,
+      rows: 2,
+    });
+    const clearSequence = createKittyDeleteGraphicsSequence({
+      imageId: 123,
+      placementId: 456,
+    });
+
+    try {
+      expect(
+        graphics?.queue({
+          id: "g1",
+          x: 1,
+          y: 1,
+          w: 4,
+          h: 2,
+          protocol: "kitty",
+          sequence,
+          resizeSequence: placementSequence,
+          clearSequence,
+        }),
+      ).toBe(true);
+      flushStdout(stdout);
+      expect(writes.join("")).toContain(sequence);
+
+      writes.length = 0;
+      expect(
+        graphics?.queue({
+          id: "g1",
+          x: 1,
+          y: 1,
+          w: 4,
+          h: 2,
+          protocol: "kitty",
+          sequence: clearSequence,
+          retainOnClear: true,
+          op: "clear",
+        }),
+      ).toBe(true);
+      expect(
+        graphics?.queue({
+          id: "g1",
+          x: 1,
+          y: 2,
+          w: 4,
+          h: 2,
+          protocol: "kitty",
+          sequence,
+          resizeSequence: placementSequence,
+          clearSequence,
+        }),
+      ).toBe(true);
+      flushStdout(stdout);
+
+      const remountOutput = writes.join("");
+      expect(remountOutput).toContain(clearSequence);
+      expect(remountOutput).toContain(placementSequence);
+      expect(remountOutput).not.toContain(sequence);
+      expect(remountOutput.indexOf(clearSequence)).toBeLessThan(
+        remountOutput.indexOf(placementSequence),
+      );
+    } finally {
+      stdout.dispose();
+      app.dispose();
+    }
+  });
+
   it("clears a same-rect Kitty graphic before drawing a different signature", () => {
     vi.useFakeTimers();
     const writes: string[] = [];
@@ -2813,7 +2921,7 @@ describe("TAgentTerminalGraphic", () => {
     app.dispose();
   });
 
-  it("reuses retained Kitty image data when a cached graphic remounts at a new position", async () => {
+  it("clears the old placement while reusing retained Kitty image data at a new position", async () => {
     const writes: string[] = [];
     const output: CliOutput = {
       isTTY: true,
@@ -2908,7 +3016,10 @@ describe("TAgentTerminalGraphic", () => {
     expect(renderer).toHaveBeenCalledTimes(2);
     expect(remountOutput).toContain(placementSequence);
     expect(remountOutput).not.toContain(imageSequence);
-    expect(remountOutput).not.toContain(clearSequence);
+    expect(remountOutput).toContain(clearSequence);
+    expect(remountOutput.indexOf(clearSequence)).toBeLessThan(
+      remountOutput.indexOf(placementSequence),
+    );
 
     stdout.dispose();
     app.dispose();
@@ -3014,7 +3125,10 @@ describe("TAgentTerminalGraphic", () => {
     expect(renderer).toHaveBeenCalledTimes(2);
     expect(remountOutput).toContain(placementSequence);
     expect(remountOutput).not.toContain(imageSequence);
-    expect(remountOutput).not.toContain(clearSequence);
+    expect(remountOutput).toContain(clearSequence);
+    expect(remountOutput.indexOf(clearSequence)).toBeLessThan(
+      remountOutput.indexOf(placementSequence),
+    );
 
     stdout.dispose();
     app.dispose();
@@ -3134,7 +3248,10 @@ describe("TAgentTerminalGraphic", () => {
       expect(renderer).toHaveBeenCalledTimes(2);
       expect(remountOutput).toContain(placementSequence);
       expect(remountOutput).not.toContain(imageSequence);
-      expect(remountOutput).not.toContain(clearSequence);
+      expect(remountOutput).toContain(clearSequence);
+      expect(remountOutput.indexOf(clearSequence)).toBeLessThan(
+        remountOutput.indexOf(placementSequence),
+      );
     } finally {
       stdout.dispose();
       app.dispose();
@@ -6961,6 +7078,304 @@ describe("TAgentTerminalGraphic", () => {
     expect(writes.join("")).toContain(clearSequence);
     expect(getStdoutRendererMetrics().terminalGraphicsActive).toBe(0);
 
+    app.dispose();
+  });
+
+  it("releases retained Kitty image data when all graphics are cleared", () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 8,
+      rows: 3,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const app = createTerminalApp({
+      cols: 8,
+      rows: 3,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = withEnv(
+      { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined, TMUX: undefined },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+    const graphics = getTerminalGraphicsOutput(app.terminal);
+    const uploadSequence = createKittyGraphicsSequence("QUJD", {
+      imageId: 123,
+      placementId: 456,
+      columns: 3,
+      rows: 1,
+    });
+    const placementSequence = createKittyPlacementSequence({
+      imageId: 123,
+      placementId: 456,
+      columns: 3,
+      rows: 1,
+    });
+    const clearSequence = createKittyDeleteGraphicsSequence({
+      imageId: 123,
+      placementId: 456,
+    });
+    const pendingUploadSequence = createKittyGraphicsSequence("REVG", {
+      imageId: 789,
+      placementId: 321,
+      columns: 3,
+      rows: 1,
+    });
+    const pendingClearSequence = createKittyDeleteGraphicsSequence({
+      imageId: 789,
+      placementId: 321,
+    });
+    expect(graphics).not.toBeNull();
+
+    expect(
+      graphics!.queue({
+        id: "retained-graphic",
+        x: 1,
+        y: 1,
+        w: 3,
+        h: 1,
+        protocol: "kitty",
+        sequence: uploadSequence,
+        resizeSequence: placementSequence,
+        clearSequence,
+      }),
+    ).toBe(true);
+    flushStdoutRows(stdout, []);
+    expect(
+      graphics!.queue({
+        id: "retained-graphic",
+        x: 1,
+        y: 1,
+        w: 3,
+        h: 1,
+        protocol: "kitty",
+        sequence: clearSequence,
+        op: "clear",
+        retainOnClear: true,
+      }),
+    ).toBe(true);
+    flushStdoutRows(stdout, []);
+    expect(graphics!.isActive?.("retained-graphic")).toBe(true);
+    expect(
+      graphics!.queue({
+        id: "pending-clear-graphic",
+        x: 1,
+        y: 1,
+        w: 3,
+        h: 1,
+        protocol: "kitty",
+        sequence: pendingUploadSequence,
+        clearSequence: pendingClearSequence,
+      }),
+    ).toBe(true);
+    flushStdoutRows(stdout, []);
+
+    writes.length = 0;
+    expect(graphics!.clear?.("pending-clear-graphic")).toBe(true);
+    expect(graphics!.clearAll?.()).toBe(true);
+    flushStdoutRows(stdout, []);
+
+    expect(writes.join("")).toContain(
+      createKittyDeleteGraphicsSequence({ imageId: 123, freeImageData: true }),
+    );
+    expect(writes.join("")).toContain(
+      createKittyDeleteGraphicsSequence({ imageId: 789, freeImageData: true }),
+    );
+    expect(writes.join("")).not.toContain(pendingClearSequence);
+    expect(writes.join("")).not.toContain(
+      createKittyDeleteGraphicsSequence({ allVisible: true, freeImageData: true }),
+    );
+    expect(graphics!.isActive?.("retained-graphic")).toBe(false);
+    expect(graphics!.isActive?.("pending-clear-graphic")).toBe(false);
+
+    writes.length = 0;
+    expect(
+      graphics!.queue({
+        id: "retained-graphic",
+        x: 1,
+        y: 1,
+        w: 3,
+        h: 1,
+        protocol: "kitty",
+        sequence: uploadSequence,
+        resizeSequence: placementSequence,
+        clearSequence,
+      }),
+    ).toBe(true);
+    flushStdoutRows(stdout, []);
+    expect(writes.join("")).toContain(uploadSequence);
+
+    expect(graphics!.clear?.("retained-graphic")).toBe(true);
+    flushStdoutRows(stdout, []);
+    expect(graphics!.isActive?.("retained-graphic")).toBe(false);
+
+    writes.length = 0;
+    expect(graphics!.clearAll?.()).toBe(true);
+    flushStdoutRows(stdout, []);
+    expect(writes.join("")).toContain(
+      createKittyDeleteGraphicsSequence({ imageId: 123, freeImageData: true }),
+    );
+
+    stdout.dispose();
+    app.dispose();
+  });
+
+  it("keeps cached Kitty image data when a draw moves offscreen", () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 8,
+      rows: 3,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const app = createTerminalApp({
+      cols: 8,
+      rows: 3,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = withEnv(
+      { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined, TMUX: undefined },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+    const graphics = getTerminalGraphicsOutput(app.terminal);
+    const uploadSequence = createKittyGraphicsSequence("QUJD", {
+      imageId: 123,
+      placementId: 456,
+      columns: 3,
+      rows: 1,
+    });
+    const placementSequence = createKittyPlacementSequence({
+      imageId: 123,
+      placementId: 456,
+      columns: 3,
+      rows: 1,
+    });
+    const clearSequence = createKittyDeleteGraphicsSequence({
+      imageId: 123,
+      placementId: 456,
+    });
+    expect(graphics).not.toBeNull();
+
+    const draw = (y: number) =>
+      graphics!.queue({
+        id: "cached-offscreen-graphic",
+        x: 1,
+        y,
+        w: 3,
+        h: 1,
+        protocol: "kitty",
+        sequence: uploadSequence,
+        resizeSequence: placementSequence,
+        clearSequence,
+        retainOnClear: true,
+      });
+
+    expect(draw(1)).toBe(true);
+    flushStdoutRows(stdout, []);
+    expect(draw(4)).toBe(false);
+    flushStdoutRows(stdout, []);
+    expect(graphics!.isActive?.("cached-offscreen-graphic")).toBe(true);
+
+    writes.length = 0;
+    expect(draw(1)).toBe(true);
+    flushStdoutRows(stdout, []);
+    expect(writes.join("")).toContain(placementSequence);
+    expect(writes.join("")).not.toContain(uploadSequence);
+
+    stdout.dispose();
+    app.dispose();
+  });
+
+  it("reuses active Kitty image data when a new owner queues the same image", () => {
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 8,
+      rows: 4,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const app = createTerminalApp({
+      cols: 8,
+      rows: 4,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = withEnv(
+      { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined, TMUX: undefined },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+    const graphics = getTerminalGraphicsOutput(app.terminal);
+    const uploadSequence = createKittyGraphicsSequence("QUJD", {
+      imageId: 123,
+      placementId: 456,
+      columns: 3,
+      rows: 1,
+    });
+    const placementSequence = createKittyPlacementSequence({
+      imageId: 123,
+      placementId: 456,
+      columns: 3,
+      rows: 1,
+    });
+    const clearSequence = createKittyDeleteGraphicsSequence({
+      imageId: 123,
+      placementId: 456,
+    });
+    expect(graphics).not.toBeNull();
+
+    const draw = (y: number) =>
+      graphics!.queue({
+        id: "same-image-new-owner",
+        x: 1,
+        y,
+        w: 3,
+        h: 1,
+        protocol: "kitty",
+        sequence: uploadSequence,
+        resizeSequence: placementSequence,
+        clearSequence,
+        retainOnClear: true,
+      });
+
+    expect(draw(1)).toBe(true);
+    flushStdoutRows(stdout, []);
+
+    writes.length = 0;
+    expect(draw(2)).toBe(true);
+    flushStdoutRows(stdout, []);
+    const movedOutput = writes.join("");
+    expect(movedOutput).toContain(clearSequence);
+    expect(movedOutput).toContain(placementSequence);
+    expect(movedOutput).not.toContain(uploadSequence);
+    expect(movedOutput.indexOf(clearSequence)).toBeLessThan(movedOutput.indexOf(placementSequence));
+
+    stdout.dispose();
     app.dispose();
   });
 
