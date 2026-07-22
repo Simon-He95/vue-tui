@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Style } from "@simon_he/vue-tui";
+import type { TVideoFrameSource } from "@simon_he/vue-tui/experimental";
 import { computed, ref, watchEffect } from "vue";
 import { TText, TView } from "@simon_he/vue-tui";
 import { useLayout, useTerminal } from "@simon_he/vue-tui/vue";
@@ -13,6 +14,8 @@ import {
 
 const props = defineProps<{
   onThemeChange?: (mode: ShowcaseThemeMode) => void;
+  videoSrc: string;
+  videoFrameSource: TVideoFrameSource;
 }>();
 
 const layout = useLayout();
@@ -31,6 +34,11 @@ const activeIndex = computed(() =>
   ),
 );
 const activeDemo = computed(() => showcaseDemos[activeIndex.value] ?? firstDemo);
+const activeDemoProps = computed(() =>
+  activeDemo.value.id === "video"
+    ? { videoSrc: props.videoSrc, videoFrameSource: props.videoFrameSource }
+    : {},
+);
 const providerKey = computed(() => `${themeMode.value}:${activeDemo.value.id}`);
 
 const theme = computed(() => showcaseChromeTheme(themeMode.value));
@@ -173,7 +181,7 @@ function onKeydown(event: any) {
     />
 
     <TView :key="providerKey" :x="0" :y="demoY" :w="cols" :h="demoH">
-      <component :is="activeDemo.component" :key="providerKey" />
+      <component :is="activeDemo.component" :key="providerKey" v-bind="activeDemoProps" />
     </TView>
   </TView>
 </template>

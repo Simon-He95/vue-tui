@@ -120,6 +120,7 @@ writeFileSync(
 const cjsCliResult = await build({
   entryPoints: {
     cli: "src/cli.ts",
+    "experimental/video/node": "src/experimental/video/node.ts",
   },
   outdir: "dist",
   outExtension: { ".js": ".cjs" },
@@ -131,6 +132,7 @@ const cjsCliResult = await build({
   treeShaking: true,
   minifySyntax: true,
   metafile: true,
+  supported: { "dynamic-import": true },
   external: ["vue"],
   define: productionDefine,
   plugins: [instrumentationStripPlugin],

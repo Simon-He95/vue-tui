@@ -10,6 +10,7 @@ import {
   showcaseTuiTheme,
   type ShowcaseThemeMode,
 } from "./showcase-theme";
+import { createBrowserVideoFrameSource } from "./browser-video-frame-source";
 
 const themeMode = ref<ShowcaseThemeMode>("dark");
 const terminalTheme = computed(() => showcaseTuiTheme(themeMode.value));
@@ -18,6 +19,11 @@ const firstDemo = showcaseDemos[0]!;
 const activeId = ref(firstDemo.id);
 const activeDemo = computed(
   () => showcaseDemos.find((demo) => demo.id === activeId.value) ?? firstDemo,
+);
+const videoSrc = `${import.meta.env.BASE_URL}video-demo.mp4`;
+const videoFrameSource = createBrowserVideoFrameSource({ loop: true });
+const activeDemoProps = computed(() =>
+  activeDemo.value.id === "video" ? { videoSrc, videoFrameSource } : {},
 );
 const providerKey = computed(() => `${themeMode.value}:${activeDemo.value.id}`);
 const providerDefaultStyle = computed(() => ({
@@ -105,7 +111,7 @@ watchEffect(() => {
           :theme="terminalTheme"
           :dom-renderer-options="terminalDomRendererOptions"
         >
-          <component :is="activeDemo.component" />
+          <component :is="activeDemo.component" v-bind="activeDemoProps" />
         </TerminalProvider>
       </div>
     </section>

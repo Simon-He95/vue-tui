@@ -340,6 +340,7 @@ export const tAgentTerminalGraphicProps = {
   scrolling: { type: Boolean, default: false },
   scrollVersion: { type: Number, default: 0 },
   placementMoveWithoutClear: { type: Boolean, default: false },
+  preserveRawWhileRendering: { type: Boolean, default: false },
   suspended: { type: Boolean, default: false },
   retainRawWhileCovered: { type: Boolean, default: false },
   ignoreRawCoverage: { type: Boolean, default: false },
@@ -848,6 +849,11 @@ export const TAgentTerminalGraphic = defineComponent({
           ? output.isActive(previous.id)
           : true
         : false;
+      const preservePreviousForAtomicReplace =
+        props.preserveRawWhileRendering &&
+        activePrevious != null &&
+        !previousIsRetained &&
+        previousStillActive;
 
       if (
         !previousIsRetained &&
@@ -892,7 +898,12 @@ export const TAgentTerminalGraphic = defineComponent({
         return false;
       }
 
-      if (previousStillActive && !previousIsRetained && !canReusePlacementSequence) {
+      if (
+        previousStillActive &&
+        !previousIsRetained &&
+        !canReusePlacementSequence &&
+        !preservePreviousForAtomicReplace
+      ) {
         if (!queueClearLastGraphic({ markPendingRepaint: false })) return false;
       } else if (previous) {
         if (!previousStillActive) {
@@ -926,7 +937,12 @@ export const TAgentTerminalGraphic = defineComponent({
       }
 
       if (!accepted) {
-        lastDrawnGraphic.value = null;
+        if (preservePreviousForAtomicReplace) {
+          lastDrawnGraphic.value = activePrevious;
+          queueClearLastGraphic({ markPendingRepaint: false });
+        } else {
+          lastDrawnGraphic.value = null;
+        }
         if (rawDrawRejectedKey.value !== drawKey) {
           rawDrawRejectedKey.value = drawKey;
           scheduler.invalidate({ priority: "low", reason: "data" });
@@ -1278,7 +1294,7 @@ export const TAgentTerminalGraphic = defineComponent({
 
     function scheduleRender(options: Readonly<{ clearLastGraphic?: boolean }> = {}): void {
       const version = ++renderVersion;
-      if (options.clearLastGraphic ?? true) queueClearLastGraphic();
+      if (options.clearLastGraphic ?? !props.preserveRawWhileRendering) queueClearLastGraphic();
 
       if (!builtOnce || !props.streaming) {
         builtOnce = true;
@@ -1313,6 +1329,7 @@ export const TAgentTerminalGraphic = defineComponent({
         () => props.suspendRawWhileScrolling,
         () => props.suspendRenderWhileScrolling,
         () => props.scrolling,
+        () => props.preserveRawWhileRendering,
         () => props.suspended,
         () => props.retainRawWhileCovered,
         () => props.ignoreRawCoverage,

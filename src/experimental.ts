@@ -1,4 +1,13 @@
 export { TVirtualList } from "./vue/components/TVirtualList.js";
+export { TVideo } from "./vue/components/TVideo.js";
+export type { TVideoProps } from "./vue/components/TVideo.js";
+export type {
+  TVideoFrame,
+  TVideoFrameEvent,
+  TVideoFrameFormat,
+  TVideoFrameSource,
+  TVideoFrameSourceContext,
+} from "./vue/video/types.js";
 export {
   TCandlestickChart,
   TContributionGraph,

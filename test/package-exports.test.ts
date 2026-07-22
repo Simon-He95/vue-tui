@@ -16,6 +16,7 @@ const distVue = resolve("dist/vue.js");
 const distCli = resolve("dist/cli.js");
 const distMarkdown = resolve("dist/markdown.js");
 const distExperimental = resolve("dist/experimental.js");
+const distExperimentalVideoNode = resolve("dist/experimental/video/node.js");
 const distAgent = resolve("dist/agent.js");
 const distAgentMermaid = resolve("dist/agent/mermaid.js");
 const distMermaid = resolve("dist/mermaid.js");
@@ -27,6 +28,7 @@ const distObservabilityCjs = resolve("dist/observability.cjs");
 const distVueCjs = resolve("dist/vue.cjs");
 const distMarkdownCjs = resolve("dist/markdown.cjs");
 const distExperimentalCjs = resolve("dist/experimental.cjs");
+const distExperimentalVideoNodeCjs = resolve("dist/experimental/video/node.cjs");
 const distAgentCjs = resolve("dist/agent.cjs");
 const distAgentMermaidCjs = resolve("dist/agent/mermaid.cjs");
 const distMermaidCjs = resolve("dist/mermaid.cjs");
@@ -39,6 +41,7 @@ const distVueCjsTypes = resolve("dist/vue.d.cts");
 const distCliCjsTypes = resolve("dist/cli.d.cts");
 const distMarkdownCjsTypes = resolve("dist/markdown.d.cts");
 const distExperimentalCjsTypes = resolve("dist/experimental.d.cts");
+const distExperimentalVideoNodeCjsTypes = resolve("dist/experimental/video/node.d.cts");
 const distAgentCjsTypes = resolve("dist/agent.d.cts");
 const distAgentMermaidCjsTypes = resolve("dist/agent/mermaid.d.cts");
 const distMermaidCjsTypes = resolve("dist/mermaid.d.cts");
@@ -51,6 +54,7 @@ const distVueTypes = resolve("dist/vue.d.ts");
 const distCliTypes = resolve("dist/cli.d.ts");
 const distMarkdownTypes = resolve("dist/markdown.d.ts");
 const distExperimentalTypes = resolve("dist/experimental.d.ts");
+const distExperimentalVideoNodeTypes = resolve("dist/experimental/video/node.d.ts");
 const distAgentTypes = resolve("dist/agent.d.ts");
 const distAgentMermaidTypes = resolve("dist/agent/mermaid.d.ts");
 const distMermaidTypes = resolve("dist/mermaid.d.ts");
@@ -168,6 +172,12 @@ describe("package exports", () => {
 
     expect(agentMermaidCjs).toContain('require("../mermaid.cjs")');
     expect(agentMermaidCjs).not.toMatch(/require\(["']beautiful-mermaid["']\)/);
+  });
+
+  it.skipIf(!requireDistExports)("keeps the Node FFmpeg adapter lazy in built CJS output", () => {
+    const videoCjs = readFileSync(distExperimentalVideoNodeCjs, "utf8");
+    expect(videoCjs).toContain('import("node:child_process")');
+    expect(videoCjs).not.toMatch(/require\(["'](?:node:)?child_process["']\)/u);
   });
 
   it("detects bare Node builtins in browser forbidden code scans", () => {
@@ -380,6 +390,7 @@ describe("package exports", () => {
       "TLogVirtualSearchResults",
       "TPieChart",
       "TTranscriptView",
+      "TVideo",
       "TVirtualList",
       "captureTLogViewSessionState",
       "createAppendOnlyLogStore",
@@ -895,6 +906,7 @@ describe("package exports", () => {
     expect(existsSync(distCli)).toBe(true);
     expect(existsSync(distMarkdown)).toBe(true);
     expect(existsSync(distExperimental)).toBe(true);
+    expect(existsSync(distExperimentalVideoNode)).toBe(true);
     expect(existsSync(distAgent)).toBe(true);
     expect(existsSync(distAgentMermaid)).toBe(true);
     expect(existsSync(distMermaid)).toBe(true);
@@ -907,6 +919,7 @@ describe("package exports", () => {
     expect(existsSync(distCliCjsTypes)).toBe(true);
     expect(existsSync(distMarkdownCjsTypes)).toBe(true);
     expect(existsSync(distExperimentalCjsTypes)).toBe(true);
+    expect(existsSync(distExperimentalVideoNodeCjsTypes)).toBe(true);
     expect(existsSync(distAgentCjsTypes)).toBe(true);
     expect(existsSync(distAgentMermaidCjsTypes)).toBe(true);
     expect(existsSync(distMermaidCjsTypes)).toBe(true);
@@ -919,11 +932,13 @@ describe("package exports", () => {
     expect(existsSync(distCliTypes)).toBe(true);
     expect(existsSync(distMarkdownTypes)).toBe(true);
     expect(existsSync(distExperimentalTypes)).toBe(true);
+    expect(existsSync(distExperimentalVideoNodeTypes)).toBe(true);
     expect(existsSync(distAgentTypes)).toBe(true);
     expect(existsSync(distAgentMermaidTypes)).toBe(true);
     expect(existsSync(distMermaidTypes)).toBe(true);
     expect(existsSync(distAgentMermaidCjs)).toBe(true);
     expect(existsSync(distMermaidCjs)).toBe(true);
+    expect(existsSync(distExperimentalVideoNodeCjs)).toBe(true);
     expect(readFileSync(distCliTypes, "utf8")).toContain("Osc52ClipboardOptions");
 
     const root = await import(/* @vite-ignore */ pathToFileURL(distIndex).href);
@@ -935,6 +950,9 @@ describe("package exports", () => {
     const cli = await import(/* @vite-ignore */ pathToFileURL(distCli).href);
     const markdown = await import(/* @vite-ignore */ pathToFileURL(distMarkdown).href);
     const experimental = await import(/* @vite-ignore */ pathToFileURL(distExperimental).href);
+    const experimentalVideoNode = await import(
+      /* @vite-ignore */ pathToFileURL(distExperimentalVideoNode).href
+    );
     const agent = await import(/* @vite-ignore */ pathToFileURL(distAgent).href);
     const agentMermaid = await import(/* @vite-ignore */ pathToFileURL(distAgentMermaid).href);
     const mermaid = await import(/* @vite-ignore */ pathToFileURL(distMermaid).href);
@@ -948,6 +966,7 @@ describe("package exports", () => {
     const cliCjs = require("../dist/cli.cjs");
     const markdownCjs = require("../dist/markdown.cjs");
     const experimentalCjs = require("../dist/experimental.cjs");
+    const experimentalVideoNodeCjs = require("../dist/experimental/video/node.cjs");
     const agentCjs = require("../dist/agent.cjs");
     const agentMermaidCjs = require("../dist/agent/mermaid.cjs");
     const mermaidCjs = require("../dist/mermaid.cjs");
@@ -955,6 +974,9 @@ describe("package exports", () => {
     expect("createTerminalApp" in root).toBe(false);
     expect("createStdoutRenderer" in root).toBe(false);
     expect("TVirtualList" in root).toBe(false);
+    expect("TVideo" in root).toBe(false);
+    expect("TVideo" in vue).toBe(false);
+    expect("TVideo" in agent).toBe(false);
     expect("createDefaultTInputHostAdapter" in root).toBe(false);
     expect("defaultTInputHostPlugin" in root).toBe(false);
     expect(root.TerminalProvider).toBeTruthy();
@@ -1040,6 +1062,9 @@ describe("package exports", () => {
     expect(markdownCjs.buildMarkdownVisualRows).toBeTruthy();
     expect(markdownCjs.layoutMarkdownBlocks).toBeTruthy();
     expect(experimental.TVirtualList).toBeTruthy();
+    expect(experimental.TVideo).toBeTruthy();
+    expect(experimentalVideoNode.createFfmpegVideoFrameSource).toBeTruthy();
+    expect(experimentalVideoNode.createYtDlpVideoFrameSource).toBeTruthy();
     expect(experimental.TLogView).toBeTruthy();
     expect(experimental.TLogScrollbar).toBeTruthy();
     expect(experimental.TLogMinimap).toBeTruthy();
@@ -1096,6 +1121,9 @@ describe("package exports", () => {
     expect("TMarkdownText" in experimentalCjs).toBe(false);
     expect("TVirtualMarkdown" in experimentalCjs).toBe(false);
     expect(experimentalCjs.TVirtualList).toBeTruthy();
+    expect(experimentalCjs.TVideo).toBeTruthy();
+    expect(experimentalVideoNodeCjs.createFfmpegVideoFrameSource).toBeTruthy();
+    expect(experimentalVideoNodeCjs.createYtDlpVideoFrameSource).toBeTruthy();
     expect(experimentalCjs.TLogView).toBeTruthy();
     expect(experimentalCjs.TLogScrollbar).toBeTruthy();
     expect(experimentalCjs.TLogMinimap).toBeTruthy();

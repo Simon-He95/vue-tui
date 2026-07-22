@@ -2115,6 +2115,136 @@ describe("stdout renderer", () => {
         expect(eraseIndex).toBeGreaterThanOrEqual(0);
         expect(textIndex).toBeGreaterThanOrEqual(0);
         expect(moveIndex).toBeLessThan(eraseIndex);
+        expect(out).not.toContain("\x1B[4X");
+        expect(out).not.toContain("\x1B[10X");
+
+        renderer.dispose();
+      } finally {
+        nowSpy.mockRestore();
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  it("uses placement-only resize redraws unless Kitty pixels changed concurrently", () => {
+    withUnsetEnv("GHOSTTY_RESOURCES_DIR", () => {
+      vi.useFakeTimers();
+      const nowRef = { t: 0 };
+      const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => nowRef.t);
+      try {
+        const terminal = createTerminal({ cols: 12, rows: 5 });
+        const transcript = getPlaneTerminal(terminal, "transcript");
+        let out = "";
+        const output = {
+          isTTY: true,
+          write(chunk: string) {
+            out += chunk;
+          },
+        };
+        const renderer = createStdoutRenderer(terminal, {
+          output,
+          clear: false,
+          hideCursor: false,
+          altScreen: false,
+          terminalGraphics: { protocol: "kitty", force: true },
+        });
+        const graphics = getTerminalGraphicsOutput(terminal);
+        const imageId = 101;
+        const placementId = 202;
+        const firstSequence = createKittyGraphicsSequence("QUJD", {
+          imageId,
+          placementId,
+          columns: 8,
+          rows: 3,
+        });
+        const secondSequence = createKittyGraphicsSequence("REVG", {
+          imageId,
+          placementId,
+          columns: 8,
+          rows: 3,
+        });
+        const placementSequence = createKittyPlacementSequence({
+          imageId,
+          placementId,
+          columns: 8,
+          rows: 3,
+        });
+        const clearSequence = createKittyDeleteGraphicsSequence({
+          imageId,
+          placementId,
+          freeImageData: true,
+        });
+        const frameDelayMs = getFrameDelayMs();
+        const flushFrame = () => {
+          nowRef.t += frameDelayMs;
+          vi.advanceTimersByTime(frameDelayMs);
+        };
+
+        transcript.fill(0, 0, 12, 5, " ");
+        for (let y = 1; y <= 3; y++) {
+          transcript.write("│", { x: 0, y });
+          transcript.write("│", { x: 11, y });
+        }
+        terminal.commit({ planes: ["transcript"], sync: true });
+        flushFrame();
+
+        graphics?.queue({
+          id: "video-frame",
+          x: 2,
+          y: 1,
+          w: 8,
+          h: 3,
+          protocol: "kitty",
+          sequence: firstSequence,
+          resizeSequence: placementSequence,
+          clearSequence,
+          deferFlush: true,
+          op: "draw",
+        });
+        flushFrame();
+        expect(out).toContain(firstSequence);
+
+        out = "";
+        terminal.resize(13, 5);
+        graphics?.queue({
+          id: "video-frame",
+          x: 2,
+          y: 1,
+          w: 8,
+          h: 3,
+          protocol: "kitty",
+          sequence: firstSequence,
+          resizeSequence: placementSequence,
+          clearSequence,
+          deferFlush: true,
+          op: "draw",
+        });
+        flushFrame();
+
+        expect(out).toContain(placementSequence);
+        expect(out).not.toContain(firstSequence);
+
+        out = "";
+        terminal.resize(12, 5);
+        graphics?.queue({
+          id: "video-frame",
+          x: 2,
+          y: 1,
+          w: 8,
+          h: 3,
+          protocol: "kitty",
+          sequence: secondSequence,
+          resizeSequence: placementSequence,
+          clearSequence,
+          deferFlush: true,
+          op: "draw",
+        });
+        flushFrame();
+
+        expect(out).toContain(clearSequence);
+        expect(out).toContain(secondSequence);
+        expect(out).not.toContain(placementSequence);
+        expect(out).not.toContain("\u001B[2X");
 
         renderer.dispose();
       } finally {

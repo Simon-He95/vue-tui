@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Experimental
+
+- Added the browser-safe `TVideo` component and the Node-only `@simon_he/vue-tui/experimental/video/node` entrypoint for dynamically loaded FFmpeg and yt-dlp frame sources.
+- Added local file, HTTP(S), and resolved YouTube demo playback with latest-frame-only delivery, adaptive source selection, and Kitty/iTerm2 or ASCII output.
+
+### Fixed
+
+- Kitty terminal resize redraws now retransmit changed image data while reusing placement-only sequences for unchanged pixels.
+- Moving or resizing terminal graphics no longer erases text or borders outside the graphic-owned rectangle.
+
 ## 1.0.0-rc.0 - 2026-05-16
 
 ### Breaking

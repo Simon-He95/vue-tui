@@ -912,12 +912,14 @@ function entrypointMeta(specifier: string): {
     specifier === "@simon_he/vue-tui/observability"
       ? "advanced"
       : specifier === "@simon_he/vue-tui/experimental" ||
+          specifier.startsWith("@simon_he/vue-tui/experimental/") ||
           specifier === "@simon_he/vue-tui/agent" ||
           specifier.startsWith("@simon_he/vue-tui/agent/")
         ? "experimental"
         : "public";
   const runtime: EntrypointRuntime =
-    specifier === "@simon_he/vue-tui/cli"
+    specifier === "@simon_he/vue-tui/cli" ||
+    specifier === "@simon_he/vue-tui/experimental/video/node"
       ? "node-only"
       : specifier === "@simon_he/vue-tui/runtime"
         ? "mixed"

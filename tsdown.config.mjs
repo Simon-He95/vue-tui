@@ -97,6 +97,7 @@ export default defineConfig([
     target: "node16",
     entry: {
       cli: "src/cli.ts",
+      "experimental/video/node": "src/experimental/video/node.ts",
     },
     format: ["esm"],
     clean: false,

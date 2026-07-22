@@ -13,6 +13,7 @@ import MultilinePasteDemo from "./MultilinePasteDemo.vue";
 import MultiSelectDemo from "./MultiSelectDemo.vue";
 import SnakeDemo from "./SnakeDemo.vue";
 import TableDemo from "./TableDemo.vue";
+import VideoDemo from "./VideoDemo.vue";
 
 export type ShowcaseDemo = {
   id: string;
@@ -32,6 +33,16 @@ export const showcaseDemos: ShowcaseDemo[] = [
     cols: 82,
     rows: 24,
     component: markRaw(CommandCenterDemo),
+    defaultStyle: { fg: "whiteBright", bg: "black" },
+  },
+  {
+    id: "video",
+    label: "Video",
+    summary:
+      "Big Buck Bunny 4K60：自适应选择 source，图形终端播放 PNG，普通终端按 1:2 cell 比例播放动态 ASCII。",
+    cols: 86,
+    rows: 26,
+    component: markRaw(VideoDemo),
     defaultStyle: { fg: "whiteBright", bg: "black" },
   },
   {

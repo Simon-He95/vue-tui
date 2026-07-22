@@ -46,6 +46,7 @@ import { TAnchor, TDebugOverlay, TFlex, TFlexItem, TFlow, TInputBox, TJsonEditor
 import { createDefaultTInputHostAdapter, createStdoutRenderer, createTerminalApp, defaultTInputHostPlugin, installTerminalCleanup, type TerminalCleanupSignalPolicy } from "@simon_he/vue-tui/cli";
 import { TMarkdownText, createTuiMarkdownParser } from "@simon_he/vue-tui/markdown";
 import { TLogView, TVirtualList, createAppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
+import { createFfmpegVideoFrameSource, createYtDlpVideoFrameSource, type FfmpegVideoFrameSourceOptions, type YtDlpVideoFrameSourceOptions } from "@simon_he/vue-tui/experimental/video/node";
 import { TAgentTranscript, TToolLogView } from "@simon_he/vue-tui/agent";
 
 const style: Style = { fg: "whiteBright", href: "https://example.com" };
@@ -53,6 +54,8 @@ const domOptions: DomRendererOptions = { links: true };
 const event: TerminalEventRecord = { type: "keydown", key: "Enter" };
 const plugin: TInputPlugin = { name: "test", install: () => {} };
 const signalPolicy: TerminalCleanupSignalPolicy = "cleanup-only";
+const ffmpegVideoOptions: FfmpegVideoFrameSourceOptions = { loop: true };
+const ytDlpVideoOptions: YtDlpVideoFrameSourceOptions = { maxSourceHeight: 1080 };
 
 console.log(
   createTerminal,
@@ -85,6 +88,10 @@ console.log(
   TAgentTranscript,
   TToolLogView,
   createAppendOnlyLogStore,
+  createFfmpegVideoFrameSource,
+  createYtDlpVideoFrameSource,
+  ffmpegVideoOptions,
+  ytDlpVideoOptions,
   style,
   domOptions,
   event,
@@ -99,9 +106,12 @@ console.log(
     `
 const root = require("@simon_he/vue-tui");
 const cli = require("@simon_he/vue-tui/cli");
+const experimentalVideoNode = require("@simon_he/vue-tui/experimental/video/node");
 
 root.createTerminal({ cols: 80, rows: 24 });
 cli.createStdoutRenderer;
+experimentalVideoNode.createFfmpegVideoFrameSource;
+experimentalVideoNode.createYtDlpVideoFrameSource;
 `,
   );
 
