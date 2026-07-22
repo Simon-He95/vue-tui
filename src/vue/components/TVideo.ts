@@ -37,6 +37,7 @@ import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { createFrameMailbox } from "../scheduler/frame-mailbox.js";
 import { intersectRect, translateRect } from "../utils/rect.js";
+import { textCellWidth } from "../utils/text.js";
 import { TAgentTerminalGraphic } from "./TAgentTerminalGraphic.js";
 import { TText } from "./TText.js";
 import { TView } from "./TView.js";
@@ -94,6 +95,18 @@ function playbackRate(value: unknown): TVideoPlaybackRate {
 function optionalDuration(value: unknown): number | undefined {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function formatPlaybackTime(valueMs: number | undefined, hourDigits = 0): string {
+  if (valueMs == null) return "--:--";
+  const seconds = Math.max(0, Math.floor(valueMs / 1000));
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainder = seconds % 60;
+  if (hours > 0 || hourDigits > 0) {
+    return `${String(hours).padStart(Math.max(1, hourDigits), "0")}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
+  }
+  return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
 }
 
 function readUint32(bytes: Uint8Array, offset: number): number {
@@ -356,6 +369,10 @@ export const tVideoProps = {
   paused: { type: Boolean, default: undefined },
   playbackRate: { type: Number as PropType<TVideoPlaybackRate>, default: undefined },
   controls: { type: Boolean, default: false },
+  controlsLayout: {
+    type: String as PropType<TVideoControlsLayout>,
+    default: "compact",
+  },
   durationMs: { type: Number, default: undefined },
   loop: { type: Boolean, default: false },
   maxFps: { type: Number, default: DEFAULT_MAX_FPS },
@@ -366,6 +383,7 @@ export const tVideoProps = {
   clear: { type: Boolean, default: true },
 } as const;
 
+export type TVideoControlsLayout = "compact" | "cinema";
 export type TVideoProps = ExtractPublicPropTypes<typeof tVideoProps>;
 
 export type TVideoSeekEvent = Readonly<{
@@ -413,6 +431,7 @@ export const TVideo = defineComponent({
     let lastTimestampMs = 0;
     let droppedFrames = 0;
     let pendingEndedGeneration: number | null = null;
+    let suppressNextVideoClick = false;
     let controlPointerCapture: Readonly<{
       pointerId: number;
       target: {
@@ -430,9 +449,13 @@ export const TVideo = defineComponent({
     const showControls = computed(
       () => props.controls && Math.floor(props.w) >= 14 && Math.floor(props.h) >= 2,
     );
-    const videoHeight = computed(() =>
-      Math.max(1, Math.floor(props.h) - Number(showControls.value)),
+    const resolvedControlsLayout = computed<TVideoControlsLayout>(() =>
+      props.controlsLayout === "cinema" && Math.floor(props.h) >= 3 ? "cinema" : "compact",
     );
+    const controlRows = computed(() =>
+      showControls.value ? (resolvedControlsLayout.value === "cinema" ? 2 : 1) : 0,
+    );
+    const videoHeight = computed(() => Math.max(1, Math.floor(props.h) - controlRows.value));
     const resolvedMaxFps = computed(() => positiveNumber(props.maxFps, DEFAULT_MAX_FPS, 60));
     const resolvedPixelSize = computed(() => {
       const desiredWidth = Math.max(2, Math.floor(props.w) * 8);
@@ -521,39 +544,121 @@ export const TVideo = defineComponent({
     const resolvedDurationMs = computed(
       () => optionalDuration(props.durationMs) ?? discoveredDurationMs.value,
     );
-    const controlLayout = computed(() => {
-      const width = Math.max(1, Math.floor(props.w));
-      const ratesX = Math.max(5, width - 8);
-      const progressX = 3;
-      return {
-        width,
-        ratesX,
-        progressX,
-        progressWidth: Math.max(1, ratesX - progressX - 1),
-      };
-    });
     const effectivePaused = computed(() => props.paused ?? internalPaused.value);
     const effectivePlaybackRate = computed(() =>
       props.playbackRate == null ? internalPlaybackRate.value : playbackRate(props.playbackRate),
     );
+    const controlTimestampMs = computed(() => seekPreviewMs.value ?? displayedTimestampMs.value);
+    const timeHourDigits = computed(() => {
+      const duration = resolvedDurationMs.value;
+      if (!duration || duration < 3_600_000) return 0;
+      return String(Math.floor(duration / 3_600_000)).length;
+    });
+    const currentTimeText = computed(() =>
+      formatPlaybackTime(controlTimestampMs.value, timeHourDigits.value),
+    );
+    const durationTimeText = computed(() =>
+      formatPlaybackTime(resolvedDurationMs.value, timeHourDigits.value),
+    );
+    const controlLayout = computed(() => {
+      const width = Math.max(1, Math.floor(props.w));
+      const progressY = videoHeight.value;
+      const current = currentTimeText.value;
+      const duration = durationTimeText.value;
+      const timeWidth = Math.max(textCellWidth(current), textCellWidth(duration));
+      const ratesWidth = 8;
+
+      if (resolvedControlsLayout.value === "cinema") {
+        const ratesX = Math.max(3, width - ratesWidth);
+        const timeText = `${current} / ${duration}`;
+        return {
+          width,
+          kind: "cinema" as const,
+          progressX: 0,
+          progressY,
+          progressWidth: width,
+          actionY: progressY + 1,
+          ratesX,
+          showAllRates: true,
+          showTimes: 3 + textCellWidth(timeText) < ratesX,
+          current,
+          duration,
+          timeText,
+          timeWidth,
+          currentX: 3,
+          totalX: 0,
+        };
+      }
+
+      const ratesX = width - ratesWidth;
+      const progressX = timeWidth + 4;
+      const totalX = ratesX - timeWidth - 1;
+      const progressWidth = totalX - progressX - 1;
+      if (progressWidth >= 4) {
+        return {
+          width,
+          kind: "compact" as const,
+          progressX,
+          progressY,
+          progressWidth,
+          actionY: progressY,
+          ratesX,
+          showAllRates: true,
+          showTimes: true,
+          current,
+          duration,
+          timeText: "",
+          timeWidth,
+          currentX: 3,
+          totalX,
+        };
+      }
+
+      const compactRatesX = Math.max(4, width - 2);
+      return {
+        width,
+        kind: "compact" as const,
+        progressX: 3,
+        progressY,
+        progressWidth: Math.max(1, compactRatesX - 4),
+        actionY: progressY,
+        ratesX: compactRatesX,
+        showAllRates: false,
+        showTimes: false,
+        current,
+        duration,
+        timeText: "",
+        timeWidth,
+        currentX: 0,
+        totalX: 0,
+      };
+    });
     const rateStyles = computed(() =>
       PLAYBACK_RATES.map((rate) =>
         rate === effectivePlaybackRate.value ? { ...props.style, inverse: true } : props.style,
       ),
     );
-    const progressText = computed(() => {
+    const remainingProgressStyle = computed(() => ({ ...props.style, dim: true }));
+    const progressThumbStyle = computed(() => ({ ...props.style, inverse: true }));
+    const progressSegments = computed(() => {
       const { progressWidth } = controlLayout.value;
       const duration = resolvedDurationMs.value;
-      if (!duration) return "-".repeat(progressWidth);
-      const timestamp = seekPreviewMs.value ?? displayedTimestampMs.value;
-      const ratio = Math.max(0, Math.min(1, timestamp / duration));
-      const marker = Math.round(ratio * Math.max(0, progressWidth - 1));
-      let text = "";
-      for (let index = 0; index < progressWidth; index++) {
-        text += index < marker ? "=" : index === marker ? ">" : "-";
+      if (!duration) {
+        return { playedWidth: 0, thumbWidth: 0, remainingWidth: progressWidth };
       }
-      return text;
+      const ratio = Math.max(0, Math.min(1, controlTimestampMs.value / duration));
+      const marker = Math.round(ratio * Math.max(0, progressWidth - 1));
+      return {
+        playedWidth: marker,
+        thumbWidth: 1,
+        remainingWidth: progressWidth - marker - 1,
+      };
     });
+    const controlFill = computed(() => " ".repeat(controlLayout.value.width));
+    const progressGlyphs = computed(() => ({
+      played: "━".repeat(progressSegments.value.playedWidth),
+      remaining: "─".repeat(progressSegments.value.remainingWidth),
+    }));
     const playbackEnabled = computed(
       () =>
         alive &&
@@ -675,8 +780,11 @@ export const TVideo = defineComponent({
       if (restart) startPlayback(effectivePaused.value);
     }
 
-    function controlCellX(event: TerminalPointerEvent): number {
-      return Math.floor(event.cellX - (event.currentTarget?.rect.x ?? 0));
+    function controlCell(event: TerminalPointerEvent): Readonly<{ x: number; y: number }> {
+      return {
+        x: Math.floor(event.cellX - layout.originX - props.x),
+        y: Math.floor(event.cellY - layout.originY - props.y),
+      };
     }
 
     function previewSeekAt(cellX: number): void {
@@ -714,60 +822,94 @@ export const TVideo = defineComponent({
     }
 
     function rateAt(cellX: number): TVideoPlaybackRate | undefined {
-      const offset = cellX - controlLayout.value.ratesX;
+      const { ratesX, showAllRates } = controlLayout.value;
+      const offset = cellX - ratesX;
+      if (!showAllRates) {
+        if (offset < 0 || offset >= 2) return undefined;
+        const index = PLAYBACK_RATES.indexOf(effectivePlaybackRate.value);
+        return PLAYBACK_RATES[(index + 1) % PLAYBACK_RATES.length];
+      }
       if (offset < 0 || offset % 3 >= 2) return undefined;
       return PLAYBACK_RATES[Math.floor(offset / 3)];
     }
 
-    function onControlPointerDown(event: TerminalPointerEvent): void {
+    function onInteractivePointerDown(event: TerminalPointerEvent): void {
       if (event.button != null && event.button !== 0) return;
-      const cellX = controlCellX(event);
+      const { x: cellX, y: cellY } = controlCell(event);
+      if (cellY < videoHeight.value) {
+        suppressNextVideoClick = false;
+        return;
+      }
+      if (!showControls.value) return;
+
+      const { actionY, progressY, progressX, progressWidth } = controlLayout.value;
       const rate = rateAt(cellX);
-      if (cellX <= 1) {
+      if (cellY === actionY && cellX <= 1) {
         event.preventDefault();
         event.stopPropagation();
+        suppressNextVideoClick = true;
         setPaused(!effectivePaused.value);
         return;
       }
-      if (rate) {
+      if (cellY === actionY && rate) {
         event.preventDefault();
         event.stopPropagation();
+        suppressNextVideoClick = true;
         setPlaybackRate(rate);
         return;
       }
-      const { progressX, progressWidth } = controlLayout.value;
-      if (!resolvedDurationMs.value || cellX < progressX || cellX >= progressX + progressWidth) {
+      if (
+        cellY !== progressY ||
+        !resolvedDurationMs.value ||
+        cellX < progressX ||
+        cellX >= progressX + progressWidth
+      ) {
         return;
       }
       event.preventDefault();
       event.stopPropagation();
+      suppressNextVideoClick = true;
       seeking.value = true;
       stopPlayback();
       previewSeekAt(cellX);
       captureControlPointer(event);
     }
 
-    function onControlPointerMove(event: TerminalPointerEvent): void {
+    function onInteractivePointerMove(event: TerminalPointerEvent): void {
       if (!seeking.value) return;
       if (event.buttons === 0) {
-        onControlPointerUp(event);
+        onInteractivePointerUp(event);
         return;
       }
       event.preventDefault();
       event.stopPropagation();
-      previewSeekAt(controlCellX(event));
+      previewSeekAt(controlCell(event).x);
     }
 
-    function onControlPointerUp(event: TerminalPointerEvent): void {
+    function onInteractivePointerUp(event: TerminalPointerEvent): void {
       if (!seeking.value) return;
       event.preventDefault();
       event.stopPropagation();
-      previewSeekAt(controlCellX(event));
+      previewSeekAt(controlCell(event).x);
       const timestampMs = seekPreviewMs.value ?? lastTimestampMs;
       applySeek(timestampMs, false);
       seeking.value = false;
       releaseControlPointer();
       startPlayback(effectivePaused.value);
+    }
+
+    function onVideoClick(event: TerminalPointerEvent): void {
+      if (event.button != null && event.button !== 0) return;
+      if (suppressNextVideoClick) {
+        suppressNextVideoClick = false;
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      if (controlCell(event).y >= videoHeight.value) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setPaused(!effectivePaused.value);
     }
 
     function finishControlSeek(): void {
@@ -953,6 +1095,7 @@ export const TVideo = defineComponent({
             discoveredDurationMs.value = undefined;
             seekPreviewMs.value = undefined;
             seeking.value = false;
+            suppressNextVideoClick = false;
             releaseControlPointer();
             droppedFrames = 0;
           }
@@ -995,57 +1138,140 @@ export const TVideo = defineComponent({
         }),
       ];
 
-      if (showControls.value) {
-        const { width, progressX, progressWidth, ratesX } = controlLayout.value;
+      if (props.controls) {
         children.push(
           h(
             TView,
             {
               x: props.x,
-              y: props.y + videoHeight.value,
-              w: width,
-              h: 1,
+              y: props.y,
+              w: Math.max(0, Math.floor(props.w)),
+              h: Math.max(0, Math.floor(props.h)),
               zIndex: props.zIndex,
               focusable: true,
               selectable: false,
-              onPointerdown: onControlPointerDown,
-              onPointermove: onControlPointerMove,
-              onPointerup: onControlPointerUp,
+              onClick: onVideoClick,
+              onPointerdown: onInteractivePointerDown,
+              onPointermove: onInteractivePointerMove,
+              onPointerup: onInteractivePointerUp,
               onKeydown: onControlKeydown,
               onBlur: finishControlSeek,
             },
-            () => [
-              h(TText, {
-                x: 0,
-                y: 0,
-                w: width,
-                value: " ".repeat(width),
-                style: props.style,
-              }),
-              h(TText, {
-                x: 0,
-                y: 0,
-                w: 2,
-                value: effectivePaused.value ? "> " : "||",
-                style: props.style,
-              }),
-              h(TText, {
-                x: progressX,
-                y: 0,
-                w: progressWidth,
-                value: progressText.value,
-                style: props.style,
-              }),
-              ...PLAYBACK_RATES.map((rate, index) =>
+            () => {
+              if (!showControls.value) return [];
+              const layout = controlLayout.value;
+              const segments = progressSegments.value;
+              const controls = Array.from({ length: controlRows.value }, (_, index) =>
                 h(TText, {
-                  x: ratesX + index * 3,
-                  y: 0,
-                  w: 2,
-                  value: `${rate}x`,
-                  style: rateStyles.value[index],
+                  x: 0,
+                  y: videoHeight.value + index,
+                  w: layout.width,
+                  value: controlFill.value,
+                  style: props.style,
                 }),
-              ),
-            ],
+              );
+
+              controls.push(
+                h(TText, {
+                  x: 0,
+                  y: layout.actionY,
+                  w: 2,
+                  value: effectivePaused.value ? "> " : "||",
+                  style: props.style,
+                }),
+              );
+
+              if (layout.showTimes) {
+                if (layout.kind === "cinema") {
+                  controls.push(
+                    h(TText, {
+                      x: layout.currentX,
+                      y: layout.actionY,
+                      w: textCellWidth(layout.timeText),
+                      value: layout.timeText,
+                      style: props.style,
+                    }),
+                  );
+                } else {
+                  controls.push(
+                    h(TText, {
+                      x: layout.currentX,
+                      y: layout.actionY,
+                      w: layout.timeWidth,
+                      value: layout.current,
+                      style: props.style,
+                    }),
+                    h(TText, {
+                      x: layout.totalX,
+                      y: layout.actionY,
+                      w: layout.timeWidth,
+                      value: layout.duration,
+                      style: props.style,
+                    }),
+                  );
+                }
+              }
+
+              if (segments.playedWidth > 0) {
+                controls.push(
+                  h(TText, {
+                    x: layout.progressX,
+                    y: layout.progressY,
+                    w: segments.playedWidth,
+                    value: progressGlyphs.value.played,
+                    style: props.style,
+                  }),
+                );
+              }
+              if (segments.thumbWidth > 0) {
+                controls.push(
+                  h(TText, {
+                    x: layout.progressX + segments.playedWidth,
+                    y: layout.progressY,
+                    w: 1,
+                    value: "╋",
+                    style: progressThumbStyle.value,
+                  }),
+                );
+              }
+              if (segments.remainingWidth > 0) {
+                controls.push(
+                  h(TText, {
+                    x: layout.progressX + segments.playedWidth + segments.thumbWidth,
+                    y: layout.progressY,
+                    w: segments.remainingWidth,
+                    value: progressGlyphs.value.remaining,
+                    style: remainingProgressStyle.value,
+                  }),
+                );
+              }
+
+              if (layout.showAllRates) {
+                controls.push(
+                  ...PLAYBACK_RATES.map((rate, index) =>
+                    h(TText, {
+                      x: layout.ratesX + index * 3,
+                      y: layout.actionY,
+                      w: 2,
+                      value: `${rate}x`,
+                      style: rateStyles.value[index],
+                    }),
+                  ),
+                );
+              } else {
+                controls.push(
+                  h(TText, {
+                    x: layout.ratesX,
+                    y: layout.actionY,
+                    w: 2,
+                    value: `${effectivePlaybackRate.value}x`,
+                    style: rateStyles.value[PLAYBACK_RATES.indexOf(effectivePlaybackRate.value)],
+                  }),
+                );
+              }
+
+              return controls;
+            },
           ),
         );
       }

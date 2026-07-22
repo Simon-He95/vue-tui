@@ -77,6 +77,7 @@ function onError(error: unknown) {
       v-model:paused="paused"
       v-model:playback-rate="playbackRate"
       controls
+      :controls-layout="youtubeSource ? 'cinema' : 'compact'"
       loop
       fallback="Waiting for the first decoded video frame…"
       @frame="onFrame"

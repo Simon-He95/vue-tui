@@ -1,6 +1,10 @@
 export { TVirtualList } from "./vue/components/TVirtualList.js";
 export { TVideo } from "./vue/components/TVideo.js";
-export type { TVideoProps, TVideoSeekEvent } from "./vue/components/TVideo.js";
+export type {
+  TVideoControlsLayout,
+  TVideoProps,
+  TVideoSeekEvent,
+} from "./vue/components/TVideo.js";
 export type {
   TVideoFrame,
   TVideoFrameEvent,

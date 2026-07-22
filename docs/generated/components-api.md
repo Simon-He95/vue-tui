@@ -2739,26 +2739,27 @@ Import: `@simon_he/vue-tui/experimental`
 
 ### Props
 
-| 名称                      | 类型                            | 默认值                           | 必填 | 说明 |
-| ------------------------- | ------------------------------- | -------------------------------- | ---- | ---- |
-| <code>x</code>            | <code>number</code>             | —                                | 是   | —    |
-| <code>y</code>            | <code>number</code>             | —                                | 是   | —    |
-| <code>w</code>            | <code>number</code>             | —                                | 是   | —    |
-| <code>h</code>            | <code>number</code>             | —                                | 是   | —    |
-| <code>zIndex</code>       | <code>number</code>             | <code>0</code>                   | 否   | —    |
-| <code>src</code>          | <code>string</code>             | —                                | 是   | —    |
-| <code>frameSource</code>  | <code>TVideoFrameSource</code>  | —                                | 是   | —    |
-| <code>paused</code>       | <code>boolean</code>            | <code>undefined</code>           | 否   | —    |
-| <code>playbackRate</code> | <code>TVideoPlaybackRate</code> | <code>undefined</code>           | 否   | —    |
-| <code>controls</code>     | <code>boolean</code>            | <code>false</code>               | 否   | —    |
-| <code>durationMs</code>   | <code>number</code>             | <code>undefined</code>           | 否   | —    |
-| <code>loop</code>         | <code>boolean</code>            | <code>false</code>               | 否   | —    |
-| <code>maxFps</code>       | <code>number</code>             | <code>DEFAULT_MAX_FPS</code>     | 否   | —    |
-| <code>pixelWidth</code>   | <code>number</code>             | <code>undefined</code>           | 否   | —    |
-| <code>pixelHeight</code>  | <code>number</code>             | <code>undefined</code>           | 否   | —    |
-| <code>fallback</code>     | <code>string</code>             | <code>&quot;[video]&quot;</code> | 否   | —    |
-| <code>style</code>        | <code>Style</code>              | <code>undefined</code>           | 否   | —    |
-| <code>clear</code>        | <code>boolean</code>            | <code>true</code>                | 否   | —    |
+| 名称                        | 类型                              | 默认值                           | 必填 | 说明 |
+| --------------------------- | --------------------------------- | -------------------------------- | ---- | ---- |
+| <code>x</code>              | <code>number</code>               | —                                | 是   | —    |
+| <code>y</code>              | <code>number</code>               | —                                | 是   | —    |
+| <code>w</code>              | <code>number</code>               | —                                | 是   | —    |
+| <code>h</code>              | <code>number</code>               | —                                | 是   | —    |
+| <code>zIndex</code>         | <code>number</code>               | <code>0</code>                   | 否   | —    |
+| <code>src</code>            | <code>string</code>               | —                                | 是   | —    |
+| <code>frameSource</code>    | <code>TVideoFrameSource</code>    | —                                | 是   | —    |
+| <code>paused</code>         | <code>boolean</code>              | <code>undefined</code>           | 否   | —    |
+| <code>playbackRate</code>   | <code>TVideoPlaybackRate</code>   | <code>undefined</code>           | 否   | —    |
+| <code>controls</code>       | <code>boolean</code>              | <code>false</code>               | 否   | —    |
+| <code>controlsLayout</code> | <code>TVideoControlsLayout</code> | <code>&quot;compact&quot;</code> | 否   | —    |
+| <code>durationMs</code>     | <code>number</code>               | <code>undefined</code>           | 否   | —    |
+| <code>loop</code>           | <code>boolean</code>              | <code>false</code>               | 否   | —    |
+| <code>maxFps</code>         | <code>number</code>               | <code>DEFAULT_MAX_FPS</code>     | 否   | —    |
+| <code>pixelWidth</code>     | <code>number</code>               | <code>undefined</code>           | 否   | —    |
+| <code>pixelHeight</code>    | <code>number</code>               | <code>undefined</code>           | 否   | —    |
+| <code>fallback</code>       | <code>string</code>               | <code>&quot;[video]&quot;</code> | 否   | —    |
+| <code>style</code>          | <code>Style</code>                | <code>undefined</code>           | 否   | —    |
+| <code>clear</code>          | <code>boolean</code>              | <code>true</code>                | 否   | —    |
 
 ### Events
 

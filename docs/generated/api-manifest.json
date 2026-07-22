@@ -619,6 +619,7 @@
         "TTranscriptViewHandle",
         "TTranscriptVisualRow",
         "TTranscriptVisualSegment",
+        "TVideoControlsLayout",
         "TVideoFrame",
         "TVideoFrameEvent",
         "TVideoFrameFormat",
@@ -9972,6 +9973,12 @@
           "type": "boolean",
           "required": false,
           "defaultValue": "false"
+        },
+        {
+          "name": "controlsLayout",
+          "type": "TVideoControlsLayout",
+          "required": false,
+          "defaultValue": "\"compact\""
         },
         {
           "name": "durationMs",
