@@ -44,6 +44,13 @@ async function settle(app: ReturnType<typeof createTerminalApp>): Promise<void> 
   }
 }
 
+async function waitForAbort(signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return;
+  await new Promise<void>((resolve) => {
+    signal.addEventListener("abort", () => resolve(), { once: true });
+  });
+}
+
 function registerKittyOutput(
   app: ReturnType<typeof createTerminalApp>,
   accept: (payload: TerminalGraphicsPayload) => boolean = () => true,
@@ -112,7 +119,13 @@ describe("TVideo", () => {
     expect(graphics.payloads[0]?.sequence).not.toContain(TINY_PNG_BASE64);
     expect(graphics.payloads[0]?.clearSequence).toContain("d=I");
     expect(frameEvents).toEqual([
-      { timestampMs: 83, pixelWidth: 24, pixelHeight: 12, droppedFrames: 1 },
+      {
+        timestampMs: 83,
+        pixelWidth: 24,
+        pixelHeight: 12,
+        droppedFrames: 1,
+        playbackRate: 1,
+      },
     ]);
 
     app.dispose();
@@ -372,6 +385,317 @@ describe("TVideo", () => {
 
     app.dispose();
     expect(contexts[1]?.signal.aborted).toBe(true);
+    graphics.unregister();
+  });
+
+  it("reserves one row for controls and excludes it from the decode height", async () => {
+    const contexts: Parameters<TVideoFrameSource>[0][] = [];
+    const source: TVideoFrameSource = async function* (context) {
+      contexts.push(context);
+      await waitForAbort(context.signal);
+    };
+    const App = defineComponent({
+      setup: () => () =>
+        h(TVideo, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 4,
+          src: "video.mp4",
+          frameSource: source,
+          controls: true,
+          loop: true,
+        }),
+    });
+    const app = createTerminalApp({ cols: 24, rows: 6, component: App });
+
+    app.mount();
+    await settle(app);
+
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0]).toMatchObject({
+      pixelWidth: 10,
+      pixelHeight: 3,
+      preferredFormat: "gray8",
+      playbackRate: 1,
+      loop: true,
+    });
+    expect(rowText(app, 3)).toBe("|| -------- 1x 2x 3x");
+
+    app.dispose();
+  });
+
+  it("restarts uncontrolled playback once for resume, pointer rate, and keyboard rate changes", async () => {
+    const contexts: Parameters<TVideoFrameSource>[0][] = [];
+    const pausedEvents: boolean[] = [];
+    const rateEvents: number[] = [];
+    const source: TVideoFrameSource = async function* (context) {
+      contexts.push(context);
+      yield frame(TINY_PNG_BASE64, context.startAtMs + 100);
+      await waitForAbort(context.signal);
+    };
+    const App = defineComponent({
+      setup: () => () =>
+        h(TVideo, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 4,
+          src: "video.mp4",
+          frameSource: source,
+          controls: true,
+          "onUpdate:paused": (paused: boolean) => pausedEvents.push(paused),
+          "onUpdate:playbackRate": (rate: number) => rateEvents.push(rate),
+        }),
+    });
+    const app = createTerminalApp({ cols: 24, rows: 6, component: App });
+    const graphics = registerKittyOutput(app);
+
+    app.mount();
+    await settle(app);
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0]).toMatchObject({ startAtMs: 0, playbackRate: 1 });
+
+    app.events.dispatch({ type: "pointerdown", cellX: 0, cellY: 3, button: 0 });
+    app.events.dispatch({ type: "pointerup", cellX: 0, cellY: 3, button: 0 });
+    await settle(app);
+    expect(pausedEvents).toEqual([true]);
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0]?.signal.aborted).toBe(true);
+
+    app.events.dispatch({ type: "pointerdown", cellX: 0, cellY: 3, button: 0 });
+    app.events.dispatch({ type: "pointerup", cellX: 0, cellY: 3, button: 0 });
+    await settle(app);
+    expect(pausedEvents).toEqual([true, false]);
+    expect(contexts).toHaveLength(2);
+    expect(contexts[1]).toMatchObject({ startAtMs: 100, playbackRate: 1 });
+
+    app.events.dispatch({ type: "pointerdown", cellX: 15, cellY: 3, button: 0 });
+    app.events.dispatch({ type: "pointerup", cellX: 15, cellY: 3, button: 0 });
+    await settle(app);
+    expect(rateEvents).toEqual([2]);
+    expect(contexts).toHaveLength(3);
+    expect(contexts[2]).toMatchObject({ startAtMs: 200, playbackRate: 2 });
+
+    app.events.dispatch({ type: "keydown", key: "3", code: "Digit3" });
+    await settle(app);
+    expect(rateEvents).toEqual([2, 3]);
+    expect(contexts).toHaveLength(4);
+    expect(contexts[3]).toMatchObject({ startAtMs: 300, playbackRate: 3 });
+
+    app.dispose();
+    graphics.unregister();
+  });
+
+  it("only emits play intent when paused is controlled", async () => {
+    const source = vi.fn<TVideoFrameSource>(async function* () {});
+    const pausedEvents: boolean[] = [];
+    const App = defineComponent({
+      setup: () => () =>
+        h(TVideo, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 4,
+          src: "video.mp4",
+          frameSource: source,
+          controls: true,
+          paused: true,
+          "onUpdate:paused": (paused: boolean) => pausedEvents.push(paused),
+        }),
+    });
+    const app = createTerminalApp({ cols: 24, rows: 6, component: App });
+
+    app.mount();
+    await settle(app);
+    expect(source).not.toHaveBeenCalled();
+
+    app.events.dispatch({ type: "pointerdown", cellX: 0, cellY: 3, button: 0 });
+    app.events.dispatch({ type: "pointerup", cellX: 0, cellY: 3, button: 0 });
+    await settle(app);
+
+    expect(pausedEvents).toEqual([false]);
+    expect(source).not.toHaveBeenCalled();
+    expect(rowText(app, 3).startsWith("> ")).toBe(true);
+
+    app.dispose();
+  });
+
+  it("coalesces progress dragging into one seek restart with the mapped timestamp", async () => {
+    const contexts: Parameters<TVideoFrameSource>[0][] = [];
+    const seekEvents: Array<{ timestampMs: number; durationMs?: number }> = [];
+    const source: TVideoFrameSource = async function* (context) {
+      contexts.push(context);
+      await waitForAbort(context.signal);
+    };
+    const App = defineComponent({
+      setup: () => () =>
+        h(TVideo, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 4,
+          src: "video.mp4",
+          frameSource: source,
+          controls: true,
+          durationMs: 10_000,
+          onSeek: (event: { timestampMs: number; durationMs?: number }) => seekEvents.push(event),
+        }),
+    });
+    const app = createTerminalApp({ cols: 24, rows: 6, component: App });
+
+    app.mount();
+    await settle(app);
+    expect(contexts).toHaveLength(1);
+
+    app.events.dispatch({ type: "pointerdown", cellX: 3, cellY: 3, button: 0, buttons: 1 });
+    await settle(app);
+    expect(contexts).toHaveLength(1);
+
+    app.events.dispatch({ type: "pointermove", cellX: 5, cellY: 3, button: 0, buttons: 1 });
+    app.events.dispatch({ type: "pointermove", cellX: 8, cellY: 3, button: 0, buttons: 1 });
+    await settle(app);
+    expect(contexts).toHaveLength(1);
+
+    app.events.dispatch({ type: "pointerup", cellX: 7, cellY: 3, button: 0, buttons: 0 });
+    await settle(app);
+
+    const expectedTimestamp = (4 / 7) * 10_000;
+    expect(seekEvents).toHaveLength(1);
+    expect(seekEvents[0]?.timestampMs).toBeCloseTo(expectedTimestamp);
+    expect(seekEvents[0]?.durationMs).toBe(10_000);
+    expect(contexts).toHaveLength(2);
+    expect(contexts[1]?.startAtMs).toBeCloseTo(expectedTimestamp);
+
+    app.dispose();
+  });
+
+  it("does not seek a progress bar with unknown duration", async () => {
+    const contexts: Parameters<TVideoFrameSource>[0][] = [];
+    const seekEvents: Array<{ timestampMs: number }> = [];
+    const source: TVideoFrameSource = async function* (context) {
+      contexts.push(context);
+      await waitForAbort(context.signal);
+    };
+    const App = defineComponent({
+      setup: () => () =>
+        h(TVideo, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 4,
+          src: "video.mp4",
+          frameSource: source,
+          controls: true,
+          onSeek: (event: { timestampMs: number }) => seekEvents.push(event),
+        }),
+    });
+    const app = createTerminalApp({ cols: 24, rows: 6, component: App });
+
+    app.mount();
+    await settle(app);
+    expect(contexts).toHaveLength(1);
+
+    app.events.dispatch({ type: "pointerdown", cellX: 3, cellY: 3, button: 0, buttons: 1 });
+    app.events.dispatch({ type: "pointermove", cellX: 8, cellY: 3, button: 0, buttons: 1 });
+    app.events.dispatch({ type: "pointerup", cellX: 8, cellY: 3, button: 0, buttons: 0 });
+    await settle(app);
+
+    expect(seekEvents).toEqual([]);
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0]?.signal.aborted).toBe(false);
+    expect(rowText(app, 3).slice(3, 11)).toBe("--------");
+
+    app.dispose();
+  });
+
+  it("decodes one preview frame when seeking while paused and stays paused", async () => {
+    const contexts: Parameters<TVideoFrameSource>[0][] = [];
+    const yieldedFrames: number[] = [];
+    const source: TVideoFrameSource = async function* (context) {
+      const index = contexts.push(context) - 1;
+      yieldedFrames[index] = (yieldedFrames[index] ?? 0) + 1;
+      yield frame(TINY_PNG_BASE64, context.startAtMs);
+      yieldedFrames[index] = (yieldedFrames[index] ?? 0) + 1;
+      yield frame(WIDE_PNG_BASE64, context.startAtMs + 100);
+    };
+    const App = defineComponent({
+      setup: () => () =>
+        h(TVideo, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 4,
+          src: "video.mp4",
+          frameSource: source,
+          controls: true,
+          paused: true,
+          durationMs: 7_000,
+        }),
+    });
+    const app = createTerminalApp({ cols: 24, rows: 6, component: App });
+    const graphics = registerKittyOutput(app);
+
+    app.mount();
+    await settle(app);
+    expect(contexts).toHaveLength(0);
+
+    app.events.dispatch({ type: "pointerdown", cellX: 3, cellY: 3, button: 0, buttons: 1 });
+    app.events.dispatch({ type: "pointermove", cellX: 6, cellY: 3, button: 0, buttons: 1 });
+    app.events.dispatch({ type: "pointerup", cellX: 6, cellY: 3, button: 0, buttons: 0 });
+    await settle(app);
+
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0]?.startAtMs).toBe(3_000);
+    expect(yieldedFrames).toEqual([1]);
+    expect(rowText(app, 3).startsWith("> ")).toBe(true);
+
+    app.dispose();
+    graphics.unregister();
+  });
+
+  it("clears a discovered duration when src changes", async () => {
+    const src = ref("first.mp4");
+    const contexts: Parameters<TVideoFrameSource>[0][] = [];
+    const source: TVideoFrameSource = async function* (context) {
+      contexts.push(context);
+      if (context.src === "first.mp4") {
+        yield {
+          ...frame(TINY_PNG_BASE64, 5_000),
+          durationMs: 10_000,
+        };
+      }
+      await waitForAbort(context.signal);
+    };
+    const App = defineComponent({
+      setup: () => () =>
+        h(TVideo, {
+          x: 0,
+          y: 0,
+          w: 20,
+          h: 4,
+          src: src.value,
+          frameSource: source,
+          controls: true,
+        }),
+    });
+    const app = createTerminalApp({ cols: 24, rows: 6, component: App });
+    const graphics = registerKittyOutput(app);
+
+    app.mount();
+    await settle(app);
+    expect(contexts).toHaveLength(1);
+    expect(rowText(app, 3).slice(3, 11)).toBe("====>---");
+
+    src.value = "second.mp4";
+    await nextTick();
+    await settle(app);
+
+    expect(contexts).toHaveLength(2);
+    expect(contexts[1]?.src).toBe("second.mp4");
+    expect(rowText(app, 3).slice(3, 11)).toBe("--------");
+
+    app.dispose();
     graphics.unregister();
   });
 

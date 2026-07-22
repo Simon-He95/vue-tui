@@ -119,6 +119,7 @@ export function buildFfmpegVideoArgs(
   const realtime = options.realtime !== false;
   const input = classifyInput(context.src, live);
   const fps = positiveNumber(context.maxFps, 12, 60);
+  const playbackRate = positiveNumber(context.playbackRate, 1, 3);
   const width = positiveInt(context.pixelWidth, 320, MAX_PNG_DIMENSION);
   const height = positiveInt(context.pixelHeight, 180, MAX_PNG_DIMENSION);
   const preferredFormat = context.preferredFormat ?? "png";
@@ -126,6 +127,9 @@ export function buildFfmpegVideoArgs(
   const httpHeaders =
     input.protocolWhitelist === "file" ? "" : ffmpegHttpHeaders(options.httpHeaders);
   const filters = [
+    playbackRate === 1
+      ? "setpts=PTS-STARTPTS"
+      : `setpts=(PTS-STARTPTS)/${ffmpegNumber(playbackRate)}`,
     `fps=${ffmpegNumber(fps)}`,
     ...(realtime ? ["realtime"] : []),
     `scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=fast_bilinear`,
@@ -137,9 +141,9 @@ export function buildFfmpegVideoArgs(
     "-hide_banner",
     "-loglevel",
     "error",
-    ...(options.loop ? ["-stream_loop", "-1"] : []),
+    ...(context.loop || options.loop ? ["-stream_loop", "-1"] : []),
     ...(startAtMs > 0 && !live ? ["-ss", ffmpegNumber(startAtMs / 1000)] : []),
-    ...(realtime && input.readAtNativeRate ? ["-readrate", "1"] : []),
+    ...(realtime && input.readAtNativeRate ? ["-readrate", ffmpegNumber(playbackRate)] : []),
     "-protocol_whitelist",
     input.protocolWhitelist,
     ...(httpHeaders ? ["-headers", httpHeaders] : []),
@@ -170,6 +174,7 @@ export function createFfmpegVideoFrameSource(
     if (context.signal.aborted) throw abortError();
 
     const fps = positiveNumber(context.maxFps, 12, 60);
+    const playbackRate = positiveNumber(context.playbackRate, 1, 3);
     const startAtMs = Math.max(0, Number(context.startAtMs) || 0);
     const width = positiveInt(context.pixelWidth, 320, MAX_PNG_DIMENSION);
     const height = positiveInt(context.pixelHeight, 180, MAX_PNG_DIMENSION);
@@ -244,7 +249,7 @@ export function createFfmpegVideoFrameSource(
       if (preferredFormat === "gray8") {
         for await (const pixels of parseRawFrames(stdout, rawFrameBytes)) {
           if (aborted || context.signal.aborted) throw abortError();
-          const timestampMs = startAtMs + (frameIndex * 1000) / fps;
+          const timestampMs = startAtMs + (frameIndex * 1000 * playbackRate) / fps;
           frameIndex++;
           yield {
             format: "gray8",
@@ -260,7 +265,7 @@ export function createFfmpegVideoFrameSource(
           maxDimension: MAX_PNG_DIMENSION,
         })) {
           if (aborted || context.signal.aborted) throw abortError();
-          const timestampMs = startAtMs + (frameIndex * 1000) / fps;
+          const timestampMs = startAtMs + (frameIndex * 1000 * playbackRate) / fps;
           frameIndex++;
           const dimensions = pngDimensions(png);
           yield {

@@ -25,18 +25,31 @@ const sourceLabel = computed(() =>
     ? "YouTube 4K60 → adaptive source (typically 360p/≤30fps) → PNG/ASCII"
     : "Bundled CC clip · 640×360 H.264 · offline fallback",
 );
-const playbackStatus = ref("starting video decoder…");
+const paused = ref(false);
+const playbackRate = ref(1);
+const discoveredDurationMs = ref<number>();
+const frameStatus = ref("starting video decoder…");
+const durationMs = computed(() => (youtubeSource.value ? discoveredDurationMs.value : 6000));
+const playbackStatus = computed(() => {
+  const totalSeconds = Math.max(0, Math.round((durationMs.value ?? 0) / 1000));
+  const duration =
+    durationMs.value == null
+      ? "--:--"
+      : `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, "0")}`;
+  return `${frameStatus.value} · ${paused.value ? "paused" : "playing"} · ${playbackRate.value}x · duration ${duration}`;
+});
 let displayedSecond = -1;
 
 function onFrame(event: TVideoFrameEvent) {
+  if (event.durationMs != null) discoveredDurationMs.value = event.durationMs;
   const second = Math.floor(event.timestampMs / 1000);
   if (second === displayedSecond) return;
   displayedSecond = second;
-  playbackStatus.value = `${event.pixelWidth}x${event.pixelHeight} · ${second}s · dropped ${event.droppedFrames}`;
+  frameStatus.value = `${event.pixelWidth}x${event.pixelHeight} · ${second}s · dropped ${event.droppedFrames}`;
 }
 
 function onError(error: unknown) {
-  playbackStatus.value = error instanceof Error ? error.message : String(error);
+  frameStatus.value = error instanceof Error ? error.message : String(error);
 }
 </script>
 
@@ -60,6 +73,11 @@ function onError(error: unknown) {
       :src="videoSrc"
       :frame-source="videoFrameSource"
       :max-fps="12"
+      :duration-ms="youtubeSource ? undefined : 6000"
+      v-model:paused="paused"
+      v-model:playback-rate="playbackRate"
+      controls
+      loop
       fallback="Waiting for the first decoded video frame…"
       @frame="onFrame"
       @error="onError"

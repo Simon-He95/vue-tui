@@ -33,7 +33,6 @@ const videoFrameSource = youtubeDemo
     })
   : createFfmpegVideoFrameSource({
       ffmpegPath: process.env.FFMPEG_PATH,
-      loop: true,
     });
 let out!: ReturnType<typeof createStdoutRenderer>;
 

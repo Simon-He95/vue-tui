@@ -1,10 +1,16 @@
+import type { TerminalKeyboardEvent, TerminalPointerEvent } from "../../events/manager/types.js";
 import type { ExtractPublicPropTypes, PropType } from "vue";
 import type { Style } from "../../core/types.js";
 import type {
   TAgentTerminalGraphicRenderer,
   TAgentTerminalGraphicRendererContext,
 } from "./TAgentTerminalGraphic.js";
-import type { TVideoFrame, TVideoFrameEvent, TVideoFrameSource } from "../video/types.js";
+import type {
+  TVideoFrame,
+  TVideoFrameEvent,
+  TVideoFrameSource,
+  TVideoPlaybackRate,
+} from "../video/types.js";
 import {
   computed,
   defineComponent,
@@ -32,6 +38,8 @@ import { useVisibility } from "../composables/use-visibility.js";
 import { createFrameMailbox } from "../scheduler/frame-mailbox.js";
 import { intersectRect, translateRect } from "../utils/rect.js";
 import { TAgentTerminalGraphic } from "./TAgentTerminalGraphic.js";
+import { TText } from "./TText.js";
+import { TView } from "./TView.js";
 
 const DEFAULT_MAX_FPS = 12;
 const DEFAULT_MAX_PIXEL_WIDTH = 640;
@@ -42,6 +50,8 @@ const MAX_GRAY8_FPS = 10;
 const MAX_GRAY8_WIDTH = 512;
 const MAX_GRAY8_HEIGHT = 256;
 const ASCII_RAMP = " .:-=+*#%@";
+const CONTROL_REFRESH_MS = 250;
+const PLAYBACK_RATES = [1, 2, 3] as const;
 
 type NormalizedPngFrame = Readonly<{
   format: "png";
@@ -50,6 +60,7 @@ type NormalizedPngFrame = Readonly<{
   pixelWidth: number;
   pixelHeight: number;
   fingerprint?: string | number;
+  durationMs?: number;
 }>;
 
 type NormalizedGray8Frame = Readonly<{
@@ -59,6 +70,7 @@ type NormalizedGray8Frame = Readonly<{
   pixelWidth: number;
   pixelHeight: number;
   fingerprint?: string | number;
+  durationMs?: number;
 }>;
 
 type NormalizedVideoFrame = NormalizedPngFrame | NormalizedGray8Frame;
@@ -73,6 +85,15 @@ function positiveNumber(value: unknown, fallback: number, max: number): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
   return Math.min(max, parsed);
+}
+
+function playbackRate(value: unknown): TVideoPlaybackRate {
+  return value === 2 || value === 3 ? value : 1;
+}
+
+function optionalDuration(value: unknown): number | undefined {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 function readUint32(bytes: Uint8Array, offset: number): number {
@@ -111,6 +132,7 @@ function normalizeFrame(frame: TVideoFrame): NormalizedVideoFrame {
       pixelWidth,
       pixelHeight,
       fingerprint: frame.fingerprint,
+      durationMs: optionalDuration(frame.durationMs),
     };
   }
 
@@ -149,6 +171,7 @@ function normalizeFrame(frame: TVideoFrame): NormalizedVideoFrame {
     pixelWidth,
     pixelHeight,
     fingerprint: frame.fingerprint,
+    durationMs: optionalDuration(frame.durationMs),
   };
 }
 
@@ -330,7 +353,11 @@ export const tVideoProps = {
     type: Function as PropType<TVideoFrameSource>,
     required: true,
   },
-  paused: { type: Boolean, default: false },
+  paused: { type: Boolean, default: undefined },
+  playbackRate: { type: Number as PropType<TVideoPlaybackRate>, default: undefined },
+  controls: { type: Boolean, default: false },
+  durationMs: { type: Number, default: undefined },
+  loop: { type: Boolean, default: false },
   maxFps: { type: Number, default: DEFAULT_MAX_FPS },
   pixelWidth: { type: Number, default: undefined },
   pixelHeight: { type: Number, default: undefined },
@@ -341,6 +368,11 @@ export const tVideoProps = {
 
 export type TVideoProps = ExtractPublicPropTypes<typeof tVideoProps>;
 
+export type TVideoSeekEvent = Readonly<{
+  timestampMs: number;
+  durationMs?: number;
+}>;
+
 export const TVideo = defineComponent({
   name: "TVideo",
   props: tVideoProps,
@@ -348,6 +380,9 @@ export const TVideo = defineComponent({
     frame: (_event: TVideoFrameEvent) => true,
     ended: () => true,
     error: (_error: unknown) => true,
+    seek: (_event: TVideoSeekEvent) => true,
+    "update:paused": (_paused: boolean) => true,
+    "update:playbackRate": (_rate: TVideoPlaybackRate) => true,
   },
   setup(props, { emit }) {
     const instance = getCurrentInstance();
@@ -357,6 +392,12 @@ export const TVideo = defineComponent({
     const graphicsActivity = inject(TerminalGraphicsActivityKey, null);
     const frameRenderer = shallowRef<TAgentTerminalGraphicRenderer>();
     const playbackError = shallowRef("");
+    const internalPaused = shallowRef(props.paused ?? false);
+    const internalPlaybackRate = shallowRef<TVideoPlaybackRate>(playbackRate(props.playbackRate));
+    const discoveredDurationMs = shallowRef<number>();
+    const displayedTimestampMs = shallowRef(0);
+    const seekPreviewMs = shallowRef<number>();
+    const seeking = shallowRef(false);
     const terminalSizeVersion = shallowRef(0);
     const graphicsOutputVersion = shallowRef(getTerminalGraphicsOutputVersion(terminal));
     const placementKey = `TVideo:${instance?.uid ?? "unknown"}`;
@@ -372,6 +413,12 @@ export const TVideo = defineComponent({
     let lastTimestampMs = 0;
     let droppedFrames = 0;
     let pendingEndedGeneration: number | null = null;
+    let controlPointerCapture: Readonly<{
+      pointerId: number;
+      target: {
+        releasePointerCapture?: (pointerId: number) => void;
+      };
+    }> | null = null;
 
     const unsubscribeTerminalResize = terminal.on("resize", () => {
       terminalSizeVersion.value++;
@@ -380,10 +427,16 @@ export const TVideo = defineComponent({
       graphicsOutputVersion.value = getTerminalGraphicsOutputVersion(terminal);
     });
 
+    const showControls = computed(
+      () => props.controls && Math.floor(props.w) >= 14 && Math.floor(props.h) >= 2,
+    );
+    const videoHeight = computed(() =>
+      Math.max(1, Math.floor(props.h) - Number(showControls.value)),
+    );
     const resolvedMaxFps = computed(() => positiveNumber(props.maxFps, DEFAULT_MAX_FPS, 60));
     const resolvedPixelSize = computed(() => {
       const desiredWidth = Math.max(2, Math.floor(props.w) * 8);
-      const desiredHeight = Math.max(2, Math.floor(props.h) * 16);
+      const desiredHeight = Math.max(2, videoHeight.value * 16);
       if (props.pixelWidth == null && props.pixelHeight == null) {
         const scale = Math.min(
           1,
@@ -436,7 +489,7 @@ export const TVideo = defineComponent({
       const clip = layout.clipRect ? intersectRect(layout.clipRect, terminalRect) : terminalRect;
       if (!clip) return false;
       const rect = translateRect(
-        { x: props.x, y: props.y, w: props.w, h: props.h },
+        { x: props.x, y: props.y, w: props.w, h: videoHeight.value },
         layout.originX,
         layout.originY,
       );
@@ -462,31 +515,99 @@ export const TVideo = defineComponent({
     );
     const resolvedDecodeHeight = computed(() =>
       preferredFormat.value === "gray8"
-        ? positiveInt(props.h, 1, MAX_GRAY8_HEIGHT)
+        ? positiveInt(videoHeight.value, 1, MAX_GRAY8_HEIGHT)
         : resolvedPixelHeight.value,
     );
-    const shouldPlay = computed(
+    const resolvedDurationMs = computed(
+      () => optionalDuration(props.durationMs) ?? discoveredDurationMs.value,
+    );
+    const controlLayout = computed(() => {
+      const width = Math.max(1, Math.floor(props.w));
+      const ratesX = Math.max(5, width - 8);
+      const progressX = 3;
+      return {
+        width,
+        ratesX,
+        progressX,
+        progressWidth: Math.max(1, ratesX - progressX - 1),
+      };
+    });
+    const effectivePaused = computed(() => props.paused ?? internalPaused.value);
+    const effectivePlaybackRate = computed(() =>
+      props.playbackRate == null ? internalPlaybackRate.value : playbackRate(props.playbackRate),
+    );
+    const rateStyles = computed(() =>
+      PLAYBACK_RATES.map((rate) =>
+        rate === effectivePlaybackRate.value ? { ...props.style, inverse: true } : props.style,
+      ),
+    );
+    const progressText = computed(() => {
+      const { progressWidth } = controlLayout.value;
+      const duration = resolvedDurationMs.value;
+      if (!duration) return "-".repeat(progressWidth);
+      const timestamp = seekPreviewMs.value ?? displayedTimestampMs.value;
+      const ratio = Math.max(0, Math.min(1, timestamp / duration));
+      const marker = Math.round(ratio * Math.max(0, progressWidth - 1));
+      let text = "";
+      for (let index = 0; index < progressWidth; index++) {
+        text += index < marker ? "=" : index === marker ? ">" : "-";
+      }
+      return text;
+    });
+    const playbackEnabled = computed(
       () =>
         alive &&
-        !props.paused &&
+        !effectivePaused.value &&
         !graphicsActivity?.scrolling.value &&
         props.src.trim().length > 0 &&
         paintable.value,
     );
+    const shouldPlay = computed(() => playbackEnabled.value && !seeking.value);
     const visibleFallback = computed(() =>
       playbackError.value ? `${props.fallback}: ${playbackError.value}` : props.fallback,
     );
+
+    function timelineTimestamp(timestampMs: number): number {
+      const duration = resolvedDurationMs.value;
+      if (!duration) return Math.max(0, timestampMs);
+      if (props.loop) return Math.max(0, timestampMs) % duration;
+      return Math.max(0, Math.min(duration, timestampMs));
+    }
+
+    function seekTimestamp(timestampMs: number): number {
+      const duration = resolvedDurationMs.value;
+      if (!duration) return Math.max(0, timestampMs);
+      const end = props.loop ? Math.max(0, duration - 1) : duration;
+      return Math.max(0, Math.min(end, timestampMs));
+    }
+
+    function updateTimestamp(timestampMs: number, force = false): void {
+      const next = timelineTimestamp(timestampMs);
+      lastTimestampMs = next;
+      if (!showControls.value) return;
+      const threshold = CONTROL_REFRESH_MS * effectivePlaybackRate.value;
+      if (
+        force ||
+        next < displayedTimestampMs.value ||
+        Math.abs(next - displayedTimestampMs.value) >= threshold
+      ) {
+        displayedTimestampMs.value = next;
+      }
+    }
 
     function commitFrame(frame: NormalizedVideoFrame, dropped: number): void {
       if (!alive) return;
       droppedFrames += dropped;
       frameRenderer.value = markRaw(createFrameRenderer(frame, props.w));
-      lastTimestampMs = frame.timestampMs;
+      updateTimestamp(frame.timestampMs);
+      const durationMs = resolvedDurationMs.value;
       emit("frame", {
         timestampMs: frame.timestampMs,
         pixelWidth: frame.pixelWidth,
         pixelHeight: frame.pixelHeight,
         droppedFrames,
+        ...(durationMs ? { durationMs } : {}),
+        playbackRate: effectivePlaybackRate.value,
       });
     }
 
@@ -518,11 +639,187 @@ export const TVideo = defineComponent({
       activeAbort = null;
     }
 
+    function resetQueuedFrameIdentity(): void {
+      lastSourceBytes = null;
+      lastQueuedBytes = null;
+      lastQueuedFormat = null;
+      lastQueuedFingerprint = undefined;
+    }
+
+    function setPaused(paused: boolean): void {
+      if (effectivePaused.value === paused) return;
+      if (props.paused == null) internalPaused.value = paused;
+      emit("update:paused", paused);
+    }
+
+    function setPlaybackRate(rate: TVideoPlaybackRate): void {
+      const next = playbackRate(rate);
+      if (effectivePlaybackRate.value === next) return;
+      if (props.playbackRate == null) internalPlaybackRate.value = next;
+      emit("update:playbackRate", next);
+    }
+
+    function applySeek(timestampMs: number, restart: boolean): void {
+      const parsed = Number(timestampMs);
+      if (!Number.isFinite(parsed)) return;
+      stopPlayback();
+      resetQueuedFrameIdentity();
+      const next = seekTimestamp(parsed);
+      updateTimestamp(next, true);
+      seekPreviewMs.value = undefined;
+      const durationMs = resolvedDurationMs.value;
+      emit("seek", {
+        timestampMs: next,
+        ...(durationMs ? { durationMs } : {}),
+      });
+      if (restart) startPlayback(effectivePaused.value);
+    }
+
+    function controlCellX(event: TerminalPointerEvent): number {
+      return Math.floor(event.cellX - (event.currentTarget?.rect.x ?? 0));
+    }
+
+    function previewSeekAt(cellX: number): void {
+      const duration = resolvedDurationMs.value;
+      if (!duration) return;
+      const { progressX, progressWidth } = controlLayout.value;
+      const offset = Math.max(0, Math.min(progressWidth - 1, cellX - progressX));
+      seekPreviewMs.value =
+        progressWidth <= 1 ? 0 : (offset / Math.max(1, progressWidth - 1)) * duration;
+    }
+
+    function captureControlPointer(event: TerminalPointerEvent): void {
+      const native = event.nativeEvent as
+        | (Event & {
+            pointerId?: number;
+            target?: EventTarget | null;
+          })
+        | undefined;
+      const pointerId = native?.pointerId;
+      const target = native?.target as
+        | {
+            setPointerCapture?: (pointerId: number) => void;
+            releasePointerCapture?: (pointerId: number) => void;
+          }
+        | undefined;
+      if (pointerId == null || !target?.setPointerCapture) return;
+      target.setPointerCapture(pointerId);
+      controlPointerCapture = { pointerId, target };
+    }
+
+    function releaseControlPointer(): void {
+      if (!controlPointerCapture) return;
+      controlPointerCapture.target.releasePointerCapture?.(controlPointerCapture.pointerId);
+      controlPointerCapture = null;
+    }
+
+    function rateAt(cellX: number): TVideoPlaybackRate | undefined {
+      const offset = cellX - controlLayout.value.ratesX;
+      if (offset < 0 || offset % 3 >= 2) return undefined;
+      return PLAYBACK_RATES[Math.floor(offset / 3)];
+    }
+
+    function onControlPointerDown(event: TerminalPointerEvent): void {
+      if (event.button != null && event.button !== 0) return;
+      const cellX = controlCellX(event);
+      const rate = rateAt(cellX);
+      if (cellX <= 1) {
+        event.preventDefault();
+        event.stopPropagation();
+        setPaused(!effectivePaused.value);
+        return;
+      }
+      if (rate) {
+        event.preventDefault();
+        event.stopPropagation();
+        setPlaybackRate(rate);
+        return;
+      }
+      const { progressX, progressWidth } = controlLayout.value;
+      if (!resolvedDurationMs.value || cellX < progressX || cellX >= progressX + progressWidth) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      seeking.value = true;
+      stopPlayback();
+      previewSeekAt(cellX);
+      captureControlPointer(event);
+    }
+
+    function onControlPointerMove(event: TerminalPointerEvent): void {
+      if (!seeking.value) return;
+      if (event.buttons === 0) {
+        onControlPointerUp(event);
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      previewSeekAt(controlCellX(event));
+    }
+
+    function onControlPointerUp(event: TerminalPointerEvent): void {
+      if (!seeking.value) return;
+      event.preventDefault();
+      event.stopPropagation();
+      previewSeekAt(controlCellX(event));
+      const timestampMs = seekPreviewMs.value ?? lastTimestampMs;
+      applySeek(timestampMs, false);
+      seeking.value = false;
+      releaseControlPointer();
+      startPlayback(effectivePaused.value);
+    }
+
+    function finishControlSeek(): void {
+      if (!seeking.value) return;
+      const timestampMs = seekPreviewMs.value ?? lastTimestampMs;
+      applySeek(timestampMs, false);
+      seeking.value = false;
+      releaseControlPointer();
+      startPlayback(effectivePaused.value);
+    }
+
+    function onControlKeydown(event: TerminalKeyboardEvent): void {
+      if (event.key === "Enter" || event.key === " " || event.key === "Spacebar") {
+        event.preventDefault();
+        event.stopPropagation();
+        setPaused(!effectivePaused.value);
+        return;
+      }
+      if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+        event.preventDefault();
+        event.stopPropagation();
+        const index = PLAYBACK_RATES.indexOf(effectivePlaybackRate.value);
+        const offset = event.key === "ArrowUp" ? 1 : -1;
+        setPlaybackRate(PLAYBACK_RATES[Math.max(0, Math.min(2, index + offset))]!);
+        return;
+      }
+      if (
+        !event.repeat &&
+        (event.key === "Home" || event.key === "End") &&
+        resolvedDurationMs.value
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        applySeek(event.key === "Home" ? 0 : resolvedDurationMs.value, true);
+        return;
+      }
+      if (event.key === "1" || event.key === "2" || event.key === "3") {
+        event.preventDefault();
+        event.stopPropagation();
+        setPlaybackRate(Number(event.key) as TVideoPlaybackRate);
+      }
+    }
+
     function queueFrame(frame: TVideoFrame, expectedFormat: "png" | "gray8"): void {
-      const normalized = normalizeFrame(frame);
+      let normalized = normalizeFrame(frame);
       if (normalized.format !== expectedFormat) {
         throw new Error(`TVideo frame source did not provide requested ${expectedFormat} frames`);
       }
+      if (normalized.durationMs != null && normalized.durationMs !== discoveredDurationMs.value) {
+        discoveredDurationMs.value = normalized.durationMs;
+      }
+      normalized = { ...normalized, timestampMs: timelineTimestamp(normalized.timestampMs) };
       const sourceBytes = frameBytes(normalized);
       const reusesSourceBuffer = sourceBytes === lastSourceBytes;
       lastSourceBytes = sourceBytes;
@@ -549,7 +846,7 @@ export const TVideo = defineComponent({
         lastQueuedBytes = bytes;
         lastQueuedFormat = normalized.format;
         lastQueuedFingerprint = normalized.fingerprint;
-        lastTimestampMs = Math.max(lastTimestampMs, normalized.timestampMs);
+        updateTimestamp(normalized.timestampMs);
         if (mailbox.hasPending()) mailbox.replacePending(stableFrame);
         return;
       }
@@ -563,9 +860,20 @@ export const TVideo = defineComponent({
       }
     }
 
-    function startPlayback(): void {
+    function startPlayback(oneFrame = false): void {
       stopPlayback();
-      if (!shouldPlay.value) return;
+      if (
+        !shouldPlay.value &&
+        !(
+          oneFrame &&
+          alive &&
+          props.src.trim().length > 0 &&
+          paintable.value &&
+          !graphicsActivity?.scrolling.value
+        )
+      ) {
+        return;
+      }
 
       const currentGeneration = generation;
       const abort = new AbortController();
@@ -582,6 +890,8 @@ export const TVideo = defineComponent({
         pixelHeight: resolvedDecodeHeight.value,
         startAtMs: lastTimestampMs,
         preferredFormat: format,
+        playbackRate: effectivePlaybackRate.value,
+        loop: props.loop,
       };
 
       void (async () => {
@@ -590,6 +900,7 @@ export const TVideo = defineComponent({
           for await (const frame of frames) {
             if (!alive || abort.signal.aborted || currentGeneration !== generation) return;
             queueFrame(frame, format);
+            if (oneFrame) return;
           }
           if (!alive || abort.signal.aborted || currentGeneration !== generation) return;
           if (mailbox.hasPending()) pendingEndedGeneration = currentGeneration;
@@ -606,25 +917,43 @@ export const TVideo = defineComponent({
     }
 
     watch(
+      () => props.paused,
+      (paused) => {
+        if (paused != null) internalPaused.value = paused;
+      },
+    );
+
+    watch(
+      () => props.playbackRate,
+      (rate) => {
+        if (rate != null) internalPlaybackRate.value = playbackRate(rate);
+      },
+    );
+
+    watch(
       [
         () => props.src,
         () => props.frameSource,
-        shouldPlay,
+        playbackEnabled,
         resolvedDecodeFps,
         resolvedDecodeWidth,
         resolvedDecodeHeight,
         preferredFormat,
+        effectivePlaybackRate,
+        () => props.loop,
       ],
       (next, previous) => {
         const sourceChanged = !previous || next[0] !== previous[0] || next[1] !== previous[1];
         const formatChanged = !previous || next[6] !== previous[6];
         if (sourceChanged || formatChanged) {
-          lastSourceBytes = null;
-          lastQueuedBytes = null;
-          lastQueuedFormat = null;
-          lastQueuedFingerprint = undefined;
+          resetQueuedFrameIdentity();
           if (sourceChanged) {
             lastTimestampMs = 0;
+            displayedTimestampMs.value = 0;
+            discoveredDurationMs.value = undefined;
+            seekPreviewMs.value = undefined;
+            seeking.value = false;
+            releaseControlPointer();
             droppedFrames = 0;
           }
           playbackError.value = "";
@@ -638,18 +967,19 @@ export const TVideo = defineComponent({
     onBeforeUnmount(() => {
       alive = false;
       stopPlayback();
+      releaseControlPointer();
       mailbox.dispose();
       unsubscribeTerminalResize();
       unsubscribeGraphicsOutput();
     });
 
-    return () =>
-      h("span", rootProps, [
+    return () => {
+      const children = [
         h(TAgentTerminalGraphic, {
           x: props.x,
           y: props.y,
           w: props.w,
-          h: props.h,
+          h: videoHeight.value,
           zIndex: props.zIndex,
           content: props.src.trim() ? props.src : "video",
           fallback: visibleFallback.value,
@@ -663,6 +993,64 @@ export const TVideo = defineComponent({
           ignoreSamePlaneRawCoverage: true,
           suspended: !paintable.value,
         }),
-      ]);
+      ];
+
+      if (showControls.value) {
+        const { width, progressX, progressWidth, ratesX } = controlLayout.value;
+        children.push(
+          h(
+            TView,
+            {
+              x: props.x,
+              y: props.y + videoHeight.value,
+              w: width,
+              h: 1,
+              zIndex: props.zIndex,
+              focusable: true,
+              selectable: false,
+              onPointerdown: onControlPointerDown,
+              onPointermove: onControlPointerMove,
+              onPointerup: onControlPointerUp,
+              onKeydown: onControlKeydown,
+              onBlur: finishControlSeek,
+            },
+            () => [
+              h(TText, {
+                x: 0,
+                y: 0,
+                w: width,
+                value: " ".repeat(width),
+                style: props.style,
+              }),
+              h(TText, {
+                x: 0,
+                y: 0,
+                w: 2,
+                value: effectivePaused.value ? "> " : "||",
+                style: props.style,
+              }),
+              h(TText, {
+                x: progressX,
+                y: 0,
+                w: progressWidth,
+                value: progressText.value,
+                style: props.style,
+              }),
+              ...PLAYBACK_RATES.map((rate, index) =>
+                h(TText, {
+                  x: ratesX + index * 3,
+                  y: 0,
+                  w: 2,
+                  value: `${rate}x`,
+                  style: rateStyles.value[index],
+                }),
+              ),
+            ],
+          ),
+        );
+      }
+
+      return h("span", rootProps, children);
+    };
   },
 });

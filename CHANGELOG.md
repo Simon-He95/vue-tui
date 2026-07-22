@@ -6,6 +6,7 @@
 
 - Added the browser-safe `TVideo` component and the Node-only `@simon_he/vue-tui/experimental/video/node` entrypoint for dynamically loaded FFmpeg and yt-dlp frame sources.
 - Added local file, HTTP(S), and resolved YouTube demo playback with latest-frame-only delivery, adaptive source selection, and Kitty/iTerm2 or ASCII output.
+- Added optional `TVideo` transport controls with pause/resume, drag-to-seek, and 1×/2×/3× playback while keeping decoder restarts and frame conversion bounded.
 
 ### Fixed
 

@@ -16,12 +16,14 @@ const MAX_SOURCE_HEIGHT = 4320;
 const MAX_METADATA_BYTES = 128 * 1024;
 const MAX_STDERR_CHARS = 16_384;
 const KILL_TIMEOUT_MS = 1_000;
-const METADATA_TEMPLATE = "%(.{url,http_headers,protocol,width,height,fps,vcodec})j";
+const RESOLVED_INPUT_TTL_MS = 5 * 60 * 1000;
+const METADATA_TEMPLATE = "%(.{url,http_headers,protocol,width,height,fps,vcodec,duration})j";
 const COMMON_SOURCE_HEIGHTS = [144, 240, 360, 480, 720, 1080, 1440, 2160, 4320] as const;
 
 type ResolvedYtDlpInput = Readonly<{
   url: string;
   httpHeaders: Readonly<Record<string, string>>;
+  durationMs?: number;
 }>;
 
 function positiveInt(value: unknown, fallback: number, max: number): number {
@@ -229,7 +231,11 @@ async function resolveYtDlpVideoInput(
       throw new Error("yt-dlp returned invalid video metadata");
     }
 
-    const raw = metadata as Readonly<{ url?: unknown; http_headers?: unknown }>;
+    const raw = metadata as Readonly<{
+      url?: unknown;
+      http_headers?: unknown;
+      duration?: unknown;
+    }>;
     if (typeof raw.url !== "string") throw new Error("yt-dlp returned invalid video metadata");
     const url = assertHttpUrl(raw.url, "yt-dlp resolved video URL");
     const httpHeaders: Record<string, string> = {};
@@ -242,7 +248,14 @@ async function resolveYtDlpVideoInput(
         httpHeaders[name] = value;
       }
     }
-    return { url, httpHeaders };
+    let durationMs: number | undefined;
+    if (raw.duration != null) {
+      if (typeof raw.duration !== "number" || !Number.isFinite(raw.duration) || raw.duration < 0) {
+        throw new Error("yt-dlp returned invalid video metadata");
+      }
+      durationMs = Math.round(raw.duration * 1000);
+    }
+    return { url, httpHeaders, durationMs };
   } finally {
     signal.removeEventListener("abort", onAbort);
     if (!closed) terminate();
@@ -252,8 +265,26 @@ async function resolveYtDlpVideoInput(
 export function createYtDlpVideoFrameSource(
   options: YtDlpVideoFrameSourceOptions = {},
 ): TVideoFrameSource {
+  const resolvedInputs = new Map<
+    string,
+    Readonly<{ input: ResolvedYtDlpInput; expiresAtMs: number }>
+  >();
+
   return async function* ytDlpVideoFrames(context) {
-    const input = await resolveYtDlpVideoInput(context.src, context.signal, options, context);
+    if (context.signal.aborted) throw abortError();
+    const cacheKey = JSON.stringify(buildYtDlpVideoArgs(context.src, options, context));
+    const cached = resolvedInputs.get(cacheKey);
+    let input: ResolvedYtDlpInput;
+    if (cached && cached.expiresAtMs > Date.now()) {
+      input = cached.input;
+    } else {
+      if (cached) resolvedInputs.delete(cacheKey);
+      input = await resolveYtDlpVideoInput(context.src, context.signal, options, context);
+      resolvedInputs.set(cacheKey, {
+        input,
+        expiresAtMs: Date.now() + RESOLVED_INPUT_TTL_MS,
+      });
+    }
     const ffmpegSource = createFfmpegVideoFrameSource({
       ffmpegPath: options.ffmpegPath,
       live: options.live,
@@ -262,6 +293,19 @@ export function createYtDlpVideoFrameSource(
       httpHeaders: input.httpHeaders,
     });
     const frames = await ffmpegSource({ ...context, src: input.url });
-    yield* frames;
+    try {
+      if (input.durationMs == null) {
+        yield* frames;
+        return;
+      }
+      for await (const frame of frames) {
+        yield { ...frame, durationMs: input.durationMs };
+      }
+    } catch (error) {
+      if (!(error instanceof Error && error.name === "AbortError")) {
+        resolvedInputs.delete(cacheKey);
+      }
+      throw error;
+    }
   };
 }

@@ -53,6 +53,8 @@ function context(src: string, preferredFormat: "png" | "gray8" = "png"): TVideoF
     pixelWidth: 320,
     pixelHeight: 180,
     startAtMs: 1500,
+    playbackRate: 1,
+    loop: false,
     preferredFormat,
   };
 }
@@ -128,11 +130,37 @@ describe("FFmpeg TVideo frame source", () => {
     expect(args.filter((arg) => arg === src)).toHaveLength(1);
     expect(args).toContain("http,https,httpproxy,tcp,tls");
     expect(args).toContain("-readrate");
+    expect(args[args.indexOf("-readrate") + 1]).toBe("1");
     expect(args).toContain("1.5");
     expect(args[args.indexOf("-vf") + 1]).toBe(
-      "fps=12,realtime,scale=320:180:force_original_aspect_ratio=decrease:flags=fast_bilinear,pad=320:180:(ow-iw)/2:(oh-ih)/2",
+      "setpts=PTS-STARTPTS,fps=12,realtime,scale=320:180:force_original_aspect_ratio=decrease:flags=fast_bilinear,pad=320:180:(ow-iw)/2:(oh-ih)/2",
     );
     expect(args).toContain("-compression_level");
+  });
+
+  it.each([1, 2, 3] as const)(
+    "keeps the %sx wall-clock frame rate bounded while advancing media time",
+    (playbackRate) => {
+      const args = buildFfmpegVideoArgs({
+        ...context("video.mp4"),
+        playbackRate,
+      });
+      const filter = args[args.indexOf("-vf") + 1]!;
+      const setpts =
+        playbackRate === 1 ? "setpts=PTS-STARTPTS" : `setpts=(PTS-STARTPTS)/${playbackRate}`;
+
+      expect(args[args.indexOf("-readrate") + 1]).toBe(String(playbackRate));
+      expect(filter).toContain(`${setpts},fps=12,realtime`);
+    },
+  );
+
+  it("loops input when requested by the source context", () => {
+    const args = buildFfmpegVideoArgs({ ...context("video.mp4"), loop: true });
+
+    expect(args.slice(args.indexOf("-stream_loop"), args.indexOf("-stream_loop") + 2)).toEqual([
+      "-stream_loop",
+      "-1",
+    ]);
   });
 
   it("passes resolved HTTP headers to FFmpeg without allowing control characters", () => {
@@ -172,6 +200,7 @@ describe("FFmpeg TVideo frame source", () => {
     );
     expect(args).toContain("--no-config");
     expect(args).toContain("--no-playlist");
+    expect(args[args.indexOf("--print") + 1]).toContain("duration");
   });
 
   it("rounds gray8 source height upward, caps it, and preserves custom formats", () => {
@@ -197,10 +226,14 @@ describe("FFmpeg TVideo frame source", () => {
     expect(custom[custom.indexOf("--format") + 1]).toBe("worstvideo[protocol^=http]");
   });
 
-  it("lazily resolves a yt-dlp URL and decodes it through FFmpeg", async () => {
+  it("caches a completed yt-dlp resolution across playback contexts", async () => {
     const ytDlp = fakeFfmpegProcess();
     const ffmpeg = fakeFfmpegProcess();
-    spawnMock.mockReturnValueOnce(ytDlp).mockReturnValueOnce(ffmpeg);
+    const resumedFfmpeg = fakeFfmpegProcess();
+    spawnMock
+      .mockReturnValueOnce(ytDlp)
+      .mockReturnValueOnce(ffmpeg)
+      .mockReturnValueOnce(resumedFfmpeg);
     const source = createYtDlpVideoFrameSource({
       ytDlpPath: "/usr/local/bin/yt-dlp",
       ffmpegPath: "/usr/local/bin/ffmpeg",
@@ -225,6 +258,7 @@ describe("FFmpeg TVideo frame source", () => {
           "User-Agent": "yt-dlp-test",
           Accept: "text/html",
         },
+        duration: 596.458,
       })}\n`,
     );
     ytDlp.stderr.end();
@@ -241,10 +275,36 @@ describe("FFmpeg TVideo frame source", () => {
     ffmpeg.stdout.write(TINY_PNG);
     await expect(first).resolves.toMatchObject({
       done: false,
-      value: { pixelWidth: 1, pixelHeight: 1 },
+      value: { pixelWidth: 1, pixelHeight: 1, durationMs: 596458 },
     });
     await iterator.return?.();
     expect(ffmpeg.kill).toHaveBeenCalledWith("SIGTERM");
+
+    const resumedFrames = await source({
+      ...context("https://www.youtube.com/watch?v=aqz-KE-bpKQ"),
+      signal: new AbortController().signal,
+      startAtMs: 4250,
+      playbackRate: 3,
+    });
+    const resumedIterator = resumedFrames[Symbol.asyncIterator]();
+    const resumedFirst = resumedIterator.next();
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(3));
+
+    const [resumedExecutable, resumedArgs] = spawnMock.mock.calls[2]!;
+    expect(resumedExecutable).toBe("/usr/local/bin/ffmpeg");
+    expect(resumedArgs[resumedArgs.indexOf("-i") + 1]).toBe(
+      "https://rr.example.googlevideo.com/videoplayback?id=abc",
+    );
+    expect(resumedArgs[resumedArgs.indexOf("-ss") + 1]).toBe("4.25");
+    expect(resumedArgs[resumedArgs.indexOf("-readrate") + 1]).toBe("3");
+
+    resumedFfmpeg.stdout.write(TINY_PNG);
+    await expect(resumedFirst).resolves.toMatchObject({
+      done: false,
+      value: { timestampMs: 4250, durationMs: 596458 },
+    });
+    await resumedIterator.return?.();
+    expect(resumedFfmpeg.kill).toHaveBeenCalledWith("SIGTERM");
   });
 
   it("aborts yt-dlp resolution before FFmpeg starts", async () => {
@@ -264,6 +324,44 @@ describe("FFmpeg TVideo frame source", () => {
     await expect(next).rejects.toMatchObject({ name: "AbortError" });
     expect(ytDlp.kill).toHaveBeenCalledWith("SIGTERM");
     expect(spawnMock).toHaveBeenCalledOnce();
+  });
+
+  it("evicts a resolved URL after an FFmpeg decode failure", async () => {
+    const ytDlp = fakeFfmpegProcess();
+    const ffmpeg = fakeFfmpegProcess();
+    const retryYtDlp = fakeFfmpegProcess();
+    spawnMock
+      .mockReturnValueOnce(ytDlp)
+      .mockReturnValueOnce(ffmpeg)
+      .mockReturnValueOnce(retryYtDlp);
+    const src = "https://www.youtube.com/watch?v=aqz-KE-bpKQ";
+    const source = createYtDlpVideoFrameSource();
+    const frames = await source(context(src));
+    const next = frames[Symbol.asyncIterator]().next();
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
+
+    ytDlp.stdout.end(`${JSON.stringify({ url: "https://rr.example.googlevideo.com/expired" })}\n`);
+    ytDlp.stderr.end();
+    ytDlp.emit("close", 0, null);
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2));
+
+    ffmpeg.stdout.end();
+    ffmpeg.stderr.end("HTTP error 403 Forbidden");
+    ffmpeg.emit("close", 1, null);
+    await expect(next).rejects.toThrow("HTTP error 403 Forbidden");
+
+    const retryController = new AbortController();
+    const retryFrames = await source({
+      ...context(src),
+      signal: retryController.signal,
+    });
+    const retryNext = retryFrames[Symbol.asyncIterator]().next();
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(3));
+    expect(spawnMock.mock.calls[2]![0]).toBe("yt-dlp");
+
+    retryController.abort();
+    await expect(retryNext).rejects.toMatchObject({ name: "AbortError" });
+    expect(retryYtDlp.kill).toHaveBeenCalledWith("SIGTERM");
   });
 
   it("rejects yt-dlp metadata with an array of HTTP headers", async () => {
@@ -357,33 +455,47 @@ describe("FFmpeg TVideo frame source", () => {
     expect(await observed).toBe(spawnFailure);
   });
 
-  it("emits gray8 frames with fixed dimensions and timestamps", async () => {
-    const child = fakeFfmpegProcess();
-    spawnMock.mockReturnValueOnce(child);
-    const source = createFfmpegVideoFrameSource();
-    const frames = await source({
-      ...context("video.mp4", "gray8"),
-      pixelWidth: 2,
-      pixelHeight: 2,
-    });
-    const iterator = frames[Symbol.asyncIterator]();
-    const first = iterator.next();
-    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
-
-    child.stdout.write(new Uint8Array([0, 64, 128, 255]));
-
-    await expect(first).resolves.toEqual({
-      done: false,
-      value: {
-        format: "gray8",
-        pixels: new Uint8Array([0, 64, 128, 255]),
-        timestampMs: 1500,
+  it.each([1, 2, 3] as const)(
+    "emits gray8 frames with fixed dimensions and %sx media timestamps",
+    async (playbackRate) => {
+      const child = fakeFfmpegProcess();
+      spawnMock.mockReturnValueOnce(child);
+      const source = createFfmpegVideoFrameSource();
+      const frames = await source({
+        ...context("video.mp4", "gray8"),
         pixelWidth: 2,
         pixelHeight: 2,
-      },
-    });
-    await iterator.return?.();
-  });
+        playbackRate,
+      });
+      const iterator = frames[Symbol.asyncIterator]();
+      const first = iterator.next();
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce());
+
+      child.stdout.write(new Uint8Array([0, 64, 128, 255, 255, 128, 64, 0]));
+
+      await expect(first).resolves.toEqual({
+        done: false,
+        value: {
+          format: "gray8",
+          pixels: new Uint8Array([0, 64, 128, 255]),
+          timestampMs: 1500,
+          pixelWidth: 2,
+          pixelHeight: 2,
+        },
+      });
+      await expect(iterator.next()).resolves.toEqual({
+        done: false,
+        value: {
+          format: "gray8",
+          pixels: new Uint8Array([255, 128, 64, 0]),
+          timestampMs: 1500 + (playbackRate * 1000) / 12,
+          pixelWidth: 2,
+          pixelHeight: 2,
+        },
+      });
+      await iterator.return?.();
+    },
+  );
 
   it("rejects an oversized gray8 frame before spawning FFmpeg", async () => {
     const source = createFfmpegVideoFrameSource({ maxFrameBytes: 3 });

@@ -10,6 +10,7 @@ const MAX_FPS = 30;
 
 type VideoFrameMetadata = Readonly<{
   mediaTime: number;
+  wallTimeMs: number;
 }>;
 
 type VideoWithFrameCallbacks = HTMLVideoElement & {
@@ -132,9 +133,14 @@ function waitForVideoFrame(
     signal.addEventListener("abort", onAbort, { once: true });
 
     if (video.requestVideoFrameCallback) {
-      callbackHandle = video.requestVideoFrameCallback((_now, metadata) => finish(metadata));
+      callbackHandle = video.requestVideoFrameCallback((now, metadata) =>
+        finish({ mediaTime: metadata.mediaTime, wallTimeMs: now }),
+      );
     } else {
-      timer = setTimeout(() => finish({ mediaTime: video.currentTime }), fallbackDelayMs);
+      timer = setTimeout(
+        () => finish({ mediaTime: video.currentTime, wallTimeMs: performance.now() }),
+        fallbackDelayMs,
+      );
     }
   });
 }
@@ -172,7 +178,7 @@ export function createBrowserVideoFrameSource(
     canvas.width = width;
     canvas.height = height;
     video.crossOrigin = "anonymous";
-    video.loop = options.loop !== false;
+    video.loop = context.loop || options.loop === true;
     video.muted = true;
     video.playsInline = true;
     video.preload = "auto";
@@ -191,20 +197,20 @@ export function createBrowserVideoFrameSource(
             ? startSeconds % video.duration
             : Math.min(startSeconds, Math.max(0, video.duration || 0));
       }
+      video.playbackRate = context.playbackRate;
       await waitForPlayback(video, context.signal);
 
       drawing.imageSmoothingEnabled = true;
       drawing.imageSmoothingQuality = "low";
 
-      let lastTimestampMs = Number.NEGATIVE_INFINITY;
+      let lastFrameAtMs = Number.NEGATIVE_INFINITY;
       while (!context.signal.aborted) {
         const metadata = await waitForVideoFrame(video, context.signal, frameIntervalMs);
         if (!metadata) return;
 
         const timestampMs = Math.max(0, metadata.mediaTime * 1000);
-        if (timestampMs < lastTimestampMs) lastTimestampMs = Number.NEGATIVE_INFINITY;
-        if (timestampMs - lastTimestampMs + 0.5 < frameIntervalMs) continue;
-        lastTimestampMs = timestampMs;
+        if (metadata.wallTimeMs - lastFrameAtMs + 0.5 < frameIntervalMs) continue;
+        lastFrameAtMs = metadata.wallTimeMs;
 
         const scale = Math.min(width / video.videoWidth, height / video.videoHeight);
         const drawWidth = Math.max(1, Math.round(video.videoWidth * scale));
@@ -235,6 +241,9 @@ export function createBrowserVideoFrameSource(
           pixelWidth: width,
           pixelHeight: height,
           timestampMs,
+          ...(Number.isFinite(video.duration) && video.duration > 0
+            ? { durationMs: video.duration * 1000 }
+            : {}),
           fingerprint: fingerprintPixels(pixels),
         };
       }

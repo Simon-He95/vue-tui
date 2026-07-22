@@ -624,7 +624,9 @@
         "TVideoFrameFormat",
         "TVideoFrameSource",
         "TVideoFrameSourceContext",
+        "TVideoPlaybackRate",
         "TVideoProps",
+        "TVideoSeekEvent",
         "UseTLogLinkControllerOptions",
         "UseTLogSearchControllerOptions",
         "UseTLogSearchResultsPageOptions",
@@ -9957,6 +9959,30 @@
           "name": "paused",
           "type": "boolean",
           "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "playbackRate",
+          "type": "TVideoPlaybackRate",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "controls",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "durationMs",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "loop",
+          "type": "boolean",
+          "required": false,
           "defaultValue": "false"
         },
         {
@@ -10007,6 +10033,18 @@
         {
           "name": "error",
           "payload": "unknown"
+        },
+        {
+          "name": "seek",
+          "payload": "TVideoSeekEvent"
+        },
+        {
+          "name": "update:paused",
+          "payload": "boolean"
+        },
+        {
+          "name": "update:playbackRate",
+          "payload": "TVideoPlaybackRate"
         }
       ]
     },

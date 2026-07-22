@@ -21,7 +21,7 @@ const activeDemo = computed(
   () => showcaseDemos.find((demo) => demo.id === activeId.value) ?? firstDemo,
 );
 const videoSrc = `${import.meta.env.BASE_URL}video-demo.mp4`;
-const videoFrameSource = createBrowserVideoFrameSource({ loop: true });
+const videoFrameSource = createBrowserVideoFrameSource();
 const activeDemoProps = computed(() =>
   activeDemo.value.id === "video" ? { videoSrc, videoFrameSource } : {},
 );
