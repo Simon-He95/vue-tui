@@ -92,7 +92,19 @@ import {
   layoutMarkdownBlocks,
 } from "@simon_he/vue-tui/markdown";
 
-import { TLogView, TVirtualList, createAppendOnlyLogStore } from "@simon_he/vue-tui/experimental";
+import {
+  TLogView,
+  TVideo,
+  TVirtualList,
+  createAppendOnlyLogStore,
+  type TVideoFrameSource,
+} from "@simon_he/vue-tui/experimental";
+import {
+  createFfmpegVideoFrameSource,
+  createYtDlpVideoFrameSource,
+  type FfmpegVideoFrameSourceOptions,
+  type YtDlpVideoFrameSourceOptions,
+} from "@simon_he/vue-tui/experimental/video/node";
 import {
   TAgentTranscript,
   markMermaidRenderErrorFatal as markAgentMermaidRenderErrorFatal,
@@ -433,6 +445,19 @@ const markdownRows = buildMarkdownVisualRows("| Ω |\n|---|", 20, markdownParser
   widthProvider: "cjk",
 });
 const markdownLayoutRows = layoutMarkdownBlocks([], 20, { widthProvider: "cjk" });
+const videoFrameSource: TVideoFrameSource = async function* () {
+  yield { png: new Uint8Array(24), timestampMs: 0 };
+};
+const ffmpegVideoOptions: FfmpegVideoFrameSourceOptions = {
+  ffmpegPath: "ffmpeg",
+  realtime: true,
+};
+const ffmpegVideoFrameSource = createFfmpegVideoFrameSource(ffmpegVideoOptions);
+const ytDlpVideoOptions: YtDlpVideoFrameSourceOptions = {
+  ytDlpPath: "yt-dlp",
+  maxSourceHeight: 720,
+};
+const ytDlpVideoFrameSource = createYtDlpVideoFrameSource(ytDlpVideoOptions);
 console.log(
   driver,
   stdoutOutput,
@@ -443,9 +468,13 @@ console.log(
   stdoutInternalOptions,
   stdoutRendererMock,
   cleanupHandle,
+  ytDlpVideoFrameSource,
   signalPolicy,
   record,
   toolCallSlot,
   markdownRows,
   markdownLayoutRows,
+  TVideo,
+  videoFrameSource,
+  ffmpegVideoFrameSource,
 );

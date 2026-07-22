@@ -837,7 +837,7 @@ export function createStdoutRenderer(
         continue;
       }
       const signature = activeGraphicSignatures.get(id);
-      const sequence = active.resizeSequence ?? active.sequence;
+      const sequence = active.sequence;
       pendingGraphics.set(`${id}:draw`, {
         id,
         x: active.x,
@@ -879,7 +879,7 @@ export function createStdoutRenderer(
         w: active.w,
         h: active.h,
         protocol: active.protocol,
-        sequence: active.resizeSequence ?? active.sequence,
+        sequence: active.sequence,
         resizeSequence: active.resizeSequence,
         clearSequence: active.clearSequence,
         allowTextOverlay: active.allowTextOverlay,
@@ -1026,6 +1026,7 @@ export function createStdoutRenderer(
         const active = activeGraphics.get(frame.id);
         const activeCanReplacePlacement =
           active &&
+          active.sequence === frame.sequence &&
           resizeSequence &&
           canReplaceKittyPlacementWithoutClear(active, {
             ...normalized,
@@ -1072,6 +1073,7 @@ export function createStdoutRenderer(
         const retained = retainedGraphics.get(frame.id);
         const retainedCanReplacePlacement =
           retained &&
+          retained.active.sequence === frame.sequence &&
           resizeSequence &&
           canReplaceKittyPlacementWithoutClear(retained.active, {
             ...normalized,
@@ -1099,7 +1101,7 @@ export function createStdoutRenderer(
             id: frame.id,
             w: frame.width,
             h: frame.height,
-            sequence: resizeSequence,
+            sequence: forceTerminalResizeRedraw ? frame.sequence : resizeSequence,
             resizeSequence,
             clearSequence,
             fallbackText: frame.fallbackText,
@@ -4036,29 +4038,6 @@ export function createStdoutRenderer(
 
       return out;
     };
-    const clearGraphicRowBackgroundForRowsNotPainted = (
-      rect: Readonly<{ x: number; y: number; w: number; h: number }>,
-    ): string => {
-      if (scrollHandled) return "";
-
-      const clearStyle = bgSeq;
-      let out = "";
-      const leftW = Math.max(0, Math.min(size.cols, rect.x));
-      const rightX = Math.max(0, Math.min(size.cols, rect.x + rect.w));
-      const rightW = Math.max(0, size.cols - rightX);
-
-      if (leftW <= 0 && rightW <= 0) return "";
-
-      for (let row = 0; row < rect.h; row++) {
-        const y = rect.y + row;
-        if (!rowsToRender || rowWasPaintedByTextRenderer(y)) continue;
-        if (leftW > 0) out += `\u001B[${y + 1};1H${clearStyle}\u001B[${leftW}X${SGR_RESET}`;
-        if (rightW > 0)
-          out += `\u001B[${y + 1};${rightX + 1}H${clearStyle}\u001B[${rightW}X${SGR_RESET}`;
-      }
-
-      return out;
-    };
     let commitTerminalGraphicsState: (() => void) | null = null;
     let restoreTerminalGraphicsAfterWriteFailure: (() => void) | null = null;
     let terminalGraphicsMetrics: Readonly<{
@@ -4264,6 +4243,11 @@ export function createStdoutRenderer(
           previous != null &&
           payload.resizeRedraw &&
           canReplaceKittyPlacementWithoutClear(previous, payload);
+        const terminalResizePlacementOnly =
+          previous != null &&
+          payload.terminalResizeRedraw &&
+          payload.resizeSequence != null &&
+          previous.sequence === payload.sequence;
         const resizeRedrawNeedsClear =
           previous &&
           (payload.resizeRedraw || payload.terminalResizeRedraw) &&
@@ -4296,12 +4280,9 @@ export function createStdoutRenderer(
           );
         }
         const clearRect = visibleRect ? clearGraphicRectForRowsNotPainted(visibleRect) : "";
-        const clearRowBackground = visibleRect
-          ? clearGraphicRowBackgroundForRowsNotPainted(visibleRect)
-          : "";
         const cursor = `\u001B[${rect.y + 1};${rect.x + 1}H`;
         const sequencePayload =
-          (canReplacePlacement || payload.terminalResizeRedraw) && payload.resizeSequence
+          (canReplacePlacement || terminalResizePlacementOnly) && payload.resizeSequence
             ? payload.resizeSequence
             : payload.sequence;
         const sequence = maybeWrapTerminalGraphic(sequencePayload);
@@ -4309,14 +4290,16 @@ export function createStdoutRenderer(
           countGraphicsBytes(cursor),
           countGraphicsBytes(sequence),
           countGraphicsBytes(SGR_RESET),
-          clearRowBackground ? countGraphicsBytes(clearRowBackground) : "",
           clearRect ? countGraphicsBytes(clearRect) : "",
         );
         terminalGraphicsDraws++;
         nextActiveGraphics.set(payload.id, {
           ...rect,
           protocol: payload.protocol,
-          sequence: payload.sequence,
+          sequence:
+            previous && (canReplacePlacement || terminalResizePlacementOnly)
+              ? previous.sequence
+              : payload.sequence,
           resizeSequence: payload.resizeSequence ?? previous?.resizeSequence,
           clearSequence: payload.clearSequence,
           allowTextOverlay: payload.allowTextOverlay ?? previous?.allowTextOverlay,

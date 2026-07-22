@@ -44,20 +44,21 @@ Vue 是 peer dependency。当前发布包支持 Vue `>=3.3.0 <4`。
 
 ## 入口选择
 
-| 入口                              | 稳定性       | 主要用途                                                                        |
-| --------------------------------- | ------------ | ------------------------------------------------------------------------------- |
-| `@simon_he/vue-tui`               | Public       | Browser-safe terminal core、DOM renderer、稳定 Vue 组件和 input host plugin     |
-| `@simon_he/vue-tui/core`          | Public       | terminal core、buffer-facing types、ANSI/theme/path/hyperlink helpers           |
-| `@simon_he/vue-tui/renderer/dom`  | Public       | DOM renderer factory 和 renderer capabilities                                   |
-| `@simon_he/vue-tui/vue`           | Advanced     | 扩展 Vue 组件、composables、router helpers 和 Vue runtime internals             |
-| `@simon_he/vue-tui/runtime`       | Advanced     | runtime wiring、selection helpers 和 clipboard abstraction                      |
-| `@simon_he/vue-tui/observability` | Advanced     | frame perf store、profiler hooks 和 trace helpers                               |
-| `@simon_he/vue-tui/cli`           | Public       | Node-only headless app、stdin driver、stdout renderer、path provider、recording |
-| `@simon_he/vue-tui/markdown`      | Public       | `TMarkdownText`、`TVirtualMarkdown`、markdown parser、block source              |
-| `@simon_he/vue-tui/mermaid`       | Public       | optional `beautiful-mermaid` bridge、renderer helper、wrapper component         |
-| `@simon_he/vue-tui/experimental`  | Experimental | `TVirtualList`、`TLogView`、TLog companions、append-only log store              |
-| `@simon_he/vue-tui/agent`         | Experimental | agent/console 常用的 transcript、tool-call、log、markdown、overlay 组件聚合入口 |
-| `@simon_he/vue-tui/agent/mermaid` | Experimental | agent namespace 下的 optional Mermaid bridge                                    |
+| 入口                                        | 稳定性       | 主要用途                                                                        |
+| ------------------------------------------- | ------------ | ------------------------------------------------------------------------------- |
+| `@simon_he/vue-tui`                         | Public       | Browser-safe terminal core、DOM renderer、稳定 Vue 组件和 input host plugin     |
+| `@simon_he/vue-tui/core`                    | Public       | terminal core、buffer-facing types、ANSI/theme/path/hyperlink helpers           |
+| `@simon_he/vue-tui/renderer/dom`            | Public       | DOM renderer factory 和 renderer capabilities                                   |
+| `@simon_he/vue-tui/vue`                     | Advanced     | 扩展 Vue 组件、composables、router helpers 和 Vue runtime internals             |
+| `@simon_he/vue-tui/runtime`                 | Advanced     | runtime wiring、selection helpers 和 clipboard abstraction                      |
+| `@simon_he/vue-tui/observability`           | Advanced     | frame perf store、profiler hooks 和 trace helpers                               |
+| `@simon_he/vue-tui/cli`                     | Public       | Node-only headless app、stdin driver、stdout renderer、path provider、recording |
+| `@simon_he/vue-tui/markdown`                | Public       | `TMarkdownText`、`TVirtualMarkdown`、markdown parser、block source              |
+| `@simon_he/vue-tui/mermaid`                 | Public       | optional `beautiful-mermaid` bridge、renderer helper、wrapper component         |
+| `@simon_he/vue-tui/experimental`            | Experimental | `TVideo`、`TVirtualList`、`TLogView`、TLog companions、append-only log store    |
+| `@simon_he/vue-tui/experimental/video/node` | Experimental | Node-only lazy FFmpeg frame source and optional yt-dlp URL resolver             |
+| `@simon_he/vue-tui/agent`                   | Experimental | agent/console 常用的 transcript、tool-call、log、markdown、overlay 组件聚合入口 |
+| `@simon_he/vue-tui/agent/mermaid`           | Experimental | agent namespace 下的 optional Mermaid bridge                                    |
 
 稳定面是 terminal core、DOM renderer、CLI runtime、基础 Vue 组件、markdown API 和 optional Mermaid bridge。`/experimental` 和 `/agent` API 仍可能在下一个 stable release 前变化；生产应用建议把这些 import 隔离在少量边界文件内。agent 代码需要 Mermaid wrapper 时可以用 `/agent/mermaid`，不改变 `/agent` 主入口的 optional peer 边界。
 

@@ -85,6 +85,9 @@
       "experimental": [
         "./dist/experimental.d.ts"
       ],
+      "experimental/video/node": [
+        "./dist/experimental/video/node.d.ts"
+      ],
       "agent": [
         "./dist/agent.d.ts"
       ],
@@ -182,6 +185,16 @@
       "require": {
         "types": "./dist/experimental.d.cts",
         "default": "./dist/experimental.cjs"
+      }
+    },
+    "./experimental/video/node": {
+      "import": {
+        "types": "./dist/experimental/video/node.d.ts",
+        "default": "./dist/experimental/video/node.js"
+      },
+      "require": {
+        "types": "./dist/experimental/video/node.d.cts",
+        "default": "./dist/experimental/video/node.cjs"
       }
     },
     "./agent": {

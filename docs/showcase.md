@@ -15,7 +15,7 @@ import DocsShowcaseTerminal from './.vitepress/components/DocsShowcaseTerminal.v
   <DocsShowcaseTerminal />
 </ClientOnly>
 
-浏览器 examples 入口 `pnpm run showcase` 另外提供 `dark` / `light` / `matrix` / `plum` 四套宣传主题，可用于截图、视频和发布素材；这些主题定义在 `examples/basic/src/showcase-theme.ts`，不改变组件内部默认样式。
+浏览器 examples 入口 `pnpm run showcase` 另外提供 `dark` / `light` / `matrix` / `plum` 四套宣传主题和带 CC BY 3.0 署名的 Big Buck Bunny Video Tab；这些主题定义在 `examples/basic/src/showcase-theme.ts`，不改变组件内部默认样式。终端入口 `pnpm run showcase:terminal` 复用同一个 Tab，并根据能力自动选择 Kitty / iTerm2 图像帧或按 cell 约 1:2 宽高比采样的 Unicode ASCII 帧。安装 `yt-dlp`、`yt-dlp-ejs` 和受支持的 JavaScript runtime 后，可以设置 `VUE_TUI_YOUTUBE_DEMO=1`，直接播放 Blender 官方 YouTube 4K60 页面；source 会按终端目标自适应选择，常见区域通常为 360p、至多 30fps。按当前 yt-dlp 要求，最省事的选择是默认启用的 Deno 2.3+。
 
 ## 主题截图
 

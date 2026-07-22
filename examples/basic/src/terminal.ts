@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import {
   createStdinDriver,
   createStdoutRenderer,
@@ -5,6 +6,10 @@ import {
   installTerminalCleanup,
   type TerminalCleanupHandle,
 } from "@simon_he/vue-tui/cli";
+import {
+  createFfmpegVideoFrameSource,
+  createYtDlpVideoFrameSource,
+} from "@simon_he/vue-tui/experimental/video/node";
 import TerminalShowcase from "./TerminalShowcase.vue";
 import {
   showcaseAnsiPalette,
@@ -15,6 +20,20 @@ import {
 const cols = Number.isFinite(process.stdout.columns) ? process.stdout.columns : 70;
 const rows = Number.isFinite(process.stdout.rows) ? process.stdout.rows : 22;
 const initialThemeMode: ShowcaseThemeMode = "dark";
+const videoAsset = "video-demo.mp4";
+const localVideoSrc = fileURLToPath(new URL(videoAsset, import.meta.url));
+const youtubeVideoSrc = "https://www.youtube.com/watch?v=aqz-KE-bpKQ";
+const youtubeDemo = /^(1|true|yes|on)$/iu.test(process.env.VUE_TUI_YOUTUBE_DEMO ?? "");
+const videoSrc = youtubeDemo ? youtubeVideoSrc : localVideoSrc;
+const videoFrameSource = youtubeDemo
+  ? createYtDlpVideoFrameSource({
+      ytDlpPath: process.env.YT_DLP_PATH,
+      ffmpegPath: process.env.FFMPEG_PATH,
+      maxSourceHeight: 720,
+    })
+  : createFfmpegVideoFrameSource({
+      ffmpegPath: process.env.FFMPEG_PATH,
+    });
 let out!: ReturnType<typeof createStdoutRenderer>;
 
 const app = createTerminalApp({
@@ -22,6 +41,8 @@ const app = createTerminalApp({
   rows,
   component: TerminalShowcase as any,
   props: {
+    videoSrc,
+    videoFrameSource,
     onThemeChange: (mode: ShowcaseThemeMode) => {
       out?.updateTheme?.({ defaultBg: "black", palette: showcaseAnsiPalette(mode) });
     },

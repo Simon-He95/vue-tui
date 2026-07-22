@@ -477,6 +477,7 @@
         "TLogVirtualSearchResults",
         "TPieChart",
         "TTranscriptView",
+        "TVideo",
         "TVirtualList",
         "captureTLogViewSessionState",
         "createAppendOnlyLogStore",
@@ -618,11 +619,26 @@
         "TTranscriptViewHandle",
         "TTranscriptVisualRow",
         "TTranscriptVisualSegment",
+        "TVideoControlsLayout",
+        "TVideoFrame",
+        "TVideoFrameEvent",
+        "TVideoFrameFormat",
+        "TVideoFrameSource",
+        "TVideoFrameSourceContext",
+        "TVideoPlaybackRate",
+        "TVideoProps",
+        "TVideoSeekEvent",
         "UseTLogLinkControllerOptions",
         "UseTLogSearchControllerOptions",
         "UseTLogSearchResultsPageOptions",
         "UseTLogVirtualSearchResultsOptions"
       ]
+    },
+    "@simon_he/vue-tui/experimental/video/node": {
+      "maturity": "experimental",
+      "runtime": "node-only",
+      "valueExports": ["createFfmpegVideoFrameSource", "createYtDlpVideoFrameSource"],
+      "typeExports": ["FfmpegVideoFrameSourceOptions", "YtDlpVideoFrameSourceOptions"]
     },
     "@simon_he/vue-tui/markdown": {
       "maturity": "public",
@@ -1122,6 +1138,12 @@
         },
         {
           "name": "placementMoveWithoutClear",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "preserveRawWhileRendering",
           "type": "boolean",
           "required": false,
           "defaultValue": "false"
@@ -9893,6 +9915,145 @@
         }
       ],
       "events": []
+    },
+    "TVideo": {
+      "entrypoint": "@simon_he/vue-tui/experimental",
+      "maturity": "experimental",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "src",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "frameSource",
+          "type": "TVideoFrameSource",
+          "required": true
+        },
+        {
+          "name": "paused",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "playbackRate",
+          "type": "TVideoPlaybackRate",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "controls",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "controlsLayout",
+          "type": "TVideoControlsLayout",
+          "required": false,
+          "defaultValue": "\"compact\""
+        },
+        {
+          "name": "durationMs",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "loop",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "maxFps",
+          "type": "number",
+          "required": false,
+          "defaultValue": "DEFAULT_MAX_FPS"
+        },
+        {
+          "name": "pixelWidth",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "pixelHeight",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "fallback",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"[video]\""
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "clear",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        }
+      ],
+      "events": [
+        {
+          "name": "frame",
+          "payload": "TVideoFrameEvent"
+        },
+        {
+          "name": "ended"
+        },
+        {
+          "name": "error",
+          "payload": "unknown"
+        },
+        {
+          "name": "seek",
+          "payload": "TVideoSeekEvent"
+        },
+        {
+          "name": "update:paused",
+          "payload": "boolean"
+        },
+        {
+          "name": "update:playbackRate",
+          "payload": "TVideoPlaybackRate"
+        }
+      ]
     },
     "TView": {
       "entrypoint": "@simon_he/vue-tui",

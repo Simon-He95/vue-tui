@@ -258,6 +258,7 @@ describe("public API surface", () => {
         "TLogVirtualSearchResults",
         "TPieChart",
         "TTranscriptView",
+        "TVideo",
         "TVirtualList",
         "captureTLogViewSessionState",
         "createAppendOnlyLogStore",
@@ -302,6 +303,13 @@ describe("public API surface", () => {
         "useTLogVirtualSearchResults",
       ]
     `);
+  });
+
+  it("keeps the experimental Node video entry intentional", async () => {
+    expect(await exportNames("../src/experimental/video/node.js")).toEqual([
+      "createFfmpegVideoFrameSource",
+      "createYtDlpVideoFrameSource",
+    ]);
   });
 
   it("keeps agent entry exports intentional", async () => {

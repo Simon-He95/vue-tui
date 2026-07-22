@@ -12,7 +12,9 @@
     "types": ["vite/client"],
     "paths": {
       "@simon_he/vue-tui": ["../../src/index.ts"],
-      "@simon_he/vue-tui/vue": ["../../src/vue.ts"]
+      "@simon_he/vue-tui/vue": ["../../src/vue.ts"],
+      "@simon_he/vue-tui/experimental": ["../../src/experimental.ts"],
+      "@simon_he/vue-tui/experimental/video/node": ["../../src/experimental/video/node.ts"]
     }
   },
   "include": ["src"]
