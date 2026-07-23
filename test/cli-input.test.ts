@@ -1738,4 +1738,131 @@ describe("cli input", () => {
       expect(events).toEqual([]);
     });
   });
+
+  describe("setMouseCapture", () => {
+    it("emits enable sequences when called with true", () => {
+      const stdin = new FakeStdin() as any;
+      const stdout = new FakeStdout() as any;
+      const driver = createStdinDriver({
+        stdin,
+        stdout,
+        dispatch: () => {},
+        enableMouse: false,
+      });
+
+      const before = stdout.writes.join("");
+      driver.setMouseCapture?.(true);
+      const after = stdout.writes.join("").slice(before.length);
+
+      expect(after).toContain("\u001B[?1007h");
+      expect(after).toContain("\u001B[?1000h");
+      expect(after).toContain("\u001B[?1002h");
+      expect(after).toContain("\u001B[?1006h");
+      expect(after).not.toContain("\u001B[?1003");
+
+      driver.dispose();
+    });
+
+    it("emits disable sequences when called with false", () => {
+      const stdin = new FakeStdin() as any;
+      const stdout = new FakeStdout() as any;
+      const driver = createStdinDriver({
+        stdin,
+        stdout,
+        dispatch: () => {},
+        enableMouse: true,
+      });
+
+      // clear startup writes
+      stdout.writes.length = 0;
+      driver.setMouseCapture?.(false);
+      const output = stdout.writes.join("");
+
+      expect(output).toContain("\u001B[?1007l");
+      expect(output).toContain("\u001B[?1000l");
+      expect(output).toContain("\u001B[?1002l");
+      expect(output).toContain("\u001B[?1006l");
+
+      driver.dispose();
+    });
+
+    it("emits ?1003 when enableMouseMotion is enabled", () => {
+      const stdin = new FakeStdin() as any;
+      const stdout = new FakeStdout() as any;
+      const driver = createStdinDriver({
+        stdin,
+        stdout,
+        dispatch: () => {},
+        enableMouse: false,
+        enableMouseMotion: true,
+      });
+
+      stdout.writes.length = 0;
+      driver.setMouseCapture?.(true);
+      const output = stdout.writes.join("");
+
+      expect(output).toContain("\u001B[?1003h");
+      expect(output).not.toContain("\u001B[?1002");
+
+      driver.dispose();
+    });
+
+    it("is a no-op when stdout is not a TTY", () => {
+      const stdin = new FakeStdin() as any;
+      const stdout = new FakeStdout() as any;
+      stdout.isTTY = false;
+      const driver = createStdinDriver({
+        stdin,
+        stdout,
+        dispatch: () => {},
+        enableMouse: true,
+      });
+
+      stdout.writes.length = 0;
+      driver.setMouseCapture?.(true);
+      driver.setMouseCapture?.(false);
+
+      expect(stdout.writes.join("")).toBe("");
+
+      driver.dispose();
+    });
+
+    it("is a no-op after dispose", () => {
+      const stdin = new FakeStdin() as any;
+      const stdout = new FakeStdout() as any;
+      const driver = createStdinDriver({
+        stdin,
+        stdout,
+        dispatch: () => {},
+        enableMouse: true,
+      });
+
+      driver.dispose();
+      stdout.writes.length = 0;
+      driver.setMouseCapture?.(true);
+      driver.setMouseCapture?.(false);
+
+      expect(stdout.writes.join("")).toBe("");
+    });
+
+    it("dispose emits disable even when initial enableMouse was false but capture was enabled at runtime", () => {
+      const stdin = new FakeStdin() as any;
+      const stdout = new FakeStdout() as any;
+      const driver = createStdinDriver({
+        stdin,
+        stdout,
+        dispatch: () => {},
+        enableMouse: false,
+      });
+
+      driver.setMouseCapture?.(true);
+      stdout.writes.length = 0;
+      driver.dispose();
+      const output = stdout.writes.join("");
+
+      expect(output).toContain("\u001B[?1007l");
+      expect(output).toContain("\u001B[?1002l");
+      expect(output).toContain("\u001B[?1006l");
+    });
+  });
 });

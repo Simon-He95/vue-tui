@@ -167,12 +167,36 @@ function shallowEqualRecord(a: Record<string, unknown>, b: Record<string, unknow
   return true;
 }
 
+export type TerminalSelectionContext = Readonly<{
+  registerTextProvider(provider: SelectionTextProvider): () => void;
+  onCopy(handler: (payload: TerminalSelectionCopyPayload) => void): () => void;
+  refresh(options?: TerminalSelectionRefreshOptions): void;
+  clear(): void;
+  /**
+   * Update the selection copy strategy at runtime. Only `autoCopy`,
+   * `copyOnMouseUp`, and `style` take effect dynamically — `enabled` is
+   * resolved at app creation time (it gates overlay node registration and
+   * the pointer-event selection path) and cannot be toggled afterwards.
+   * Triggers a refresh so the new options apply immediately.
+   *
+   * This does NOT toggle mouse capture — that is owned by the stdin driver
+   * layer. To let the terminal perform native selection, disable mouse
+   * capture at stdin-driver startup time, or rely on the terminal's
+   * Shift+drag escape hatch.
+   */
+  setConfig(config: TerminalSelectionConfig): void;
+}>;
+
 export type TerminalApp = Readonly<{
   app: App;
   terminal: Terminal;
   events: CliEventManager;
   scheduler: TerminalScheduler;
   defaultStyle: Ref<Style>;
+  /** The active clipboard instance used by selection copy and exposed for upper-layer copy actions. */
+  clipboard: ClipboardApi;
+  /** Selection controller surface: register text providers, observe copy events, refresh/clear. */
+  selection: TerminalSelectionContext;
   /** Returns the current IME anchor position (cursor position in cell coordinates), or null if no input is focused */
   getImeAnchor: () => ImeAnchor | null;
   mount: () => void;
@@ -623,7 +647,8 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
   });
   const selectionTextProviders = new Map<string, SelectionTextProvider>();
   const selectionCopyHandlers = new Set<(payload: TerminalSelectionCopyPayload) => void>();
-  const selectionContext = {
+  const selectionConfig = shallowRef<TerminalSelectionConfig>(options.selection ?? false);
+  const selectionContext: TerminalSelectionContext = {
     registerTextProvider(provider: SelectionTextProvider) {
       selectionTextProviders.set(provider.id, provider);
       return () => {
@@ -642,7 +667,11 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     clear() {
       selection.clear();
     },
-  } as const;
+    setConfig(config: TerminalSelectionConfig) {
+      selectionConfig.value = config;
+      selection.refresh();
+    },
+  };
   const selectionOverlay = getPlaneTerminal(terminal, "overlay");
   const selectionReadPlanes: TerminalRenderPlanes = ["default", "transcript", "chrome"];
   let selectionRenderNodeId: string | null = null;
@@ -654,7 +683,7 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     getRow: (y) => readTerminalRowForPlanes(terminal, y, selectionReadPlanes),
     getTextProviders: () => Array.from(selectionTextProviders.values()),
     getOptions: () => {
-      const config = resolveSelectionConfig(options.selection);
+      const config = resolveSelectionConfig(selectionConfig.value);
       return {
         autoCopy: config.autoCopy,
         copyOnMouseUp: config.copyOnMouseUp,
@@ -955,6 +984,8 @@ export function createTerminalApp(options: CreateTerminalAppOptions): TerminalAp
     events,
     scheduler: ctx.scheduler,
     defaultStyle: ctx.defaultStyle,
+    clipboard,
+    selection: selectionContext,
     getImeAnchor() {
       return imeAnchor.value;
     },

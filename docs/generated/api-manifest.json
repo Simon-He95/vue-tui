@@ -397,6 +397,7 @@
         "TerminalLinkOpenSource",
         "TerminalLinkOpener",
         "TerminalLinkOpenerLike",
+        "TerminalSelectionContext",
         "ThemePalette"
       ]
     },

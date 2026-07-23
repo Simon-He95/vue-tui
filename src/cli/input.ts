@@ -21,6 +21,14 @@ const XTERM_MODIFY_OTHER_KEYS_DISABLE = "\u001B[>4n";
 
 export type StdinDriver = Readonly<{
   dispose: () => void;
+  /**
+   * Toggle mouse capture at runtime. When disabled, the terminal's native
+   * selection / right-click menu is restored (the stdin driver sends the
+   * DECSET disable sequences). When re-enabled, vue-tui mouse tracking
+   * resumes. This does NOT toggle selection config — pair it with
+   * `app.selection.setConfig()` for a complete native-vs-osc52 mode switch.
+   */
+  setMouseCapture?: (enabled: boolean) => void;
 }>;
 
 type CleanupSignal = "SIGINT" | "SIGTERM" | "SIGHUP" | "SIGBREAK";
@@ -656,12 +664,14 @@ export function createStdinDriver(
     if (stdout.isTTY) {
       let restore = "\u001B[?2004l\u001B[?1004l";
       if (keyboardProtocolSequences) restore += keyboardProtocolSequences.disable;
-      if (enableMouse) {
-        restore += "\u001B[?1007l";
-        restore += enableMouseMotion
-          ? "\u001B[?1000l\u001B[?1003l\u001B[?1006l"
-          : "\u001B[?1000l\u001B[?1002l\u001B[?1006l";
-      }
+      // Always emit mouse disable sequences on dispose, even when the initial
+      // `enableMouse` was false: `setMouseCapture(true)` may have enabled mouse
+      // tracking at runtime, and a leftover capture state would corrupt the
+      // terminal after exit. DECSET reset on already-disabled modes is a no-op.
+      restore += "\u001B[?1007l";
+      restore += enableMouseMotion
+        ? "\u001B[?1000l\u001B[?1003l\u001B[?1006l"
+        : "\u001B[?1000l\u001B[?1002l\u001B[?1006l";
       writeTTYSyncOrStream(stdout, restore);
     }
   };
@@ -676,5 +686,21 @@ export function createStdinDriver(
     });
   }
 
-  return { dispose };
+  const setMouseCapture = (enabled: boolean): void => {
+    if (disposed || !stdout.isTTY) return;
+    if (enabled) {
+      stdout.write("\u001B[?1007h");
+      if (enableMouseMotion) stdout.write("\u001B[?1000h\u001B[?1003h\u001B[?1006h");
+      else stdout.write("\u001B[?1000h\u001B[?1002h\u001B[?1006h");
+    } else {
+      stdout.write("\u001B[?1007l");
+      stdout.write(
+        enableMouseMotion
+          ? "\u001B[?1000l\u001B[?1003l\u001B[?1006l"
+          : "\u001B[?1000l\u001B[?1002l\u001B[?1006l",
+      );
+    }
+  };
+
+  return { dispose, setMouseCapture };
 }

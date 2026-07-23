@@ -96,6 +96,7 @@ import DocsExtensibilityTerminal from './.vitepress/components/DocsExtensibility
 - `TInput.ts` 本体不再直接静态 import `node:path` / `node:url` / `node:process` / `node:child_process`
 - terminal clipboard、TTY 判定、copy toast、路径 href 这些宿主行为已经被收进 host plugin
 - runtime / app 层可以通过显式 `ClipboardApi` 或 `createOsc52ClipboardProvider()` 接入 clipboard；terminal runtime 默认仍不启用 clipboard
+- `createTerminalApp` 返回值现在暴露 `app.clipboard`（与内部 selection controller 共用的同一个实例），上层主动复制应复用它而非自建实例；`app.selection.setConfig()` 可运行时调整选区复制策略（autoCopy / copyOnMouseUp / style）
 - root 导出的 `createTInputHostPlugin()` 不携带 Node 能力；CLI 默认 host plugin 保留底层宿主能力；像 copy toast 这种 UI 反馈需要由宿主显式通过 `createTInputHostPlugin({ showToast })` 注入
 - prompt mention 的路径补全/路径类型识别也已经可以通过 `mentionPathProvider` 注入；Node 宿主可显式接入 `createNodeMentionPathProvider()`
 - `TPathPicker` 也不再在组件本体里兜底 Node provider；宿主可以通过 `TerminalProvider.pathPickerProvider`、`createTerminalApp({ pathPickerProvider })` 或局部 `provider` 显式接入
