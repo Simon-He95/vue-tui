@@ -96,17 +96,17 @@ type RendererCapabilities = Readonly<{
 
 terminal 环境没有浏览器权限弹窗，所以所有外部副作用都走显式 opt-in：
 
-| 能力                     | 默认行为                                                           | Opt-in 边界                                                                    |
-| ------------------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| 能力                     | 默认行为                                                           | Opt-in 边界                                                                                                                                                      |
+| ------------------------ | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Clipboard write/read     | terminal runtime 默认 unsupported                                  | `createRuntime("terminal", { clipboard })`、`createTerminalApp({ clipboard })`；`createTerminalApp` 返回值暴露 `app.clipboard`，上层主动复制应复用它而非自建实例 |
-| OSC52 clipboard          | 不自动启用                                                         | `createOsc52ClipboardProvider()` 显式传入                                      |
-| Node path lookup         | root/browser entrypoint 不绑定 Node provider                       | `/cli` 的 `createNodePathPickerProvider()`、`createNodeMentionPathProvider()`  |
-| File URL detection       | TLog URL detector 默认不识别 `file://`                             | `allowFileUrls: true`                                                          |
-| OSC8 / external href     | 只允许 safe `http:` / `https:` / `mailto:`，file URL 需显式 allow  | `sanitizeTerminalHref()` 和 retained-index sanitizer                           |
-| DOM href                 | DOM links opt-in 后允许 safe absolute 和 relative/hash/search href | `domRendererOptions.links`；callback 返回 `false` 才阻止默认打开行为           |
-| TLink href               | 拒绝 `file:`，只接受 DOM-safe absolute 和 relative href            | 使用 lower-level `Style.href` writer + terminal-specific opt-in 暴露 file link |
-| Link activation          | 组件只 emit / dispatch action 或调用显式 opener 尝试打开           | `TerminalProvider.linkOpener` / `createTerminalApp({ linkOpener })`            |
-| ANSI synchronized output | stdout renderer 默认保守关闭                                       | `createStdoutRenderer({ useSyncOutput: true })`                                |
+| OSC52 clipboard          | 不自动启用                                                         | `createOsc52ClipboardProvider()` 显式传入                                                                                                                        |
+| Node path lookup         | root/browser entrypoint 不绑定 Node provider                       | `/cli` 的 `createNodePathPickerProvider()`、`createNodeMentionPathProvider()`                                                                                    |
+| File URL detection       | TLog URL detector 默认不识别 `file://`                             | `allowFileUrls: true`                                                                                                                                            |
+| OSC8 / external href     | 只允许 safe `http:` / `https:` / `mailto:`，file URL 需显式 allow  | `sanitizeTerminalHref()` 和 retained-index sanitizer                                                                                                             |
+| DOM href                 | DOM links opt-in 后允许 safe absolute 和 relative/hash/search href | `domRendererOptions.links`；callback 返回 `false` 才阻止默认打开行为                                                                                             |
+| TLink href               | 拒绝 `file:`，只接受 DOM-safe absolute 和 relative href            | 使用 lower-level `Style.href` writer + terminal-specific opt-in 暴露 file link                                                                                   |
+| Link activation          | 组件只 emit / dispatch action 或调用显式 opener 尝试打开           | `TerminalProvider.linkOpener` / `createTerminalApp({ linkOpener })`                                                                                              |
+| ANSI synchronized output | stdout renderer 默认保守关闭                                       | `createStdoutRenderer({ useSyncOutput: true })`                                                                                                                  |
 
 新增 terminal 能力时按这个规则落地：
 

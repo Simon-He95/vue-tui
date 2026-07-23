@@ -61,18 +61,19 @@ const App = defineComponent({
   name: "SelectionToggleDemo",
   setup() {
     return () =>
-      h(
-        TView,
-        { x: 0, y: 0, w: cols, h: rows, selectable: true },
-        () => [
-          h(TText, { x: 1, y: 0, value: "Selection Toggle Demo", style: { fg: "cyanBright", bold: true } }),
-          ...LINES.map((line, i) =>
-            h(TText, { x: 2, y: 1 + i, value: line, style: { fg: "whiteBright" } }),
-          ),
-          // 状态栏占位行（内容由 paintStatusBar 直接写 terminal buffer）
-          h(TText, { x: 1, y: STATUS_Y, value: "", style: { dim: true } }),
-        ],
-      );
+      h(TView, { x: 0, y: 0, w: cols, h: rows, selectable: true }, () => [
+        h(TText, {
+          x: 1,
+          y: 0,
+          value: "Selection Toggle Demo",
+          style: { fg: "cyanBright", bold: true },
+        }),
+        ...LINES.map((line, i) =>
+          h(TText, { x: 2, y: 1 + i, value: line, style: { fg: "whiteBright" } }),
+        ),
+        // 状态栏占位行（内容由 paintStatusBar 直接写 terminal buffer）
+        h(TText, { x: 1, y: STATUS_Y, value: "", style: { dim: true } }),
+      ]);
   },
 });
 

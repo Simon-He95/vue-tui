@@ -285,6 +285,7 @@ app.selection.setConfig({ style: { fg: "black", bg: "magentaBright", inverse: fa
 - **仅创建时生效**：`enabled`——它决定 overlay 渲染节点是否注册及 pointer 事件是否走选区路径，`setConfig` 无法在运行时启用/禁用选区。
 
 > `setConfig` 不负责切换 mouse capture。终端原生选区（拖选复制到本地剪贴板、右键菜单）依赖终端模拟器自己的能力：主流终端（iTerm2 / Ghostty / Kitty / WezTerm 等）在 mouse tracking 开启时，按住 **Shift+drag** 会让终端临时忽略 mouse capture、走原生选区，TUI 无需配合。如需完全禁用 mouse capture 走纯原生交互，有两种方式：
+>
 > - **启动时**：在 stdin driver 启动时设 `enableMouse: false`（见 `createStdinDriver`）
 > - **运行时**：`createStdinDriver` 返回的 driver 现支持 `driver.setMouseCapture(false)` 运行时关掉 mouse capture，恢复终端原生选区/右键菜单；`setMouseCapture(true)` 重新开启。与 `app.selection.setConfig({ autoCopy })` 联动即可实现"OSC52 选中复制 ↔ 原生选区/右键"的运行时切换：
 >

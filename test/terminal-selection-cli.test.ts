@@ -311,10 +311,8 @@ describe("createTerminalApp selection", () => {
       name: "CliSetConfigAutoCopyProbe",
       setup() {
         return () =>
-          h(
-            TView,
-            { x: 0, y: 0, w: 10, h: 1, selectable: true },
-            () => h(TText, { x: 0, y: 0, value: "select me", style: { fg: "whiteBright" } }),
+          h(TView, { x: 0, y: 0, w: 10, h: 1, selectable: true }, () =>
+            h(TText, { x: 0, y: 0, value: "select me", style: { fg: "whiteBright" } }),
           );
       },
     });
@@ -359,10 +357,8 @@ describe("createTerminalApp selection", () => {
       name: "CliSetConfigStyleProbe",
       setup() {
         return () =>
-          h(
-            TView,
-            { x: 0, y: 0, w: 10, h: 1, selectable: true },
-            () => h(TText, { x: 0, y: 0, value: "select me", style: { fg: "whiteBright" } }),
+          h(TView, { x: 0, y: 0, w: 10, h: 1, selectable: true }, () =>
+            h(TText, { x: 0, y: 0, value: "select me", style: { fg: "whiteBright" } }),
           );
       },
     });
@@ -387,7 +383,10 @@ describe("createTerminalApp selection", () => {
       expect(app.terminal.getCell(0, 0).style.inverse).toBe(true);
 
       // Dynamically switch style
-      app.selection.setConfig({ autoCopy: false, style: { fg: "black", bg: "magentaBright", inverse: false } });
+      app.selection.setConfig({
+        autoCopy: false,
+        style: { fg: "black", bg: "magentaBright", inverse: false },
+      });
       await settle();
       app.scheduler.flushNow();
 
@@ -407,10 +406,8 @@ describe("createTerminalApp selection", () => {
       name: "CliSelectionDefaultProbe",
       setup() {
         return () =>
-          h(
-            TView,
-            { x: 0, y: 0, w: 10, h: 1, selectable: true },
-            () => h(TText, { x: 0, y: 0, value: "select me", style: { fg: "whiteBright" } }),
+          h(TView, { x: 0, y: 0, w: 10, h: 1, selectable: true }, () =>
+            h(TText, { x: 0, y: 0, value: "select me", style: { fg: "whiteBright" } }),
           );
       },
     });
