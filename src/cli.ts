@@ -21,7 +21,11 @@ export {
   type SuggestPathsResult,
 } from "./cli/path-suggest.js";
 export { readEventLog, writeEventLog, writeSnapshot } from "./cli/recording.js";
-export type { CreateTerminalAppOptions, TerminalApp } from "./create-terminal-app.js";
+export type {
+  CreateTerminalAppOptions,
+  TerminalApp,
+  TerminalSelectionContext,
+} from "./create-terminal-app.js";
 export { createTerminalApp } from "./create-terminal-app.js";
 export type { CliEventManager } from "./events/manager/cli-event-manager.js";
 export { createCliEventManager } from "./events/manager/cli-event-manager.js";

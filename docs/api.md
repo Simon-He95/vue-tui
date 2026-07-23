@@ -118,8 +118,10 @@ type Style = {
 
 提供一个 headless Vue App（用于 CLI / 测试），并注入与 `<TerminalProvider />` 一致的 `terminal/events/scheduler/runtime`：
 
-- `createTerminalApp({ cols, rows, component, props?, defaultStyle?, clipboard?, inputPlugins?, pathPickerProvider?, linkOpener? })`
-- 返回：`{ app, terminal, events, scheduler, mount(), dispose() }`
+- `createTerminalApp({ cols, rows, component, props?, defaultStyle?, selection?, clipboard?, inputPlugins?, pathPickerProvider?, linkOpener? })`
+- 返回：`{ app, terminal, events, scheduler, defaultStyle, clipboard, selection, getImeAnchor(), mount(), dispose() }`
+  - `clipboard`：当前 `ClipboardApi` 实例（默认 `unsupportedClipboard`，由宿主通过 `options.clipboard` 注入）。**上层主动复制应复用 `app.clipboard.writeText(text)`，避免自建实例造成选区复制与主动复制走两套 clipboard。**
+  - `selection`：选区控制接口 `TerminalSelectionContext`（`registerTextProvider` / `onCopy` / `refresh` / `clear` / `setConfig`）。详见下方 [Selection 配置](#selection-配置)。
 
 可在 `mount()` 前安装插件（如 Pinia）：
 
@@ -255,6 +257,49 @@ const app = createTerminalApp({
 ```
 
 默认 terminal runtime 不会自动执行系统剪贴板命令；OSC52 也只有在显式使用 `createOsc52ClipboardProvider()` 时才会写入 stdout。
+
+> 上层主动复制（如"复制消息"、"复制链接"等非选区场景）应复用 `app.clipboard.writeText(text)`，而不是再自建一个 clipboard 实例——否则选区复制走 `createTerminalApp` 内部实例、主动复制走上层实例，会产生双实例分叉。`app.clipboard` 就是 `createTerminalApp` 内部 selection controller 使用的那同一个实例。
+
+### Selection 配置
+
+`createTerminalApp` 的 `selection` option（`TerminalSelectionConfig`）在创建时决定选区是否启用及默认行为：
+
+- `selection: true`（默认当 `TerminalProvider` 开启时）/ `{ enabled: true, autoCopy?, copyOnMouseUp?, style? }`：开启终端选区，松开鼠标自动复制（依赖 `clipboard`）
+- `selection: false` / 省略：不启用选区
+
+运行时可通过 `app.selection.setConfig(config)` 动态修改**选区复制策略**：
+
+```ts
+import type { TerminalSelectionConfig } from "@simon_he/vue-tui/cli";
+
+// 动态关闭"松开即复制"（保留选区高亮，只是不自动写入剪贴板）
+app.selection.setConfig({ autoCopy: false });
+
+// 动态切换选区高亮样式
+app.selection.setConfig({ style: { fg: "black", bg: "magentaBright", inverse: false } });
+```
+
+`setConfig` 的生效边界：
+
+- **运行时生效**：`autoCopy`、`copyOnMouseUp`、`style`——`setConfig` 会立即 refresh overlay，新配置对当前活动选区即时生效。
+- **仅创建时生效**：`enabled`——它决定 overlay 渲染节点是否注册及 pointer 事件是否走选区路径，`setConfig` 无法在运行时启用/禁用选区。
+
+> `setConfig` 不负责切换 mouse capture。终端原生选区（拖选复制到本地剪贴板、右键菜单）依赖终端模拟器自己的能力：主流终端（iTerm2 / Ghostty / Kitty / WezTerm 等）在 mouse tracking 开启时，按住 **Shift+drag** 会让终端临时忽略 mouse capture、走原生选区，TUI 无需配合。如需完全禁用 mouse capture 走纯原生交互，有两种方式：
+>
+> - **启动时**：在 stdin driver 启动时设 `enableMouse: false`（见 `createStdinDriver`）
+> - **运行时**：`createStdinDriver` 返回的 driver 现支持 `driver.setMouseCapture(false)` 运行时关掉 mouse capture，恢复终端原生选区/右键菜单；`setMouseCapture(true)` 重新开启。与 `app.selection.setConfig({ autoCopy })` 联动即可实现"OSC52 选中复制 ↔ 原生选区/右键"的运行时切换：
+>
+> ```ts
+> const driver = createStdinDriver({ enableMouse: true, ... });
+> // 切到原生模式：关 capture + 关 autoCopy
+> driver.setMouseCapture?.(false);
+> app.selection.setConfig({ autoCopy: false });
+> // 切回 TUI 模式
+> driver.setMouseCapture?.(true);
+> app.selection.setConfig({ autoCopy: true });
+> ```
+>
+> 完整示例见 `examples/selection-toggle-demo.ts`（`c` 键联动切换）。
 
 ### 布局组件
 

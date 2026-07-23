@@ -304,4 +304,144 @@ describe("createTerminalApp selection", () => {
       app.dispose();
     }
   });
+
+  it("setConfig disables autoCopy at runtime so mouseup does not copy", async () => {
+    const writes: string[] = [];
+    const App = defineComponent({
+      name: "CliSetConfigAutoCopyProbe",
+      setup() {
+        return () =>
+          h(TView, { x: 0, y: 0, w: 10, h: 1, selectable: true }, () =>
+            h(TText, { x: 0, y: 0, value: "select me", style: { fg: "whiteBright" } }),
+          );
+      },
+    });
+    const app = createTerminalApp({
+      cols: 12,
+      rows: 2,
+      component: App,
+      selection: true,
+      clipboard: {
+        supported: true,
+        async readText() {
+          return writes[writes.length - 1] ?? "";
+        },
+        async writeText(text: string) {
+          writes.push(text);
+        },
+      },
+    });
+
+    try {
+      app.mount();
+      await settle();
+      app.scheduler.flushNow();
+
+      // Dynamically disable auto-copy after creation
+      app.selection.setConfig({ autoCopy: false });
+
+      app.events.dispatch({ type: "pointerdown", cellX: 0, cellY: 0, button: 0 });
+      app.events.dispatch({ type: "pointermove", cellX: 5, cellY: 0, button: 0 });
+      app.events.dispatch({ type: "pointerup", cellX: 5, cellY: 0, button: 0 });
+      await settle();
+      app.scheduler.flushNow();
+
+      expect(writes).toEqual([]);
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("setConfig applies a new selection style at runtime", async () => {
+    const App = defineComponent({
+      name: "CliSetConfigStyleProbe",
+      setup() {
+        return () =>
+          h(TView, { x: 0, y: 0, w: 10, h: 1, selectable: true }, () =>
+            h(TText, { x: 0, y: 0, value: "select me", style: { fg: "whiteBright" } }),
+          );
+      },
+    });
+    const app = createTerminalApp({
+      cols: 12,
+      rows: 2,
+      component: App,
+      selection: { autoCopy: false, style: { inverse: true } },
+    });
+
+    try {
+      app.mount();
+      await settle();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "pointerdown", cellX: 0, cellY: 0, button: 0 });
+      app.events.dispatch({ type: "pointermove", cellX: 5, cellY: 0, button: 0 });
+      await settle();
+      app.scheduler.flushNow();
+
+      // Initial style: inverse
+      expect(app.terminal.getCell(0, 0).style.inverse).toBe(true);
+
+      // Dynamically switch style
+      app.selection.setConfig({
+        autoCopy: false,
+        style: { fg: "black", bg: "magentaBright", inverse: false },
+      });
+      await settle();
+      app.scheduler.flushNow();
+
+      expect(app.terminal.getCell(0, 0).style).toMatchObject({
+        fg: "black",
+        bg: "magentaBright",
+        inverse: false,
+      });
+    } finally {
+      app.dispose();
+    }
+  });
+
+  it("defaults to disabled selection when `selection` option is omitted", async () => {
+    const writes: string[] = [];
+    const App = defineComponent({
+      name: "CliSelectionDefaultProbe",
+      setup() {
+        return () =>
+          h(TView, { x: 0, y: 0, w: 10, h: 1, selectable: true }, () =>
+            h(TText, { x: 0, y: 0, value: "select me", style: { fg: "whiteBright" } }),
+          );
+      },
+    });
+    const app = createTerminalApp({
+      cols: 12,
+      rows: 2,
+      component: App,
+      clipboard: {
+        supported: true,
+        async readText() {
+          return "";
+        },
+        async writeText(text: string) {
+          writes.push(text);
+        },
+      },
+      // selection intentionally omitted — must default to disabled
+    });
+
+    try {
+      app.mount();
+      await settle();
+      app.scheduler.flushNow();
+
+      app.events.dispatch({ type: "pointerdown", cellX: 0, cellY: 0, button: 0 });
+      app.events.dispatch({ type: "pointermove", cellX: 5, cellY: 0, button: 0 });
+      app.events.dispatch({ type: "pointerup", cellX: 5, cellY: 0, button: 0 });
+      await settle();
+      app.scheduler.flushNow();
+
+      expect(writes).toEqual([]);
+      expect(app.terminal.getCell(0, 0).style.inverse).toBeUndefined();
+    } finally {
+      app.dispose();
+    }
+  });
 });
