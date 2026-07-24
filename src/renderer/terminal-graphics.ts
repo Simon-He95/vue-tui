@@ -269,17 +269,15 @@ function detectCandidates(env: Record<string, unknown>): TerminalGraphicsProtoco
     envString(env, "GHOSTTY_RESOURCES_DIR") ||
     /(?:^|-)kitty(?:-|$)/i.test(term) ||
     term.includes("ghostty") ||
-    termProgram.includes("ghostty")
-  ) {
-    candidates.push("kitty");
-  }
-
-  if (
-    termProgram.includes("iterm") ||
+    termProgram.includes("ghostty") ||
     termProgram.includes("wezterm") ||
     envString(env, "WEZTERM_PANE") ||
     envString(env, "WEZTERM_EXECUTABLE")
   ) {
+    candidates.push("kitty");
+  }
+
+  if (termProgram.includes("iterm")) {
     candidates.push("iterm2");
   }
 

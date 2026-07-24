@@ -101,7 +101,7 @@ type RendererCapabilities = Readonly<{
 | 协议     | 代表终端                                  | 说明                             |
 | -------- | ----------------------------------------- | -------------------------------- |
 | `kitty`  | kitty、WezTerm、foot、Ghostty、Konsole    | 推荐；支持像素精确渲染和增量更新 |
-| `iterm2` | iTerm2、WezTerm                           | PNG inline image protocol        |
+| `iterm2` | iTerm2                                    | PNG inline image protocol        |
 | `sixel`  | xterm、mlterm、Windows Terminal（需开启） | 仅 `TAgentTerminalGraphic` 使用  |
 
 协议通过 `registerTerminalGraphicsOutput()` / `createStdoutRenderer()` 注入到渲染管线；组件本身不直接检测 TTY 能力。

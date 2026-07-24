@@ -50,7 +50,7 @@ export function checkTerminalSupport(): boolean {
     "  ║   Supported terminals:                                       ║",
     "  ║     • Kitty           (kitty)                               ║",
     "  ║     • iTerm2           (iterm2)                              ║",
-    "  ║     • WezTerm          (iterm2-compatible)                   ║",
+    "  ║     • WezTerm          (kitty-compatible)                    ║",
     "  ║     • Ghostty          (kitty-compatible)                     ║",
     "  ║     • Any Sixel terminal                                     ║",
     "  ║                                                              ║",
