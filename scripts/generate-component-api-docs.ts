@@ -45,7 +45,7 @@ type EventMeta = {
 };
 
 type ApiMaturity = "public" | "advanced" | "experimental";
-type EntrypointRuntime = "browser-safe" | "node-only" | "mixed";
+type EntrypointRuntime = "browser-safe" | "bun-only" | "node-only" | "mixed";
 
 type ComponentMeta = {
   name: string;
@@ -918,12 +918,14 @@ function entrypointMeta(specifier: string): {
         ? "experimental"
         : "public";
   const runtime: EntrypointRuntime =
-    specifier === "@simon_he/vue-tui/cli" ||
-    specifier === "@simon_he/vue-tui/experimental/video/node"
-      ? "node-only"
-      : specifier === "@simon_he/vue-tui/runtime"
-        ? "mixed"
-        : "browser-safe";
+    specifier === "@simon_he/vue-tui/experimental/3d/bun"
+      ? "bun-only"
+      : specifier === "@simon_he/vue-tui/cli" ||
+          specifier === "@simon_he/vue-tui/experimental/video/node"
+        ? "node-only"
+        : specifier === "@simon_he/vue-tui/runtime"
+          ? "mixed"
+          : "browser-safe";
   return { maturity, runtime, sourceRelPath };
 }
 

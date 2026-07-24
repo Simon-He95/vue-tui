@@ -4,6 +4,7 @@
 
 ## 目录
 
+- [T3DViewport](#t3dviewport)
 - [TAgentTerminalGraphic](#tagentterminalgraphic)
 - [TAgentTranscript](#tagenttranscript)
 - [TAnchor](#tanchor)
@@ -80,6 +81,49 @@
 - [TView](#tview)
 - [TVirtualList](#tvirtuallist)
 - [TVirtualMarkdown](#tvirtualmarkdown)
+
+## T3DViewport
+
+源码：`src/vue/components/T3DViewport.ts`
+
+API maturity: **Experimental**
+
+Import: `@simon_he/vue-tui/experimental`
+
+### Props
+
+| 名称                            | 类型                     | 默认值                                   | 必填 | 说明                                                                     |
+| ------------------------------- | ------------------------ | ---------------------------------------- | ---- | ------------------------------------------------------------------------ |
+| <code>x</code>                  | <code>number</code>      | —                                        | 是   | Horizontal position in terminal cells.                                   |
+| <code>y</code>                  | <code>number</code>      | —                                        | 是   | Vertical position in terminal cells.                                     |
+| <code>w</code>                  | <code>number</code>      | —                                        | 是   | Width in terminal cells.                                                 |
+| <code>h</code>                  | <code>number</code>      | —                                        | 是   | Height in terminal cells.                                                |
+| <code>zIndex</code>             | <code>number</code>      | <code>0</code>                           | 否   | Paint and pointer hit-test stacking order.                               |
+| <code>renderer</code>           | <code>T3DRenderer</code> | —                                        | 是   | Pull renderer captured at mount; remount the component to replace it.    |
+| <code>paused</code>             | <code>boolean</code>     | <code>false</code>                       | 否   | Stops frame pulling while true.                                          |
+| <code>maxFps</code>             | <code>number</code>      | <code>DEFAULT_MAX_FPS</code>             | 否   | Maximum requested frames per second.                                     |
+| <code>pixelWidth</code>         | <code>number</code>      | <code>undefined</code>                   | 否   | Requested source width in pixels; TVideo may adapt it for ASCII output.  |
+| <code>pixelHeight</code>        | <code>number</code>      | <code>undefined</code>                   | 否   | Requested source height in pixels; TVideo may adapt it for ASCII output. |
+| <code>fallback</code>           | <code>string</code>      | <code>&quot;[3D viewport]&quot;</code>   | 否   | Text displayed before a frame is available or after rendering fails.     |
+| <code>style</code>              | <code>Style</code>       | <code>undefined</code>                   | 否   | Terminal style applied to fallback and ASCII output.                     |
+| <code>clear</code>              | <code>boolean</code>     | <code>true</code>                        | 否   | Clears cells underneath each video frame.                                |
+| <code>interactive</code>        | <code>boolean</code>     | <code>true</code>                        | 否   | Enables pointer orbit, wheel zoom, and hover motion tracking.            |
+| <code>initialYaw</code>         | <code>number</code>      | <code>0</code>                           | 否   | Initial yaw angle in radians, also restored by resetMotion().            |
+| <code>initialPitch</code>       | <code>number</code>      | <code>0</code>                           | 否   | Initial pitch angle in radians, also restored by resetMotion().          |
+| <code>autoRotate</code>         | <code>boolean</code>     | <code>true</code>                        | 否   | Enables continuous yaw rotation when not dragging.                       |
+| <code>autoRotateSpeed</code>    | <code>number</code>      | <code>DEFAULT_AUTO_ROTATE_SPEED</code>   | 否   | Automatic yaw rotation speed in radians per second.                      |
+| <code>pointerSensitivity</code> | <code>number</code>      | <code>DEFAULT_POINTER_SENSITIVITY</code> | 否   | Drag sensitivity in radians per terminal cell.                           |
+| <code>initialZoom</code>        | <code>number</code>      | <code>1</code>                           | 否   | Initial camera zoom, also restored by resetMotion().                     |
+| <code>minZoom</code>            | <code>number</code>      | <code>DEFAULT_MIN_ZOOM</code>            | 否   | Minimum camera zoom accepted from wheel and trackpad gestures.           |
+| <code>maxZoom</code>            | <code>number</code>      | <code>DEFAULT_MAX_ZOOM</code>            | 否   | Maximum camera zoom accepted from wheel and trackpad gestures.           |
+| <code>zoomSensitivity</code>    | <code>number</code>      | <code>DEFAULT_ZOOM_SENSITIVITY</code>    | 否   | Zoom impulse per normalized wheel or trackpad unit.                      |
+
+### Events
+
+| 名称               | Payload                       | 说明                                  |
+| ------------------ | ----------------------------- | ------------------------------------- |
+| <code>frame</code> | <code>TVideoFrameEvent</code> | A frame was committed by TVideo.      |
+| <code>error</code> | <code>unknown</code>          | Rendering or frame processing failed. |
 
 ## TAgentTerminalGraphic
 

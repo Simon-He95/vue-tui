@@ -1,4 +1,14 @@
 export { TVirtualList } from "./vue/components/TVirtualList.js";
+export { T3DViewport } from "./vue/components/T3DViewport.js";
+export type {
+  T3DHitResult,
+  T3DHitTestContext,
+  T3DRenderContext,
+  T3DRenderer,
+  T3DViewportHandle,
+  T3DViewportMotion,
+  T3DViewportProps,
+} from "./vue/components/T3DViewport.js";
 export { TVideo } from "./vue/components/TVideo.js";
 export type {
   TVideoControlsLayout,

@@ -17,6 +17,7 @@ const distCli = resolve("dist/cli.js");
 const distMarkdown = resolve("dist/markdown.js");
 const distExperimental = resolve("dist/experimental.js");
 const distExperimentalVideoNode = resolve("dist/experimental/video/node.js");
+const distExperimental3DBun = resolve("dist/experimental/3d/bun.js");
 const distAgent = resolve("dist/agent.js");
 const distAgentMermaid = resolve("dist/agent/mermaid.js");
 const distMermaid = resolve("dist/mermaid.js");
@@ -29,6 +30,7 @@ const distVueCjs = resolve("dist/vue.cjs");
 const distMarkdownCjs = resolve("dist/markdown.cjs");
 const distExperimentalCjs = resolve("dist/experimental.cjs");
 const distExperimentalVideoNodeCjs = resolve("dist/experimental/video/node.cjs");
+const distExperimental3DBunCjs = resolve("dist/experimental/3d/bun.cjs");
 const distAgentCjs = resolve("dist/agent.cjs");
 const distAgentMermaidCjs = resolve("dist/agent/mermaid.cjs");
 const distMermaidCjs = resolve("dist/mermaid.cjs");
@@ -42,6 +44,7 @@ const distCliCjsTypes = resolve("dist/cli.d.cts");
 const distMarkdownCjsTypes = resolve("dist/markdown.d.cts");
 const distExperimentalCjsTypes = resolve("dist/experimental.d.cts");
 const distExperimentalVideoNodeCjsTypes = resolve("dist/experimental/video/node.d.cts");
+const distExperimental3DBunCjsTypes = resolve("dist/experimental/3d/bun.d.cts");
 const distAgentCjsTypes = resolve("dist/agent.d.cts");
 const distAgentMermaidCjsTypes = resolve("dist/agent/mermaid.d.cts");
 const distMermaidCjsTypes = resolve("dist/mermaid.d.cts");
@@ -55,6 +58,7 @@ const distCliTypes = resolve("dist/cli.d.ts");
 const distMarkdownTypes = resolve("dist/markdown.d.ts");
 const distExperimentalTypes = resolve("dist/experimental.d.ts");
 const distExperimentalVideoNodeTypes = resolve("dist/experimental/video/node.d.ts");
+const distExperimental3DBunTypes = resolve("dist/experimental/3d/bun.d.ts");
 const distAgentTypes = resolve("dist/agent.d.ts");
 const distAgentMermaidTypes = resolve("dist/agent/mermaid.d.ts");
 const distMermaidTypes = resolve("dist/mermaid.d.ts");
@@ -70,6 +74,7 @@ const packageJson = JSON.parse(readFileSync(resolve("package.json"), "utf8")) as
   types?: string;
   exports?: Record<string, unknown>;
   peerDependencies?: Record<string, string>;
+  peerDependenciesMeta?: Record<string, { optional?: boolean }>;
 };
 
 function readFixtureDir(dir: string): string {
@@ -139,8 +144,10 @@ describe("package exports", () => {
     expect(pkg.default.name).toBe("@simon_he/vue-tui");
   });
 
-  it("does not pin Vue consumers to a single patch line", () => {
+  it("keeps Vue broad and the Bun WebGPU peer optional", () => {
     expect(packageJson.peerDependencies?.vue).toBe(">=3.3.0 <4");
+    expect(packageJson.peerDependencies?.["bun-webgpu"]).toBe("^0.1.7");
+    expect(packageJson.peerDependenciesMeta?.["bun-webgpu"]?.optional).toBe(true);
   });
 
   it("does not import the mixed renderer barrel from CLI app runtime", () => {
@@ -376,6 +383,7 @@ describe("package exports", () => {
       "layoutMarkdownBlocks",
     ]);
     expect(Object.keys(experimental).sort()).toEqual([
+      "T3DViewport",
       "TCandlestickChart",
       "TContributionGraph",
       "TLineChart",
@@ -907,6 +915,7 @@ describe("package exports", () => {
     expect(existsSync(distMarkdown)).toBe(true);
     expect(existsSync(distExperimental)).toBe(true);
     expect(existsSync(distExperimentalVideoNode)).toBe(true);
+    expect(existsSync(distExperimental3DBun)).toBe(true);
     expect(existsSync(distAgent)).toBe(true);
     expect(existsSync(distAgentMermaid)).toBe(true);
     expect(existsSync(distMermaid)).toBe(true);
@@ -920,6 +929,7 @@ describe("package exports", () => {
     expect(existsSync(distMarkdownCjsTypes)).toBe(true);
     expect(existsSync(distExperimentalCjsTypes)).toBe(true);
     expect(existsSync(distExperimentalVideoNodeCjsTypes)).toBe(true);
+    expect(existsSync(distExperimental3DBunCjsTypes)).toBe(true);
     expect(existsSync(distAgentCjsTypes)).toBe(true);
     expect(existsSync(distAgentMermaidCjsTypes)).toBe(true);
     expect(existsSync(distMermaidCjsTypes)).toBe(true);
@@ -933,13 +943,17 @@ describe("package exports", () => {
     expect(existsSync(distMarkdownTypes)).toBe(true);
     expect(existsSync(distExperimentalTypes)).toBe(true);
     expect(existsSync(distExperimentalVideoNodeTypes)).toBe(true);
+    expect(existsSync(distExperimental3DBunTypes)).toBe(true);
     expect(existsSync(distAgentTypes)).toBe(true);
     expect(existsSync(distAgentMermaidTypes)).toBe(true);
     expect(existsSync(distMermaidTypes)).toBe(true);
     expect(existsSync(distAgentMermaidCjs)).toBe(true);
     expect(existsSync(distMermaidCjs)).toBe(true);
     expect(existsSync(distExperimentalVideoNodeCjs)).toBe(true);
+    expect(existsSync(distExperimental3DBunCjs)).toBe(true);
     expect(readFileSync(distCliTypes, "utf8")).toContain("Osc52ClipboardOptions");
+    expect(readFileSync(distExperimental3DBun, "utf8")).toContain("bun-webgpu");
+    expect(readFileSync(distExperimental, "utf8")).not.toContain("bun-webgpu");
 
     const root = await import(/* @vite-ignore */ pathToFileURL(distIndex).href);
     const core = await import(/* @vite-ignore */ pathToFileURL(distCore).href);

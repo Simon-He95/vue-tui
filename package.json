@@ -88,6 +88,9 @@
       "experimental/video/node": [
         "./dist/experimental/video/node.d.ts"
       ],
+      "experimental/3d/bun": [
+        "./dist/experimental/3d/bun.d.ts"
+      ],
       "agent": [
         "./dist/agent.d.ts"
       ],
@@ -197,6 +200,16 @@
         "default": "./dist/experimental/video/node.cjs"
       }
     },
+    "./experimental/3d/bun": {
+      "import": {
+        "types": "./dist/experimental/3d/bun.d.ts",
+        "default": "./dist/experimental/3d/bun.js"
+      },
+      "require": {
+        "types": "./dist/experimental/3d/bun.d.cts",
+        "default": "./dist/experimental/3d/bun.cjs"
+      }
+    },
     "./agent": {
       "import": {
         "types": "./dist/agent.d.ts",
@@ -263,6 +276,9 @@
     "run:component:terminal:list": "tsx scripts/run-component-terminal.ts --list",
     "run:github-contribution-card": "pnpm -C apps/simon-terminal-card dev",
     "run:logo:terminal": "tsx examples/vue-tui-logo-terminal.ts",
+    "run:3d:terminal": "bun examples/t3d-terminal-badge.ts",
+    "example:3d:smoke": "VT_SMOKE=1 bun examples/t3d-terminal-badge.ts",
+    "test:3d:bun": "bun scripts/smoke-bun-3d.ts",
     "run:image-showcase:terminal": "tsx examples/image-showcase.ts",
     "run:katex-showcase:terminal": "tsx examples/katex-showcase.ts",
     "trace:terminal-resize": "node scripts/trace-terminal-resize.mjs",
@@ -354,6 +370,7 @@
     "@vitest/coverage-v8": "^4.1.9",
     "beautiful-mermaid": "^1.1.3",
     "bumpp": "^8.2.1",
+    "bun-webgpu": "0.1.7",
     "esbuild": "^0.20.2",
     "happy-dom": "^17.6.3",
     "lint-staged": "^13.3.0",
@@ -373,10 +390,14 @@
   },
   "peerDependencies": {
     "beautiful-mermaid": "^1.1.3",
+    "bun-webgpu": "^0.1.7",
     "vue": ">=3.3.0 <4"
   },
   "peerDependenciesMeta": {
     "beautiful-mermaid": {
+      "optional": true
+    },
+    "bun-webgpu": {
       "optional": true
     }
   },

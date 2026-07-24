@@ -12,6 +12,7 @@ const entries = [
   "markdown",
   "experimental",
   "experimental/video/node",
+  "experimental/3d/bun",
   "agent",
   "agent/mermaid",
   "mermaid",
