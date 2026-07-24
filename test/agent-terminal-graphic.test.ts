@@ -90,6 +90,26 @@ function withEnv<T>(env: Record<string, string | undefined>, run: () => T): T {
   }
 }
 
+/** Clears all terminal-detection env vars so tests are not affected by the host terminal. */
+const CLEAN_TERMINAL_ENV: Record<string, undefined> = {
+  KITTY_WINDOW_ID: undefined,
+  GHOSTTY_RESOURCES_DIR: undefined,
+  GHOSTTY_BIN_DIR: undefined,
+  GHOSTTY_SHELL_FEATURES: undefined,
+  WEZTERM_PANE: undefined,
+  WEZTERM_EXECUTABLE: undefined,
+  TERM: undefined,
+  TERM_PROGRAM: undefined,
+  TERM_PROGRAM_VERSION: undefined,
+  VUE_TUI_SIXEL: undefined,
+  VUE_TUI_GRAPHICS_SIXEL: undefined,
+  VUE_TUI_TERMINAL_GRAPHICS: undefined,
+  VUE_TUI_GRAPHICS_PROTOCOL: undefined,
+  VUE_TUI_GRAPHICS_FORCE: undefined,
+  CI: undefined,
+  TMUX: undefined,
+};
+
 describe("TAgentTerminalGraphic", () => {
   it("flushes terminal graphics queue operations without dirty rows", () => {
     const writes: string[] = [];
@@ -1895,11 +1915,8 @@ describe("TAgentTerminalGraphic", () => {
     const app = createTerminalApp({ cols: 20, rows: 6, component: App });
     const stdout = withEnv(
       {
+        ...CLEAN_TERMINAL_ENV,
         TERM_PROGRAM: "iTerm.app",
-        KITTY_WINDOW_ID: undefined,
-        TERM: undefined,
-        CI: undefined,
-        TMUX: undefined,
       },
       () =>
         createStdoutRenderer(app.terminal, {
@@ -2013,11 +2030,8 @@ describe("TAgentTerminalGraphic", () => {
     });
     const stdout = withEnv(
       {
+        ...CLEAN_TERMINAL_ENV,
         TERM_PROGRAM: "iTerm.app",
-        KITTY_WINDOW_ID: undefined,
-        TERM: undefined,
-        CI: undefined,
-        TMUX: undefined,
       },
       () =>
         createStdoutRenderer(app.terminal, {
@@ -2078,11 +2092,8 @@ describe("TAgentTerminalGraphic", () => {
     });
     const stdout = withEnv(
       {
+        ...CLEAN_TERMINAL_ENV,
         TERM_PROGRAM: "iTerm.app",
-        KITTY_WINDOW_ID: undefined,
-        TERM: undefined,
-        CI: undefined,
-        TMUX: undefined,
       },
       () =>
         createStdoutRenderer(app.terminal, {
@@ -4141,11 +4152,8 @@ describe("TAgentTerminalGraphic", () => {
     kittyStdout.dispose();
     const iterm2Stdout = withEnv(
       {
-        KITTY_WINDOW_ID: undefined,
+        ...CLEAN_TERMINAL_ENV,
         TERM_PROGRAM: "iTerm.app",
-        TERM: undefined,
-        CI: undefined,
-        TMUX: undefined,
       },
       () =>
         createStdoutRenderer(app.terminal, {
@@ -4280,11 +4288,8 @@ describe("TAgentTerminalGraphic", () => {
     const app = createTerminalApp({ cols: 30, rows: 4, component: App });
     const sixelStdout = withEnv(
       {
-        KITTY_WINDOW_ID: undefined,
-        TERM_PROGRAM: undefined,
+        ...CLEAN_TERMINAL_ENV,
         TERM: "xterm-sixel",
-        CI: undefined,
-        TMUX: undefined,
       },
       () =>
         createStdoutRenderer(app.terminal, {
@@ -6933,18 +6938,7 @@ describe("TAgentTerminalGraphic", () => {
     const app = createTerminalApp({ cols: 20, rows: 6, component: App });
     const stdout = withEnv(
       {
-        KITTY_WINDOW_ID: undefined,
-        TERM: undefined,
-        TERM_PROGRAM: undefined,
-        WEZTERM_PANE: undefined,
-        WEZTERM_EXECUTABLE: undefined,
-        VUE_TUI_SIXEL: undefined,
-        VUE_TUI_GRAPHICS_SIXEL: undefined,
-        VUE_TUI_TERMINAL_GRAPHICS: undefined,
-        VUE_TUI_GRAPHICS_PROTOCOL: undefined,
-        VUE_TUI_GRAPHICS_FORCE: undefined,
-        CI: undefined,
-        TMUX: undefined,
+        ...CLEAN_TERMINAL_ENV,
         ...entry.env,
       },
       () =>
