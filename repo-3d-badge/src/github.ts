@@ -10,13 +10,7 @@
  * logo so callers always get a usable {@link Repo3DData}.
  */
 
-import type {
-  FetchOptions,
-  Repo3DData,
-  RepoContributor,
-  RepoLogo,
-  RepoMeta,
-} from "./types.js";
+import type { FetchOptions, Repo3DData, RepoContributor, RepoLogo, RepoMeta } from "./types.js";
 
 const DEFAULT_TIMEOUT_MS = 15000;
 const DEFAULT_MAX_CONTRIBUTORS = 100;
@@ -81,7 +75,10 @@ function timeoutSignal(opts: FetchOptions): AbortSignal {
 }
 
 /** Headers for GitHub REST API calls (JSON). */
-function apiHeaders(opts: FetchOptions, accept = "application/vnd.github+json"): Record<string, string> {
+function apiHeaders(
+  opts: FetchOptions,
+  accept = "application/vnd.github+json",
+): Record<string, string> {
   const headers: Record<string, string> = {
     Accept: accept,
     "User-Agent": "repo-3d-badge",
@@ -105,9 +102,7 @@ function isGithubHost(url: string): boolean {
   try {
     const host = new URL(url).hostname.toLowerCase();
     return (
-      host === "api.github.com" ||
-      host === "github.com" ||
-      host.endsWith(".githubusercontent.com")
+      host === "api.github.com" || host === "github.com" || host.endsWith(".githubusercontent.com")
     );
   } catch {
     return false;
@@ -124,9 +119,7 @@ async function ensureOk(res: Response, url: string): Promise<void> {
     /* ignore */
   }
   throw new Error(
-    `GitHub request to ${url} failed: ${res.status} ${res.statusText}${
-      body ? ` - ${body}` : ""
-    }`,
+    `GitHub request to ${url} failed: ${res.status} ${res.statusText}${body ? ` - ${body}` : ""}`,
   );
 }
 
@@ -409,10 +402,7 @@ export async function resolveRepoLogo(
 // ---------------------------------------------------------------------------
 
 /** Fetch everything needed to render a 3D badge for one repository. */
-export async function fetchRepo3DData(
-  input: string,
-  opts: FetchOptions = {},
-): Promise<Repo3DData> {
+export async function fetchRepo3DData(input: string, opts: FetchOptions = {}): Promise<Repo3DData> {
   const { owner, repo } = parseRepoInput(input);
   const [meta, contributors] = await Promise.all([
     fetchRepoMeta(owner, repo, opts),

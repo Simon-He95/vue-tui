@@ -82,8 +82,14 @@ const BIRD_SPRITE: string[] = [
 ];
 
 const BIRD_COLORS: Record<string, RGBA> = {
-  K: C.birdBlack, Y: C.birdYellow, y: C.birdDarkYel, W: C.birdWhite,
-  B: C.birdPupil, O: C.birdOrange, o: C.birdDarkOrg, R: C.birdRed,
+  K: C.birdBlack,
+  Y: C.birdYellow,
+  y: C.birdDarkYel,
+  W: C.birdWhite,
+  B: C.birdPupil,
+  O: C.birdOrange,
+  o: C.birdDarkOrg,
+  R: C.birdRed,
 };
 
 const WING_SPRITE: string[] = [".KKKKK.", "KcccccK", "KcccccK", "KcccccK", ".KKKK.."];
@@ -227,7 +233,16 @@ function setPx(buf: Uint8Array, w: number, h: number, x: number, y: number, c: R
   }
 }
 
-function fillRect(buf: Uint8Array, w: number, h: number, x: number, y: number, rw: number, rh: number, c: RGBA): void {
+function fillRect(
+  buf: Uint8Array,
+  w: number,
+  h: number,
+  x: number,
+  y: number,
+  rw: number,
+  rh: number,
+  c: RGBA,
+): void {
   const x0 = Math.max(0, Math.floor(x));
   const y0 = Math.max(0, Math.floor(y));
   const x1 = Math.min(w, Math.ceil(x + rw));
@@ -243,7 +258,15 @@ function fillRect(buf: Uint8Array, w: number, h: number, x: number, y: number, r
   }
 }
 
-function fillCircle(buf: Uint8Array, w: number, h: number, cx: number, cy: number, r: number, c: RGBA): void {
+function fillCircle(
+  buf: Uint8Array,
+  w: number,
+  h: number,
+  cx: number,
+  cy: number,
+  r: number,
+  c: RGBA,
+): void {
   const r2 = r * r;
   const x0 = Math.max(0, Math.floor(cx - r));
   const x1 = Math.min(w, Math.ceil(cx + r + 1));
@@ -259,10 +282,15 @@ function fillCircle(buf: Uint8Array, w: number, h: number, cx: number, cy: numbe
 }
 
 function drawSpriteRotated(
-  buf: Uint8Array, w: number, h: number,
-  centerX: number, centerY: number,
-  sprite: string[], colorMap: Record<string, RGBA>,
-  scale: number, angle: number,
+  buf: Uint8Array,
+  w: number,
+  h: number,
+  centerX: number,
+  centerY: number,
+  sprite: string[],
+  colorMap: Record<string, RGBA>,
+  scale: number,
+  angle: number,
 ): void {
   const sh = sprite.length;
   const sw = sprite[0]!.length;
@@ -271,11 +299,17 @@ function drawSpriteRotated(
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
   const corners: Array<[number, number]> = [
-    [-scx, -scy], [sw - scx, -scy], [sw - scx, sh - scy], [-scx, sh - scy],
-  ].map(([x, y]) => [
-    centerX + (x! * scale) * cos - (y! * scale) * sin,
-    centerY + (x! * scale) * sin + (y! * scale) * cos,
-  ] as [number, number]);
+    [-scx, -scy],
+    [sw - scx, -scy],
+    [sw - scx, sh - scy],
+    [-scx, sh - scy],
+  ].map(
+    ([x, y]) =>
+      [
+        centerX + x! * scale * cos - y! * scale * sin,
+        centerY + x! * scale * sin + y! * scale * cos,
+      ] as [number, number],
+  );
   const minX = Math.floor(Math.min(...corners.map((c) => c[0])));
   const maxX = Math.ceil(Math.max(...corners.map((c) => c[0])));
   const minY = Math.floor(Math.min(...corners.map((c) => c[1])));
@@ -299,7 +333,16 @@ function drawSpriteRotated(
   }
 }
 
-function drawChar(buf: Uint8Array, w: number, h: number, x: number, y: number, ch: string, scale: number, c: RGBA): void {
+function drawChar(
+  buf: Uint8Array,
+  w: number,
+  h: number,
+  x: number,
+  y: number,
+  ch: string,
+  scale: number,
+  c: RGBA,
+): void {
   const glyph = FONT[ch] ?? FONT[" "]!;
   for (let gy = 0; gy < FONT_CHAR_H; gy++) {
     const row = glyph[gy]!;
@@ -319,7 +362,17 @@ function textWidth(text: string, scale: number): number {
   return text.length * (FONT_CHAR_W * scale + scale);
 }
 
-function drawTextCentered(buf: Uint8Array, w: number, h: number, text: string, cx: number, y: number, scale: number, c: RGBA, shadow: RGBA): void {
+function drawTextCentered(
+  buf: Uint8Array,
+  w: number,
+  h: number,
+  text: string,
+  cx: number,
+  y: number,
+  scale: number,
+  c: RGBA,
+  shadow: RGBA,
+): void {
   const tw = textWidth(text, scale);
   const startX = Math.round(cx - tw / 2);
   let x = startX + scale;
@@ -339,9 +392,15 @@ function drawTextCentered(buf: Uint8Array, w: number, h: number, text: string, c
 // ═══════════════════════════════════════════════════════════════
 
 function drawClouds(buf: Uint8Array, offset: number): void {
-  const clouds = [{ x: 60, y: 36, r: 14 }, { x: 180, y: 55, r: 11 }, { x: 310, y: 30, r: 16 }, { x: 440, y: 60, r: 12 }];
+  const clouds = [
+    { x: 60, y: 36, r: 14 },
+    { x: 180, y: 55, r: 11 },
+    { x: 310, y: 30, r: 16 },
+    { x: 440, y: 60, r: 12 },
+  ];
   for (const cl of clouds) {
-    const x = ((cl.x - offset * 0.3) % (CANVAS_W + 100) + CANVAS_W + 100) % (CANVAS_W + 100) - 50;
+    const x =
+      ((((cl.x - offset * 0.3) % (CANVAS_W + 100)) + CANVAS_W + 100) % (CANVAS_W + 100)) - 50;
     fillCircle(buf, CANVAS_W, CANVAS_H, x, cl.y, cl.r, C.cloud);
     fillCircle(buf, CANVAS_W, CANVAS_H, x + cl.r * 0.7, cl.y + 2, cl.r * 0.6, C.cloud);
     fillCircle(buf, CANVAS_W, CANVAS_H, x - cl.r * 0.7, cl.y + 2, cl.r * 0.6, C.cloud);
@@ -472,9 +531,23 @@ export interface FlappyGame {
 
 export function createGame(best: number): FlappyGame {
   return {
-    phase: "ready", birdY: BIRD_START_Y, birdVY: 0, birdAngle: 0, pipes: [], score: 0,
-    best, elapsedMs: 0, speed: BASE_SPEED, pipeGap: BASE_GAP, spawnIntervalMs: BASE_SPAWN_MS,
-    lastSpawnMs: 0, groundOffset: 0, cloudOffset: 0, flapAnim: 0, gameOverMs: 0, flashAlpha: 0,
+    phase: "ready",
+    birdY: BIRD_START_Y,
+    birdVY: 0,
+    birdAngle: 0,
+    pipes: [],
+    score: 0,
+    best,
+    elapsedMs: 0,
+    speed: BASE_SPEED,
+    pipeGap: BASE_GAP,
+    spawnIntervalMs: BASE_SPAWN_MS,
+    lastSpawnMs: 0,
+    groundOffset: 0,
+    cloudOffset: 0,
+    flapAnim: 0,
+    gameOverMs: 0,
+    flashAlpha: 0,
   };
 }
 
@@ -527,17 +600,27 @@ export function updateGame(game: FlappyGame, dtMs: number): void {
   game.elapsedMs += dtMs;
   game.speed = Math.min(MAX_SPEED, BASE_SPEED + Math.floor(game.elapsedMs / 10000) * 0.35);
   game.pipeGap = Math.max(MIN_GAP, BASE_GAP - Math.floor(game.elapsedMs / 15000) * 5);
-  game.spawnIntervalMs = Math.max(MIN_SPAWN_MS, BASE_SPAWN_MS - Math.floor(game.elapsedMs / 20000) * 120);
+  game.spawnIntervalMs = Math.max(
+    MIN_SPAWN_MS,
+    BASE_SPAWN_MS - Math.floor(game.elapsedMs / 20000) * 120,
+  );
   game.birdVY = Math.min(MAX_FALL_SPEED, game.birdVY + GRAVITY * dt);
   game.birdY += game.birdVY * dt;
-  game.birdAngle = game.birdVY < 0 ? Math.max(-0.45, game.birdVY * 0.12) : Math.min(1.2, game.birdVY * 0.09);
+  game.birdAngle =
+    game.birdVY < 0 ? Math.max(-0.45, game.birdVY * 0.12) : Math.min(1.2, game.birdVY * 0.09);
   for (const pipe of game.pipes) pipe.x -= game.speed * dt;
   game.pipes = game.pipes.filter((p) => p.x > -PIPE_WIDTH - 10);
   if (game.elapsedMs - game.lastSpawnMs >= game.spawnIntervalMs) {
     game.lastSpawnMs = game.elapsedMs;
     const margin = 60;
-    const gapCenterY = margin + game.pipeGap / 2 + Math.random() * (GROUND_Y - margin * 2 - game.pipeGap);
-    game.pipes.push({ x: CANVAS_W + PIPE_WIDTH, gapCenterY, gapHeight: game.pipeGap, passed: false });
+    const gapCenterY =
+      margin + game.pipeGap / 2 + Math.random() * (GROUND_Y - margin * 2 - game.pipeGap);
+    game.pipes.push({
+      x: CANVAS_W + PIPE_WIDTH,
+      gapCenterY,
+      gapHeight: game.pipeGap,
+      passed: false,
+    });
   }
   for (const pipe of game.pipes) {
     if (!pipe.passed && pipe.x + PIPE_WIDTH < BIRD_X) {
@@ -583,18 +666,83 @@ export function renderScene(buf: Uint8Array, game: FlappyGame): void {
   drawBird(buf, BIRD_X, Math.round(game.birdY), game.birdAngle, wingPhase);
   if (game.phase === "playing") drawScore(buf, game.score);
   if (game.phase === "ready") {
-    drawTextCentered(buf, CANVAS_W, CANVAS_H, "TAP TO FLAP!", CANVAS_W / 2, 70, 3, C.textWhite, C.textShadow);
-    drawTextCentered(buf, CANVAS_W, CANVAS_H, "SPACE OR UP", CANVAS_W / 2, 100, 2, C.textYellow, C.textShadow);
+    drawTextCentered(
+      buf,
+      CANVAS_W,
+      CANVAS_H,
+      "TAP TO FLAP!",
+      CANVAS_W / 2,
+      70,
+      3,
+      C.textWhite,
+      C.textShadow,
+    );
+    drawTextCentered(
+      buf,
+      CANVAS_W,
+      CANVAS_H,
+      "SPACE OR UP",
+      CANVAS_W / 2,
+      100,
+      2,
+      C.textYellow,
+      C.textShadow,
+    );
   } else if (game.phase === "gameover") {
     if (game.flashAlpha > 0.01) {
-      fillRect(buf, CANVAS_W, CANVAS_H, 0, 0, CANVAS_W, CANVAS_H, [255, 255, 255, Math.round(game.flashAlpha * 255)]);
+      fillRect(buf, CANVAS_W, CANVAS_H, 0, 0, CANVAS_W, CANVAS_H, [
+        255,
+        255,
+        255,
+        Math.round(game.flashAlpha * 255),
+      ]);
     }
     if (game.gameOverMs > 300) {
-      drawTextCentered(buf, CANVAS_W, CANVAS_H, "GAME OVER", CANVAS_W / 2, 60, 4, C.textWhite, C.textShadow);
-      drawTextCentered(buf, CANVAS_W, CANVAS_H, "SCORE " + game.score, CANVAS_W / 2, 105, 2, C.textWhite, C.textShadow);
-      drawTextCentered(buf, CANVAS_W, CANVAS_H, "BEST " + game.best, CANVAS_W / 2, 130, 2, C.textYellow, C.textShadow);
+      drawTextCentered(
+        buf,
+        CANVAS_W,
+        CANVAS_H,
+        "GAME OVER",
+        CANVAS_W / 2,
+        60,
+        4,
+        C.textWhite,
+        C.textShadow,
+      );
+      drawTextCentered(
+        buf,
+        CANVAS_W,
+        CANVAS_H,
+        "SCORE " + game.score,
+        CANVAS_W / 2,
+        105,
+        2,
+        C.textWhite,
+        C.textShadow,
+      );
+      drawTextCentered(
+        buf,
+        CANVAS_W,
+        CANVAS_H,
+        "BEST " + game.best,
+        CANVAS_W / 2,
+        130,
+        2,
+        C.textYellow,
+        C.textShadow,
+      );
       if (game.gameOverMs > 800) {
-        drawTextCentered(buf, CANVAS_W, CANVAS_H, "TAP R TO RESTART", CANVAS_W / 2, 170, 2, C.textWhite, C.textShadow);
+        drawTextCentered(
+          buf,
+          CANVAS_W,
+          CANVAS_H,
+          "TAP R TO RESTART",
+          CANVAS_W / 2,
+          170,
+          2,
+          C.textWhite,
+          C.textShadow,
+        );
       }
     }
   }

@@ -46,9 +46,8 @@ async function main(): Promise<void> {
   // arg is now narrowed to string (printUsageAndExit is `never` for the falsy path)
 
   const smoke = process.env.VT_SMOKE === "1";
-  const maxContributors = Number(process.env.VT_MAX_CONTRIBUTORS) > 0
-    ? Number(process.env.VT_MAX_CONTRIBUTORS)
-    : 100;
+  const maxContributors =
+    Number(process.env.VT_MAX_CONTRIBUTORS) > 0 ? Number(process.env.VT_MAX_CONTRIBUTORS) : 100;
   const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
   const staticPreview = !smoke && !interactive;
   const cols = Number.isFinite(process.stdout.columns) ? process.stdout.columns : DEFAULT_COLS;

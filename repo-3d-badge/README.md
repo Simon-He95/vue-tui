@@ -64,7 +64,7 @@ import { fetchRepo3DData, createRepoBadgeRenderer } from "@simon_he/repo-3d-badg
 
 // 1. Fetch repo data
 const data = await fetchRepo3DData("vuejs/core", {
-  token: process.env.GITHUB_TOKEN,  // optional, raises rate limit
+  token: process.env.GITHUB_TOKEN, // optional, raises rate limit
   maxContributors: 50,
 });
 

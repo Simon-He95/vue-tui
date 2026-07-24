@@ -11,19 +11,13 @@ import {
   createBunWebGPU3DRenderer,
   type BunWebGPUTextureData,
 } from "@simon_he/vue-tui/experimental/3d/bun";
-import type {
-  T3DRenderer,
-} from "@simon_he/vue-tui/experimental";
+import type { T3DRenderer } from "@simon_he/vue-tui/experimental";
 import { buildBadgeSceneWgsl } from "./badge.wgsl.js";
 import { buildContributorScene, createBadgeHitTest } from "./scene.js";
 import { buildAvatarAtlas } from "./image.js";
 import { buildLogoSdfTexture } from "./sdf.js";
 import { generateLogoFallback } from "./image.js";
-import type {
-  AvatarAtlasTexture,
-  LogoSdfTexture,
-  Repo3DData,
-} from "./types.js";
+import type { AvatarAtlasTexture, LogoSdfTexture, Repo3DData } from "./types.js";
 
 const LOGO_SDF_SIZE = 128;
 const AVATAR_TILE_SIZE = 32;
@@ -79,7 +73,7 @@ export async function createRepoBadgeRenderer(
     if (logoSdf.rgba[i]! < 120) insidePixels++;
   }
   const insideRatio = insidePixels / (logoSdf.width * logoSdf.height);
-  const boardMode = insideRatio < 0.20;
+  const boardMode = insideRatio < 0.2;
 
   // 3. Avatar atlas.
   const avatarAtlas: AvatarAtlasTexture = await buildAvatarAtlas(

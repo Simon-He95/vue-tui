@@ -38,11 +38,11 @@ function edt1d(f: Float64Array, n: number): Float64Array {
   for (let q = 1; q < n; q++) {
     // Intersection of the parabola at q with the current rightmost parabola v[k].
     let vk = v[k]!;
-    let s = ((f[q]! + q * q) - (f[vk]! + vk * vk)) / (2 * q - 2 * vk);
+    let s = (f[q]! + q * q - (f[vk]! + vk * vk)) / (2 * q - 2 * vk);
     while (s <= z[k]!) {
       k--;
       vk = v[k]!;
-      s = ((f[q]! + q * q) - (f[vk]! + vk * vk)) / (2 * q - 2 * vk);
+      s = (f[q]! + q * q - (f[vk]! + vk * vk)) / (2 * q - 2 * vk);
     }
     k++;
     v[k] = q;
@@ -67,7 +67,12 @@ function edt1d(f: Float64Array, n: number): Float64Array {
  * (distance 0); otherwise non-zero pixels are the sources. Returns the squared
  * distance from every pixel to the nearest source pixel.
  */
-function edt2d(grid: Float64Array, width: number, height: number, sourcesAreZero: boolean): Float64Array {
+function edt2d(
+  grid: Float64Array,
+  width: number,
+  height: number,
+  sourcesAreZero: boolean,
+): Float64Array {
   const n = width * height;
   const out = new Float64Array(n);
   if (n === 0) return out;
@@ -247,7 +252,9 @@ export function buildLogoSdfTexture(logo: RepoLogo, targetSize = 128): LogoSdfTe
   const W = logo.width;
   const H = logo.height;
   if (logo.rgba.length === 0 || W <= 0 || H <= 0) {
-    throw new Error("buildLogoSdfTexture: logo bitmap is empty; caller must supply a fallback first");
+    throw new Error(
+      "buildLogoSdfTexture: logo bitmap is empty; caller must supply a fallback first",
+    );
   }
 
   // 1. Build alpha mask. When the image has real transparency (alpha < 255
@@ -284,8 +291,14 @@ export function buildLogoSdfTexture(logo: RepoLogo, targetSize = 128): LogoSdfTe
       borderG.push(logo.rgba[idx + 1]!);
       borderB.push(logo.rgba[idx + 2]!);
     };
-    for (let x = 0; x < W; x++) { sampleBorder(x, 0); sampleBorder(x, H - 1); }
-    for (let y = 0; y < H; y++) { sampleBorder(0, y); sampleBorder(W - 1, y); }
+    for (let x = 0; x < W; x++) {
+      sampleBorder(x, 0);
+      sampleBorder(x, H - 1);
+    }
+    for (let y = 0; y < H; y++) {
+      sampleBorder(0, y);
+      sampleBorder(W - 1, y);
+    }
 
     // Use median of border colors as the background color (robust to outliers).
     const median = (arr: number[]) => {

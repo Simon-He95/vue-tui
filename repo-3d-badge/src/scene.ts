@@ -6,10 +6,7 @@
  * always the large centerpiece sphere; remaining contributors orbit in rings.
  */
 
-import type {
-  ContributorSphere,
-  RepoContributor,
-} from "./types.js";
+import type { ContributorSphere, RepoContributor } from "./types.js";
 import type {
   T3DHitResult,
   T3DHitTestContext,
@@ -36,9 +33,7 @@ export interface SceneLayout {
  * - Remaining contributors fill concentric rings of up to 20 per ring,
  *   stepping inward in depth, matching the vue-tui badge rhythm.
  */
-export function buildContributorScene(
-  contributors: readonly RepoContributor[],
-): SceneLayout {
+export function buildContributorScene(contributors: readonly RepoContributor[]): SceneLayout {
   const count = contributors.length;
   const logins = contributors.map((c) => c.login);
   const spheres: ContributorSphere[] = [];
@@ -69,8 +64,7 @@ export function buildContributorScene(
     const depthStep = ring * 0.045;
 
     for (let slot = 0; slot < inThisRing; slot++) {
-      const angle =
-        (slot / contributorsPerRing) * Math.PI * 2 + (ring * Math.PI) / 20;
+      const angle = (slot / contributorsPerRing) * Math.PI * 2 + (ring * Math.PI) / 20;
       const depthJitter = ((slot + ring * 7) % 3) - 1;
       spheres.push({
         index: placed + 1,
@@ -135,8 +129,7 @@ function raySphere(
   const offsetX = origin[0] - sphere.x;
   const offsetY = origin[1] - sphere.y;
   const offsetZ = origin[2] - sphere.z;
-  const projection =
-    offsetX * direction[0] + offsetY * direction[1] + offsetZ * direction[2];
+  const projection = offsetX * direction[0] + offsetY * direction[1] + offsetZ * direction[2];
   const discriminant =
     projection * projection -
     (offsetX * offsetX + offsetY * offsetY + offsetZ * offsetZ - radius * radius);
@@ -176,8 +169,7 @@ export function createBadgeHitTest(layout: SceneLayout) {
       const sphere = spheres[index]!;
       if (!sphere) continue;
       const visualRadius = sphere.radius * sphereScale(index, context.motion);
-      const cellPickRadius =
-        (Math.max(0.1, cameraDistance - sphere.z) / 1.9 / cellHeight) * 0.72;
+      const cellPickRadius = (Math.max(0.1, cameraDistance - sphere.z) / 1.9 / cellHeight) * 0.72;
       const distance = raySphere(
         rayOrigin,
         rayDirection,

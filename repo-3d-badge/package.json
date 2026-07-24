@@ -2,15 +2,27 @@
   "name": "@simon_he/repo-3d-badge",
   "version": "0.1.0",
   "description": "Turn any GitHub repository into a textured 3D terminal badge — contributors orbit a 3D extrusion of the repo logo, rendered with WebGPU in your terminal.",
+  "keywords": [
+    "3d",
+    "badge",
+    "cli",
+    "contributors",
+    "github",
+    "raymarching",
+    "sdf",
+    "terminal",
+    "vue-tui",
+    "webgpu"
+  ],
   "license": "MIT",
   "author": "Simon He",
-  "type": "module",
   "bin": {
     "repo-3d-badge": "./dist/cli.js"
   },
   "files": [
     "dist"
   ],
+  "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -31,14 +43,6 @@
     "@simon_he/vue-tui": "workspace:*",
     "sharp": "^0.33.5"
   },
-  "peerDependencies": {
-    "bun-webgpu": "^0.1.7"
-  },
-  "peerDependenciesMeta": {
-    "bun-webgpu": {
-      "optional": true
-    }
-  },
   "devDependencies": {
     "@types/node": "^18.19.0",
     "bun-webgpu": "^0.1.7",
@@ -47,19 +51,15 @@
     "typescript": "^5.9.3",
     "vue": "^3.5.38"
   },
+  "peerDependencies": {
+    "bun-webgpu": "^0.1.7"
+  },
+  "peerDependenciesMeta": {
+    "bun-webgpu": {
+      "optional": true
+    }
+  },
   "engines": {
     "node": ">=18"
-  },
-  "keywords": [
-    "3d",
-    "badge",
-    "github",
-    "contributors",
-    "terminal",
-    "cli",
-    "webgpu",
-    "vue-tui",
-    "sdf",
-    "raymarching"
-  ]
+  }
 }

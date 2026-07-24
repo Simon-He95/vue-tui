@@ -6,13 +6,14 @@
     "cli",
     "flappy-bird",
     "game",
+    "iterm2",
+    "kitty-graphics",
     "terminal",
     "terminal-game",
     "tui",
-    "vue-tui",
-    "kitty-graphics",
-    "iterm2"
+    "vue-tui"
   ],
+  "homepage": "https://github.com/Simon-He95/vue-tui/tree/main/terminal-flappy-bird",
   "license": "MIT",
   "author": "Simon He",
   "repository": {
@@ -20,14 +21,13 @@
     "url": "git+https://github.com/Simon-He95/vue-tui.git",
     "directory": "terminal-flappy-bird"
   },
-  "homepage": "https://github.com/Simon-He95/vue-tui/tree/main/terminal-flappy-bird",
-  "type": "module",
   "bin": {
     "terminal-flappy-bird": "./dist/cli.js"
   },
   "files": [
     "dist"
   ],
+  "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -48,15 +48,15 @@
   "dependencies": {
     "@simon_he/vue-tui": "workspace:*"
   },
-  "peerDependencies": {
-    "vue": "^3.3.0"
-  },
   "devDependencies": {
     "@types/node": "^18.19.0",
     "tsdown": "^0.9.9",
     "tsx": "^4.22.4",
     "typescript": "^5.9.3",
     "vue": "^3.5.38"
+  },
+  "peerDependencies": {
+    "vue": "^3.3.0"
   },
   "engines": {
     "node": ">=18"

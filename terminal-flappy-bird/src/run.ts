@@ -1,6 +1,11 @@
 import { defineComponent, h, ref } from "vue";
 import { TBox, TText } from "@simon_he/vue-tui";
-import { TVideo, type TVideoFrame, type TVideoFrameEvent, type TVideoFrameSource } from "@simon_he/vue-tui/experimental";
+import {
+  TVideo,
+  type TVideoFrame,
+  type TVideoFrameEvent,
+  type TVideoFrameSource,
+} from "@simon_he/vue-tui/experimental";
 import {
   createStdinDriver,
   createStdoutRenderer,
@@ -171,22 +176,43 @@ const FlappyBirdTerminal = defineComponent({
       return h(
         TBox,
         {
-          x: 0, y: 0, w: boxW, h: boxH, border: true, padding: 1,
+          x: 0,
+          y: 0,
+          w: boxW,
+          h: boxH,
+          border: true,
+          padding: 1,
           title: " 🐦 FLAPPY BIRD · TUI ",
           style: { fg: "yellowBright", bg: "black" },
           titleStyle: { fg: "yellow", bold: true },
         },
         () => [
-          h(TText, { x: 0, y: 0, w: contentW, value: statusText.value, style: { fg: "yellowBright", bold: true } }),
+          h(TText, {
+            x: 0,
+            y: 0,
+            w: contentW,
+            value: statusText.value,
+            style: { fg: "yellowBright", bold: true },
+          }),
           h(TVideo, {
-            x: 0, y: 2, w: contentW, h: gameH,
-            src: "flappy-bird://game", frameSource: flappyFrameSource,
-            pixelWidth: CANVAS_W, pixelHeight: CANVAS_H, maxFps: TARGET_FPS,
+            x: 0,
+            y: 2,
+            w: contentW,
+            h: gameH,
+            src: "flappy-bird://game",
+            frameSource: flappyFrameSource,
+            pixelWidth: CANVAS_W,
+            pixelHeight: CANVAS_H,
+            maxFps: TARGET_FPS,
             fallback: "[Flappy Bird — graphics protocol unavailable]",
-            style: { bg: "black" }, onFrame, onError,
+            style: { bg: "black" },
+            onFrame,
+            onError,
           }),
           h(TText, {
-            x: 0, y: gameH + 2, w: contentW,
+            x: 0,
+            y: gameH + 2,
+            w: contentW,
             value: "SPACE flap · R restart · Q quit",
             style: { fg: "white", dim: true },
           }),
@@ -209,7 +235,8 @@ export function runFlappyBird(): void {
   const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
 
   const app = createTerminalApp({
-    cols: cols.value, rows: rows.value,
+    cols: cols.value,
+    rows: rows.value,
     component: FlappyBirdTerminal,
     defaultStyle: { fg: "white", bg: "black" },
   });
