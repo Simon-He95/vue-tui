@@ -278,6 +278,8 @@
     "run:logo:terminal": "tsx examples/vue-tui-logo-terminal.ts",
     "run:3d:terminal": "bun examples/t3d-terminal-badge.ts",
     "example:3d:smoke": "VT_SMOKE=1 bun examples/t3d-terminal-badge.ts",
+    "run:flappy:terminal": "tsx examples/flappy-bird-terminal.ts",
+    "example:flappy:smoke": "VT_SMOKE=1 tsx examples/flappy-bird-terminal.ts",
     "test:3d:bun": "bun scripts/smoke-bun-3d.ts",
     "run:image-showcase:terminal": "tsx examples/image-showcase.ts",
     "run:katex-showcase:terminal": "tsx examples/katex-showcase.ts",

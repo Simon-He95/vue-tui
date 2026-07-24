@@ -1,0 +1,64 @@
+{
+  "name": "terminal-flappy-bird",
+  "version": "0.1.0",
+  "description": "🐦 Flappy Bird in your terminal — high-pixel sprites, physics, difficulty progression, powered by terminal graphics protocols (Kitty / iTerm2 / WezTerm / Ghostty / Sixel).",
+  "keywords": [
+    "cli",
+    "flappy-bird",
+    "game",
+    "terminal",
+    "terminal-game",
+    "tui",
+    "vue-tui",
+    "kitty-graphics",
+    "iterm2"
+  ],
+  "license": "MIT",
+  "author": "Simon He",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Simon-He95/vue-tui.git",
+    "directory": "terminal-flappy-bird"
+  },
+  "homepage": "https://github.com/Simon-He95/vue-tui/tree/main/terminal-flappy-bird",
+  "type": "module",
+  "bin": {
+    "terminal-flappy-bird": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsx src/cli.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/cli.js",
+    "smoke": "VT_SMOKE=1 tsx src/cli.ts",
+    "pack:local": "pnpm pack --pack-destination .release"
+  },
+  "dependencies": {
+    "@simon_he/vue-tui": "workspace:*"
+  },
+  "peerDependencies": {
+    "vue": "^3.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.0",
+    "tsdown": "^0.9.9",
+    "tsx": "^4.22.4",
+    "typescript": "^5.9.3",
+    "vue": "^3.5.38"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

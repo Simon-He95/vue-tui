@@ -1,6 +1,8 @@
 packages:
   - apps/*
   - examples/*
+  - repo-3d-badge
+  - terminal-flappy-bird
 allowBuilds:
   esbuild: true
   rolldown: true
