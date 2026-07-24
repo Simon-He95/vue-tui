@@ -529,6 +529,8 @@
         "RowScrollMode",
         "SanitizeTerminalHrefOptions",
         "StorageLike",
+        "T3DHitResult",
+        "T3DHitTestContext",
         "T3DRenderContext",
         "T3DRenderer",
         "T3DViewportHandle",
@@ -1204,6 +1206,16 @@
           "name": "error",
           "payload": "unknown",
           "description": "Rendering or frame processing failed."
+        },
+        {
+          "name": "objecthover",
+          "payload": "T3DHitResult | null",
+          "description": "Hovered renderer object changed, or cleared to null."
+        },
+        {
+          "name": "objectselect",
+          "payload": "T3DHitResult | null",
+          "description": "Click-locked renderer object changed, or cleared to null."
         }
       ]
     },

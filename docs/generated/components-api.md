@@ -120,10 +120,12 @@ Import: `@simon_he/vue-tui/experimental`
 
 ### Events
 
-| 名称               | Payload                       | 说明                                  |
-| ------------------ | ----------------------------- | ------------------------------------- |
-| <code>frame</code> | <code>TVideoFrameEvent</code> | A frame was committed by TVideo.      |
-| <code>error</code> | <code>unknown</code>          | Rendering or frame processing failed. |
+| 名称                      | Payload                               | 说明                                                      |
+| ------------------------- | ------------------------------------- | --------------------------------------------------------- |
+| <code>frame</code>        | <code>TVideoFrameEvent</code>         | A frame was committed by TVideo.                          |
+| <code>error</code>        | <code>unknown</code>                  | Rendering or frame processing failed.                     |
+| <code>objecthover</code>  | <code>T3DHitResult &#124; null</code> | Hovered renderer object changed, or cleared to null.      |
+| <code>objectselect</code> | <code>T3DHitResult &#124; null</code> | Click-locked renderer object changed, or cleared to null. |
 
 ## TAgentTerminalGraphic
 
