@@ -121,6 +121,7 @@ const cjsCliResult = await build({
   entryPoints: {
     cli: "src/cli.ts",
     "experimental/video/node": "src/experimental/video/node.ts",
+    "experimental/3d/bun": "src/experimental/3d/bun.ts",
   },
   outdir: "dist",
   outExtension: { ".js": ".cjs" },
@@ -133,7 +134,7 @@ const cjsCliResult = await build({
   minifySyntax: true,
   metafile: true,
   supported: { "dynamic-import": true },
-  external: ["vue"],
+  external: ["vue", "bun-webgpu"],
   define: productionDefine,
   plugins: [instrumentationStripPlugin],
 });

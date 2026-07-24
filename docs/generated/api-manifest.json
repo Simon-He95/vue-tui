@@ -464,6 +464,7 @@
       "maturity": "experimental",
       "runtime": "browser-safe",
       "valueExports": [
+        "T3DViewport",
         "TCandlestickChart",
         "TContributionGraph",
         "TLineChart",
@@ -528,6 +529,11 @@
         "RowScrollMode",
         "SanitizeTerminalHrefOptions",
         "StorageLike",
+        "T3DRenderContext",
+        "T3DRenderer",
+        "T3DViewportHandle",
+        "T3DViewportMotion",
+        "T3DViewportProps",
         "TCandlestickDatum",
         "TLinkifyOptions",
         "TLinkifyProtocol",
@@ -633,6 +639,22 @@
         "UseTLogSearchControllerOptions",
         "UseTLogSearchResultsPageOptions",
         "UseTLogVirtualSearchResultsOptions"
+      ]
+    },
+    "@simon_he/vue-tui/experimental/3d/bun": {
+      "maturity": "experimental",
+      "runtime": "bun-only",
+      "valueExports": [
+        "createBunWebGPU3DRenderer",
+        "createTerminalBadge3DRenderer",
+        "encodeRgbaPng",
+        "rgbaToGray8",
+        "terminalBadge3DWgsl"
+      ],
+      "typeExports": [
+        "BunWebGPU3DRendererOptions",
+        "BunWebGPUTextureData",
+        "TerminalBadge3DRendererOptions"
       ]
     },
     "@simon_he/vue-tui/experimental/video/node": {
@@ -1011,6 +1033,180 @@
     }
   },
   "components": {
+    "T3DViewport": {
+      "entrypoint": "@simon_he/vue-tui/experimental",
+      "maturity": "experimental",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true,
+          "description": "Horizontal position in terminal cells."
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true,
+          "description": "Vertical position in terminal cells."
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true,
+          "description": "Width in terminal cells."
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true,
+          "description": "Height in terminal cells."
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Paint and pointer hit-test stacking order."
+        },
+        {
+          "name": "renderer",
+          "type": "T3DRenderer",
+          "required": true,
+          "description": "Pull renderer captured at mount; remount the component to replace it."
+        },
+        {
+          "name": "paused",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false",
+          "description": "Stops frame pulling while true."
+        },
+        {
+          "name": "maxFps",
+          "type": "number",
+          "required": false,
+          "defaultValue": "DEFAULT_MAX_FPS",
+          "description": "Maximum requested frames per second."
+        },
+        {
+          "name": "pixelWidth",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Requested source width in pixels; TVideo may adapt it for ASCII output."
+        },
+        {
+          "name": "pixelHeight",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Requested source height in pixels; TVideo may adapt it for ASCII output."
+        },
+        {
+          "name": "fallback",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"[3D viewport]\"",
+          "description": "Text displayed before a frame is available or after rendering fails."
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Terminal style applied to fallback and ASCII output."
+        },
+        {
+          "name": "clear",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Clears cells underneath each video frame."
+        },
+        {
+          "name": "interactive",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Enables pointer orbit, wheel zoom, and hover motion tracking."
+        },
+        {
+          "name": "initialYaw",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Initial yaw angle in radians, also restored by resetMotion()."
+        },
+        {
+          "name": "initialPitch",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0",
+          "description": "Initial pitch angle in radians, also restored by resetMotion()."
+        },
+        {
+          "name": "autoRotate",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Enables continuous yaw rotation when not dragging."
+        },
+        {
+          "name": "autoRotateSpeed",
+          "type": "number",
+          "required": false,
+          "defaultValue": "DEFAULT_AUTO_ROTATE_SPEED",
+          "description": "Automatic yaw rotation speed in radians per second."
+        },
+        {
+          "name": "pointerSensitivity",
+          "type": "number",
+          "required": false,
+          "defaultValue": "DEFAULT_POINTER_SENSITIVITY",
+          "description": "Drag sensitivity in radians per terminal cell."
+        },
+        {
+          "name": "initialZoom",
+          "type": "number",
+          "required": false,
+          "defaultValue": "1",
+          "description": "Initial camera zoom, also restored by resetMotion()."
+        },
+        {
+          "name": "minZoom",
+          "type": "number",
+          "required": false,
+          "defaultValue": "DEFAULT_MIN_ZOOM",
+          "description": "Minimum camera zoom accepted from wheel and trackpad gestures."
+        },
+        {
+          "name": "maxZoom",
+          "type": "number",
+          "required": false,
+          "defaultValue": "DEFAULT_MAX_ZOOM",
+          "description": "Maximum camera zoom accepted from wheel and trackpad gestures."
+        },
+        {
+          "name": "zoomSensitivity",
+          "type": "number",
+          "required": false,
+          "defaultValue": "DEFAULT_ZOOM_SENSITIVITY",
+          "description": "Zoom impulse per normalized wheel or trackpad unit."
+        }
+      ],
+      "events": [
+        {
+          "name": "frame",
+          "payload": "TVideoFrameEvent",
+          "description": "A frame was committed by TVideo."
+        },
+        {
+          "name": "error",
+          "payload": "unknown",
+          "description": "Rendering or frame processing failed."
+        }
+      ]
+    },
     "TAgentTerminalGraphic": {
       "entrypoint": "@simon_he/vue-tui/agent",
       "maturity": "experimental",

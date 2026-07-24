@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 
 type Maturity = "public" | "advanced" | "experimental";
-type EntrypointRuntime = "browser-safe" | "node-only" | "mixed";
+type EntrypointRuntime = "browser-safe" | "bun-only" | "node-only" | "mixed";
 type Component = {
   entrypoint: string;
   maturity: Maturity;

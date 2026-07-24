@@ -244,6 +244,7 @@ describe("public API surface", () => {
   it("keeps experimental entry exports intentional", async () => {
     expect(await exportNames("../src/experimental.js")).toMatchInlineSnapshot(`
       [
+        "T3DViewport",
         "TCandlestickChart",
         "TContributionGraph",
         "TLineChart",

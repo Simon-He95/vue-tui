@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 
 type Maturity = "public" | "advanced" | "experimental";
-type Runtime = "browser-safe" | "node-only" | "mixed";
+type Runtime = "browser-safe" | "bun-only" | "node-only" | "mixed";
 
 type Manifest = {
   entrypoints: Record<
@@ -42,6 +42,10 @@ const expectedEntrypoints: Record<string, { maturity: Maturity; runtime: Runtime
   "@simon_he/vue-tui/experimental/video/node": {
     maturity: "experimental",
     runtime: "node-only",
+  },
+  "@simon_he/vue-tui/experimental/3d/bun": {
+    maturity: "experimental",
+    runtime: "bun-only",
   },
   "@simon_he/vue-tui/agent": { maturity: "experimental", runtime: "browser-safe" },
   "@simon_he/vue-tui/agent/mermaid": {

@@ -93,10 +93,12 @@ import {
 } from "@simon_he/vue-tui/markdown";
 
 import {
+  T3DViewport,
   TLogView,
   TVideo,
   TVirtualList,
   createAppendOnlyLogStore,
+  type T3DRenderer,
   type TVideoFrameSource,
 } from "@simon_he/vue-tui/experimental";
 import {
@@ -105,6 +107,12 @@ import {
   type FfmpegVideoFrameSourceOptions,
   type YtDlpVideoFrameSourceOptions,
 } from "@simon_he/vue-tui/experimental/video/node";
+import {
+  createBunWebGPU3DRenderer,
+  createTerminalBadge3DRenderer,
+  terminalBadge3DWgsl,
+  type BunWebGPU3DRendererOptions,
+} from "@simon_he/vue-tui/experimental/3d/bun";
 import {
   TAgentTranscript,
   markMermaidRenderErrorFatal as markAgentMermaidRenderErrorFatal,
@@ -448,6 +456,9 @@ const markdownLayoutRows = layoutMarkdownBlocks([], 20, { widthProvider: "cjk" }
 const videoFrameSource: TVideoFrameSource = async function* () {
   yield { png: new Uint8Array(24), timestampMs: 0 };
 };
+const bun3DOptions: BunWebGPU3DRendererOptions = { shader: terminalBadge3DWgsl };
+const bun3DRenderer: T3DRenderer = createBunWebGPU3DRenderer(bun3DOptions);
+const terminalBadge3DRenderer: T3DRenderer = createTerminalBadge3DRenderer();
 const ffmpegVideoOptions: FfmpegVideoFrameSourceOptions = {
   ffmpegPath: "ffmpeg",
   realtime: true,
@@ -474,7 +485,10 @@ console.log(
   toolCallSlot,
   markdownRows,
   markdownLayoutRows,
+  T3DViewport,
   TVideo,
   videoFrameSource,
+  bun3DRenderer,
+  terminalBadge3DRenderer,
   ffmpegVideoFrameSource,
 );

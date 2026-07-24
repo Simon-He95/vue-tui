@@ -54,21 +54,22 @@ Development, release validation, and documentation builds are run on Node.js 20 
 
 ## Entry Points
 
-| Import                                      | Stability    | Use it for                                                                                                                                    |
-| ------------------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@simon_he/vue-tui`                         | Public       | Browser-safe terminal core, DOM renderer, stable Vue components, and input host plugin factory                                                |
-| `@simon_he/vue-tui/core`                    | Public       | Terminal core, buffer-facing types, ANSI/theme/path/hyperlink helpers                                                                         |
-| `@simon_he/vue-tui/renderer/dom`            | Public       | DOM renderer factory and renderer capabilities                                                                                                |
-| `@simon_he/vue-tui/vue`                     | Advanced     | Extended Vue components, composables, router helpers, and Vue runtime internals                                                               |
-| `@simon_he/vue-tui/runtime`                 | Advanced     | Runtime wiring, selection helpers, and clipboard abstraction                                                                                  |
-| `@simon_he/vue-tui/observability`           | Advanced     | Frame perf store, profiler hooks, and trace helpers                                                                                           |
-| `@simon_he/vue-tui/cli`                     | Public       | Node-only headless Vue app runtime, stdin driver, stdout renderer, path provider, recording, and terminal clipboard helpers                   |
-| `@simon_he/vue-tui/markdown`                | Public       | `TMarkdownText`, `TVirtualMarkdown`, markdown parser and layout helpers, streaming markdown block sources                                     |
-| `@simon_he/vue-tui/mermaid`                 | Public       | Optional `beautiful-mermaid` bridge and wrapper for `TMermaidText`                                                                            |
-| `@simon_he/vue-tui/experimental`            | Experimental | `TVideo`, charts, `TVirtualList`, `TTranscriptView`, `TLogView`, TLog search/link/minimap companions, append-only log store, and TLog plugins |
-| `@simon_he/vue-tui/experimental/video/node` | Experimental | Node-only lazy FFmpeg frame source plus optional yt-dlp resolver for supported video pages                                                    |
-| `@simon_he/vue-tui/agent`                   | Experimental | Agent/console transcript, tool-call header, log, markdown, virtual list, render plane, and overlay component aggregation                      |
-| `@simon_he/vue-tui/agent/mermaid`           | Experimental | Agent namespace optional `beautiful-mermaid` bridge and wrapper for `TMermaidText`                                                            |
+| Import                                      | Stability    | Use it for                                                                                                                   |
+| ------------------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `@simon_he/vue-tui`                         | Public       | Browser-safe terminal core, DOM renderer, stable Vue components, and input host plugin factory                               |
+| `@simon_he/vue-tui/core`                    | Public       | Terminal core, buffer-facing types, ANSI/theme/path/hyperlink helpers                                                        |
+| `@simon_he/vue-tui/renderer/dom`            | Public       | DOM renderer factory and renderer capabilities                                                                               |
+| `@simon_he/vue-tui/vue`                     | Advanced     | Extended Vue components, composables, router helpers, and Vue runtime internals                                              |
+| `@simon_he/vue-tui/runtime`                 | Advanced     | Runtime wiring, selection helpers, and clipboard abstraction                                                                 |
+| `@simon_he/vue-tui/observability`           | Advanced     | Frame perf store, profiler hooks, and trace helpers                                                                          |
+| `@simon_he/vue-tui/cli`                     | Public       | Node-only headless Vue app runtime, stdin driver, stdout renderer, path provider, recording, and terminal clipboard helpers  |
+| `@simon_he/vue-tui/markdown`                | Public       | `TMarkdownText`, `TVirtualMarkdown`, markdown parser and layout helpers, streaming markdown block sources                    |
+| `@simon_he/vue-tui/mermaid`                 | Public       | Optional `beautiful-mermaid` bridge and wrapper for `TMermaidText`                                                           |
+| `@simon_he/vue-tui/experimental`            | Experimental | `T3DViewport`, `TVideo`, charts, `TVirtualList`, `TTranscriptView`, `TLogView`, TLog companions, and append-only log tooling |
+| `@simon_he/vue-tui/experimental/video/node` | Experimental | Node-only lazy FFmpeg frame source plus optional yt-dlp resolver for supported video pages                                   |
+| `@simon_he/vue-tui/experimental/3d/bun`     | Experimental | Bun-only raw WGSL/WebGPU Pull renderers, including the vue-tui terminal badge scene                                          |
+| `@simon_he/vue-tui/agent`                   | Experimental | Agent/console transcript, tool-call header, log, markdown, virtual list, render plane, and overlay component aggregation     |
+| `@simon_he/vue-tui/agent/mermaid`           | Experimental | Agent namespace optional `beautiful-mermaid` bridge and wrapper for `TMermaidText`                                           |
 
 The stable surface is terminal core, DOM rendering, CLI runtime, basic Vue components, markdown APIs, and the optional Mermaid bridge. High-throughput log, virtualization, and agent/console aggregation APIs stay under `/experimental` or `/agent` until their public surface settles; keep those imports isolated in application code. Use `/agent/mermaid` when agent code wants the optional Mermaid wrapper without changing the `/agent` main entrypoint.
 
@@ -82,6 +83,43 @@ import {
   TPieChart,
 } from "@simon_he/vue-tui/experimental";
 ```
+
+`T3DViewport` is renderer-agnostic and Pull-based. The bundled WGSL renderer is isolated in the Bun-only entrypoint so browser-safe imports do not load native GPU code:
+
+```ts
+import { T3DViewport } from "@simon_he/vue-tui/experimental";
+import { createTerminalBadge3DRenderer } from "@simon_he/vue-tui/experimental/3d/bun";
+
+const renderer = createTerminalBadge3DRenderer();
+```
+
+Install the optional `bun-webgpu` peer, then run the complete direction-E terminal badge example with `bun run run:3d:terminal`. Drag to orbit and use a two-finger trackpad gesture or mouse wheel to zoom. CLI hover steering requires `createStdinDriver({ enableMouseMotion: true })`.
+
+#### `experimental/3d/bun` platform requirements
+
+| Requirement                 | Detail                                               |
+| --------------------------- | ---------------------------------------------------- |
+| Runtime                     | **Bun only** — Node.js and browser are not supported |
+| `bun-webgpu` peer           | Must be installed manually: `bun add bun-webgpu`     |
+| macOS x64 / arm64           | ✅ Prebuilt binary available                         |
+| Linux x64                   | ✅ Prebuilt binary available                         |
+| Windows x64                 | ✅ Prebuilt binary available                         |
+| Linux arm64 / musl (Alpine) | ❌ No prebuilt binary — must build from source       |
+
+> `T3DViewport` itself (from `/experimental`) has zero native dependencies and works everywhere. Only `experimental/3d/bun` requires Bun and the optional peer. `bun-webgpu` is an experimental library; see [bun-webgpu](https://github.com/kommander/bun-webgpu) for current status.
+
+#### Terminal graphics protocol requirements
+
+`TVideo` and `T3DViewport` automatically negotiate their output format based on the detected terminal:
+
+| Terminal capability                 | Output quality                                 |
+| ----------------------------------- | ---------------------------------------------- |
+| kitty or iTerm2 protocol            | Pixel-accurate frames (PNG)                    |
+| No graphics protocol (any terminal) | `gray8` ASCII art — functional, lower fidelity |
+
+`TAgentTerminalGraphic` (mermaid diagrams, KaTeX math, images) requires kitty, iTerm2, or sixel to render visually; without a protocol it shows the `fallback` text prop. Always provide a meaningful `fallback` value so non-graphical terminals still convey the content.
+
+> sixel terminals get graphics for `TAgentTerminalGraphic` but ASCII art for `TVideo` / `T3DViewport` — only kitty and iTerm2 support pixel-accurate video and 3D frames. See [docs/platform-contracts.md](./docs/platform-contracts.md) for the full degradation table.
 
 Do not deep import from `@simon_he/vue-tui/dist/...`; only the entry points above are part of the supported package contract.
 
