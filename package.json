@@ -1,6 +1,6 @@
 {
   "name": "@simon_he/vue-tui",
-  "version": "1.1.0",
+  "version": "1.1.2",
   "description": "Vue 3 terminal UI components and renderers for browser DOM, CLI stdout, logs, markdown transcripts, and agent consoles",
   "keywords": [
     "agent-console",
@@ -277,6 +277,7 @@
     "run:github-contribution-card": "pnpm -C apps/simon-terminal-card dev",
     "run:logo:terminal": "tsx examples/vue-tui-logo-terminal.ts",
     "run:3d:terminal": "bun examples/t3d-terminal-badge.ts",
+    "run:repo-3d-badge": "bun repo-3d-badge/src/cli.ts",
     "example:3d:smoke": "VT_SMOKE=1 bun examples/t3d-terminal-badge.ts",
     "run:flappy:terminal": "tsx examples/flappy-bird-terminal.ts",
     "example:flappy:smoke": "VT_SMOKE=1 tsx examples/flappy-bird-terminal.ts",
