@@ -375,7 +375,7 @@
     "bumpp": "^8.2.1",
     "bun-webgpu": "0.1.7",
     "esbuild": "^0.20.2",
-    "happy-dom": "^17.6.3",
+    "happy-dom": "^20.0.0",
     "lint-staged": "^13.3.0",
     "oxfmt": "^0.47.0",
     "oxlint": "^1.70.0",
