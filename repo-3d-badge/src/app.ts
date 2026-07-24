@@ -9,7 +9,7 @@ import type { T3DHitResult, TVideoFrameEvent } from "@simon_he/vue-tui/experimen
 import { T3DViewport } from "@simon_he/vue-tui/experimental";
 import { TBox, TText } from "@simon_he/vue-tui";
 import { computed, defineComponent, h, ref } from "vue";
-import { createRepoBadgeRenderer, type RepoBadgeBuildResult } from "./renderer.js";
+import type { RepoBadgeBuildResult } from "./renderer.js";
 import type { Repo3DData } from "./types.js";
 
 export interface RepoBadgeAppOptions {

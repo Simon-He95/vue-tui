@@ -28,7 +28,7 @@ const BASE_SPAWN_MS = 1700;
 const MIN_SPAWN_MS = 1050;
 
 export const TARGET_FPS = 30;
-const FRAME_MS = 1000 / TARGET_FPS;
+const _FRAME_MS = 1000 / TARGET_FPS;
 
 // ═══════════════════════════════════════════════════════════════
 //  Color Palette
