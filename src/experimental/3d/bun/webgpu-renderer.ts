@@ -1,6 +1,5 @@
 import type { T3DRenderContext, T3DRenderer } from "../../../vue/components/T3DViewport.js";
 import type { TVideoFrame } from "../../../vue/video/types.js";
-import { globalConstructors, setupGlobals } from "bun-webgpu";
 import { contributorAvatarAtlas } from "./contributor-avatar-atlas.js";
 import { encodeRgbaPng } from "./png.js";
 import { pickTerminalBadgeContributor } from "./terminal-badge-scene.js";
@@ -9,6 +8,8 @@ import { terminalBadge3DWgsl } from "./terminal-badge.wgsl.js";
 const UNIFORM_BYTES = 80;
 const WORKGROUP_SIZE = 8;
 
+type BunWebGpuModule = typeof import("bun-webgpu");
+let bunWebGpuModule: BunWebGpuModule | undefined;
 let webGpuSetup: Promise<void> | undefined;
 
 export type BunWebGPUTextureData = Readonly<{
@@ -128,6 +129,21 @@ function assertBunRuntime(): void {
   }
 }
 
+async function loadBunWebGpu(): Promise<BunWebGpuModule> {
+  if (bunWebGpuModule) return bunWebGpuModule;
+  try {
+    bunWebGpuModule = await import("bun-webgpu");
+    return bunWebGpuModule;
+  } catch {
+    throw new Error(
+      "bun-webgpu is not installed or not supported on this platform.\n" +
+        "  Install: bun add bun-webgpu\n" +
+        "  Supported platforms: macOS (x64/arm64), Linux x64, Windows x64\n" +
+        "  Linux arm64 and musl environments must build bun-webgpu from source.",
+    );
+  }
+}
+
 function currentGpu(): WebGpu | undefined {
   return (globalThis as typeof globalThis & { navigator?: { gpu?: WebGpu } }).navigator?.gpu;
 }
@@ -136,7 +152,8 @@ async function ensureWebGPU(): Promise<WebGpu> {
   assertBunRuntime();
   let gpu = currentGpu();
   if (gpu) return gpu;
-  webGpuSetup ??= setupGlobals();
+  const mod = await loadBunWebGpu();
+  webGpuSetup ??= mod.setupGlobals();
   await webGpuSetup;
   gpu = currentGpu();
   if (!gpu) throw new Error("bun-webgpu initialized without exposing navigator.gpu");
@@ -232,7 +249,7 @@ async function createRendererState(
     throw new Error(`${label}: WGSL validation failed: ${validationError.message}`);
   }
 
-  const { GPUBufferUsage, GPUTextureUsage } = globalConstructors;
+  const { GPUBufferUsage, GPUTextureUsage } = bunWebGpuModule!.globalConstructors;
   const uniforms = device.createBuffer({
     label: `${label}:uniforms`,
     size: UNIFORM_BYTES,
@@ -261,7 +278,7 @@ function createRenderResources(
   height: number,
   label: string,
 ): RenderResources {
-  const { GPUBufferUsage } = globalConstructors;
+  const { GPUBufferUsage } = bunWebGpuModule!.globalConstructors;
   const byteLength = width * height * 4;
   const output = state.device.createBuffer({
     label: `${label}:output`,
@@ -400,7 +417,7 @@ export function createBunWebGPU3DRenderer(options: BunWebGPU3DRendererOptions): 
         );
         activeState.device.queue.submit([encoder.finish()]);
 
-        await resources.readback.mapAsync(globalConstructors.GPUMapMode.READ);
+        await resources.readback.mapAsync(bunWebGpuModule!.globalConstructors.GPUMapMode.READ);
         const rgba = new Uint8Array(resources.readback.getMappedRange()).slice();
         resources.readback.unmap();
         if (context.signal.aborted || disposed) throw abortError();

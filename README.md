@@ -108,6 +108,19 @@ Install the optional `bun-webgpu` peer, then run the complete direction-E termin
 
 > `T3DViewport` itself (from `/experimental`) has zero native dependencies and works everywhere. Only `experimental/3d/bun` requires Bun and the optional peer. `bun-webgpu` is an experimental library; see [bun-webgpu](https://github.com/kommander/bun-webgpu) for current status.
 
+#### Terminal graphics protocol requirements
+
+`TVideo` and `T3DViewport` automatically negotiate their output format based on the detected terminal:
+
+| Terminal capability                 | Output quality                                 |
+| ----------------------------------- | ---------------------------------------------- |
+| kitty or iTerm2 protocol            | Pixel-accurate frames (PNG)                    |
+| No graphics protocol (any terminal) | `gray8` ASCII art — functional, lower fidelity |
+
+`TAgentTerminalGraphic` (mermaid diagrams, KaTeX math, images) requires kitty, iTerm2, or sixel to render visually; without a protocol it shows the `fallback` text prop. Always provide a meaningful `fallback` value so non-graphical terminals still convey the content.
+
+> sixel terminals get graphics for `TAgentTerminalGraphic` but ASCII art for `TVideo` / `T3DViewport` — only kitty and iTerm2 support pixel-accurate video and 3D frames. See [docs/platform-contracts.md](./docs/platform-contracts.md) for the full degradation table.
+
 Do not deep import from `@simon_he/vue-tui/dist/...`; only the entry points above are part of the supported package contract.
 
 ### Migration: Node Host Adapter Moved To `/cli`

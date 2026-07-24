@@ -92,6 +92,38 @@ type RendererCapabilities = Readonly<{
 - `syncFlush` 是 request capability，不是强制同步保证；DOM renderer 仍会按 `syncFlushMaxRows` / `syncFlushCellBudget` defer。
 - 新 renderer 必须声明 capability 常量，并让 renderer instance 暴露同一份 `capabilities`。
 
+## Terminal Graphics Protocol
+
+部分组件依赖终端图形协议（kitty / iTerm2 / sixel）来渲染像素内容。没有协议支持时，组件会降级为文本输出，而不是报错。
+
+### 支持的协议
+
+| 协议     | 代表终端                                  | 说明                             |
+| -------- | ----------------------------------------- | -------------------------------- |
+| `kitty`  | kitty、WezTerm、foot、Ghostty、Konsole    | 推荐；支持像素精确渲染和增量更新 |
+| `iterm2` | iTerm2、WezTerm                           | PNG inline image protocol        |
+| `sixel`  | xterm、mlterm、Windows Terminal（需开启） | 仅 `TAgentTerminalGraphic` 使用  |
+
+协议通过 `registerTerminalGraphicsOutput()` / `createStdoutRenderer()` 注入到渲染管线；组件本身不直接检测 TTY 能力。
+
+### 各组件的降级行为
+
+| 组件                                            | 需要协议                    | 无协议时的降级                                      |
+| ----------------------------------------------- | --------------------------- | --------------------------------------------------- |
+| `TVideo`                                        | kitty 或 iterm2             | `gray8` ASCII art（block 字符低保真输出，功能完整） |
+| `T3DViewport`                                   | kitty 或 iterm2             | 同 `TVideo`，通过 `gray8` ASCII art 降级            |
+| `TAgentTerminalGraphic`（mermaid、KaTeX、图片） | kitty / iterm2 / sixel 任一 | 渲染 `fallback` 文本；不显示图形内容                |
+| `TMarkdownText` / `TVirtualMarkdown` 内嵌图形   | 同上                        | 内嵌图形段落退化为 `fallbackText`；文本段正常渲染   |
+| 所有其他组件                                    | 无                          | 纯文本渲染，无依赖                                  |
+
+> **注意：`sixel` 协议只被 `TAgentTerminalGraphic` 消费**；`TVideo` / `T3DViewport` 的像素帧路径只支持 kitty 和 iTerm2。如果你只有 sixel 终端，视频和 3D 组件会以 ASCII art 输出，而 mermaid / 数学公式 / 图片可以正常渲染。
+
+### 最佳实践
+
+- 总是为 `TAgentTerminalGraphic` 提供有意义的 `fallback` prop，让非图形终端仍可理解内容。
+- `TVideo` / `T3DViewport` 的 `fallback` prop 在渲染器初始化前或发生错误时显示；ASCII art 降级是自动的，不需要用户处理。
+- 生产环境建议 smoke test 同时覆盖有/无 kitty 协议两种情况。
+
 ## Terminal Permissions
 
 terminal 环境没有浏览器权限弹窗，所以所有外部副作用都走显式 opt-in：
