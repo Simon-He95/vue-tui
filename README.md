@@ -95,6 +95,19 @@ const renderer = createTerminalBadge3DRenderer();
 
 Install the optional `bun-webgpu` peer, then run the complete direction-E terminal badge example with `bun run run:3d:terminal`. Drag to orbit and use a two-finger trackpad gesture or mouse wheel to zoom. CLI hover steering requires `createStdinDriver({ enableMouseMotion: true })`.
 
+#### `experimental/3d/bun` platform requirements
+
+| Requirement                 | Detail                                               |
+| --------------------------- | ---------------------------------------------------- |
+| Runtime                     | **Bun only** — Node.js and browser are not supported |
+| `bun-webgpu` peer           | Must be installed manually: `bun add bun-webgpu`     |
+| macOS x64 / arm64           | ✅ Prebuilt binary available                         |
+| Linux x64                   | ✅ Prebuilt binary available                         |
+| Windows x64                 | ✅ Prebuilt binary available                         |
+| Linux arm64 / musl (Alpine) | ❌ No prebuilt binary — must build from source       |
+
+> `T3DViewport` itself (from `/experimental`) has zero native dependencies and works everywhere. Only `experimental/3d/bun` requires Bun and the optional peer. `bun-webgpu` is an experimental library; see [bun-webgpu](https://github.com/kommander/bun-webgpu) for current status.
+
 Do not deep import from `@simon_he/vue-tui/dist/...`; only the entry points above are part of the supported package contract.
 
 ### Migration: Node Host Adapter Moved To `/cli`
