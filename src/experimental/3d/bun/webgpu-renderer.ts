@@ -201,8 +201,10 @@ function createUniformData(context: T3DRenderContext): ArrayBuffer {
   words[12] = context.frame >>> 0;
   floats[13] = Number.isFinite(context.motion.zoom) ? context.motion.zoom : 1;
   floats[14] = Number.isFinite(context.motion.zoomVelocity) ? context.motion.zoomVelocity : 0;
-  words[16] = context.motion.hoveredObjectId == null ? 0xffffffff : context.motion.hoveredObjectId >>> 0;
-  words[17] = context.motion.selectedObjectId == null ? 0xffffffff : context.motion.selectedObjectId >>> 0;
+  words[16] =
+    context.motion.hoveredObjectId == null ? 0xffffffff : context.motion.hoveredObjectId >>> 0;
+  words[17] =
+    context.motion.selectedObjectId == null ? 0xffffffff : context.motion.selectedObjectId >>> 0;
   return buffer;
 }
 
