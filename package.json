@@ -363,7 +363,7 @@
     "check:agent-console-profile-baseline": "tsx scripts/check-agent-console-profile-baseline.ts"
   },
   "dependencies": {
-    "katex": "^0.16.47",
+    "katex": "^0.18.0",
     "stream-markdown-parser": "1.0.7"
   },
   "devDependencies": {
