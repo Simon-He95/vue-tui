@@ -40,8 +40,8 @@ importers:
         specifier: ^0.20.2
         version: 0.20.2
       happy-dom:
-        specifier: ^17.6.3
-        version: 17.6.3
+        specifier: ^20.0.0
+        version: 20.11.1
       lint-staged:
         specifier: ^13.3.0
         version: 13.3.0
@@ -80,7 +80,7 @@ importers:
         version: 1.6.4(@algolia/client-search@5.52.0)(@types/node@18.19.130)(change-case@5.4.4)(lightningcss@1.32.0)(postcss@8.5.15)(qrcode@1.5.4)(search-insights@2.17.3)(typescript@5.9.3)
       vitest:
         specifier: ^4.1.9
-        version: 4.1.9(@types/node@18.19.130)(@vitest/coverage-v8@4.1.9)(happy-dom@17.6.3)(vite@8.0.16(@types/node@18.19.130)(esbuild@0.20.2)(jiti@2.4.2)(tsx@4.22.4))
+        version: 4.1.9(@types/node@18.19.130)(@vitest/coverage-v8@4.1.9)(happy-dom@20.11.1)(vite@8.0.16(@types/node@18.19.130)(esbuild@0.20.2)(jiti@2.4.2)(tsx@4.22.4))
       vue:
         specifier: ^3.5.38
         version: 3.5.38(typescript@5.9.3)
@@ -132,13 +132,13 @@ importers:
     devDependencies:
       '@vitejs/plugin-vue':
         specifier: ^5.2.4
-        version: 5.2.4(vite@5.4.21(@types/node@18.19.130)(lightningcss@1.32.0))(vue@3.5.38(typescript@5.8.3))
+        version: 5.2.4(vite@5.4.21(@types/node@26.1.1)(lightningcss@1.32.0))(vue@3.5.38(typescript@5.8.3))
       typescript:
         specifier: 5.8.3
         version: 5.8.3
       vite:
         specifier: ^5.4.21
-        version: 5.4.21(@types/node@18.19.130)(lightningcss@1.32.0)
+        version: 5.4.21(@types/node@26.1.1)(lightningcss@1.32.0)
 
   examples/basic:
     dependencies:
@@ -151,13 +151,13 @@ importers:
     devDependencies:
       '@vitejs/plugin-vue':
         specifier: ^5.2.4
-        version: 5.2.4(vite@5.4.21(@types/node@18.19.130)(lightningcss@1.32.0))(vue@3.5.38(typescript@5.8.3))
+        version: 5.2.4(vite@5.4.21(@types/node@26.1.1)(lightningcss@1.32.0))(vue@3.5.38(typescript@5.8.3))
       typescript:
         specifier: 5.8.3
         version: 5.8.3
       vite:
         specifier: ^5.4.21
-        version: 5.4.21(@types/node@18.19.130)(lightningcss@1.32.0)
+        version: 5.4.21(@types/node@26.1.1)(lightningcss@1.32.0)
 
   repo-3d-badge:
     dependencies:
@@ -1757,14 +1757,24 @@ packages:
   '@types/node@18.19.130':
     resolution: {integrity: sha512-GRaXQx6jGfL8sKfaIDD6OupbIHBr9jv7Jnaml9tB7l4v068PAOXqfcujMMo5PhbIs6ggR1XODELqahT2R8v0fg==}
 
+  '@types/node@26.1.1':
+    resolution: {integrity: sha512-nxAkRSVkN1Y0JC1W8ky/fTfkGsMmcrRsbx+3XoZE+rMOX71kLYTV7fLXpqud1GpbpP5TuffXFqfX7fH2GgZREw==}
+
   '@types/unist@3.0.3':
     resolution: {integrity: sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q==}
 
   '@types/web-bluetooth@0.0.21':
     resolution: {integrity: sha512-oIQLCGWtcFZy2JW77j9k8nHzAOpqMHLQejDA48XXMWH6tjCQHz5RCFz1bzsmROyL6PUm+LLnUiI4BCn221inxA==}
 
+  '@types/whatwg-mimetype@3.0.2':
+    resolution: {integrity: sha512-c2AKvDT8ToxLIOUlN51gTiHXflsfIFisS4pO7pDPoKouJCESkhZnEy623gwP9laCy5lnLDAw1vAzu2vM2YLOrA==}
+
+  '@types/ws@8.18.1':
+    resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
+
   '@ungap/structured-clone@1.3.0':
     resolution: {integrity: sha512-WmoN8qaIAo7WTYWbAZuG8PYEhn5fkz7dZrqTBZ7dtt//lL2Gwms1IcnQ5yHqjDfX8Ft5j4YzDM23f87zBfDe9g==}
+    deprecated: Potential CWE-502 - Update to 1.3.1 or higher
 
   '@valibot/to-json-schema@1.0.0':
     resolution: {integrity: sha512-/9crJgPptVsGCL6X+JPDQyaJwkalSZ/52WuF8DiRUxJgcmpNdzYRfZ+gqMEP8W3CTVfuMWPqqvIgfwJ97f9Etw==}
@@ -1969,6 +1979,10 @@ packages:
   braces@3.0.2:
     resolution: {integrity: sha512-b8um+L1RzM3WDSzvhm6gIz1yfTbBt6YTlcEKAvsmqCZZFw46z626lVj9j1yEPW33H5H+lBQpZMP1k8l+78Ha0A==}
     engines: {node: '>=8'}
+
+  buffer-image-size@0.6.4:
+    resolution: {integrity: sha512-nEh+kZOPY1w+gcCMobZ6ETUp9WfibndnosbpwB1iJk/8Gt5ZF2bhS6+B6bPYz424KtwsR6Rflc3tCz1/ghX2dQ==}
+    engines: {node: '>=4.0'}
 
   bumpp@8.2.1:
     resolution: {integrity: sha512-4tHKsWC2mqHQvdjZ4AXgVhS2xMsz8qQ4zYt87vGRXW5tqAjrYa/UJqy7s/dGYI2OIe9ghBdiFhKpyKEX9SXffg==}
@@ -2277,10 +2291,10 @@ packages:
 
   glob@7.1.6:
     resolution: {integrity: sha512-LwaxwyZ72Lk7vZINtNNrywX0ZuLyStrdDtabefZKAY5ZGJhVtgdznluResxNmPitE0SAO+O26sWTHeKSI2wMBA==}
-    deprecated: Glob versions prior to v9 are no longer supported
+    deprecated: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 
-  happy-dom@17.6.3:
-    resolution: {integrity: sha512-UVIHeVhxmxedbWPCfgS55Jg2rDfwf2BCKeylcPSqazLz5w3Kri7Q4xdBJubsr/+VUzFLh0VjIvh13RaDA2/Xug==}
+  happy-dom@20.11.1:
+    resolution: {integrity: sha512-XSt8tMzbW9ymE7687xztkO1ckR7qJNQ3LywY9vlYGhGi3zXrGBHuUo2Cl1ztZaICW+1eAGdkLbj6iwVqDT33kg==}
     engines: {node: '>=20.0.0'}
 
   has-flag@4.0.0:
@@ -3128,6 +3142,9 @@ packages:
   undici-types@5.26.5:
     resolution: {integrity: sha512-JlCMO+ehdEIKqlFxk6IfVoAUVmgz7cU7zD/h9XZ0qzeosSHmUJVOzSQvvYSYWXkFXC+IfLKSIffhv0sVZup6pA==}
 
+  undici-types@8.3.0:
+    resolution: {integrity: sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ==}
+
   unist-util-is@6.0.0:
     resolution: {integrity: sha512-2qCTHimwdxLfz+YzdGfkqNlH0tLi9xjTnHddPmJwtIG9MGsdbutfTc4P+haPD7l7Cjxf/WZj+we5qfVPvvxfYw==}
 
@@ -3304,10 +3321,6 @@ packages:
       typescript:
         optional: true
 
-  webidl-conversions@7.0.0:
-    resolution: {integrity: sha512-VwddBukDzu71offAQR975unBIGqfKZpM+8ZX6ySk8nYhVoo5CYaZyzt3YBvYtRtO+aoGlqxPg/B87NGVZ/fu6g==}
-    engines: {node: '>=12'}
-
   webpack-virtual-modules@0.6.2:
     resolution: {integrity: sha512-66/V2i5hQanC51vBQKPH4aI8NMAcBW59FVBs+rC7eGHupMyfn34q7rZIE+ETlJ+XTevqfUhVVBgSUNSW2flEUQ==}
 
@@ -3338,6 +3351,18 @@ packages:
 
   wrappy@1.0.2:
     resolution: {integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==}
+
+  ws@8.21.1:
+    resolution: {integrity: sha512-+0NTnW77fFN/DjQi6k/Sq/Yvk4Sgajw7urW8V+asjXnRgDs9gyGkdb7EzgfhA4goXsRIZKE28fzIXBHEzhuiWw==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
 
   y18n@4.0.3:
     resolution: {integrity: sha512-JKhqTOwSrqNA1NY5lSztJ1GrBiUodLMmIZuLiDaMRJ+itFd+ABVE8XBjOvIWL+rSqNDC74LCSFmlb/U4UZ4hJQ==}
@@ -4397,9 +4422,19 @@ snapshots:
     dependencies:
       undici-types: 5.26.5
 
+  '@types/node@26.1.1':
+    dependencies:
+      undici-types: 8.3.0
+
   '@types/unist@3.0.3': {}
 
   '@types/web-bluetooth@0.0.21': {}
+
+  '@types/whatwg-mimetype@3.0.2': {}
+
+  '@types/ws@8.18.1':
+    dependencies:
+      '@types/node': 18.19.130
 
   '@ungap/structured-clone@1.3.0': {}
 
@@ -4407,15 +4442,15 @@ snapshots:
     dependencies:
       valibot: 1.0.0(typescript@5.9.3)
 
-  '@vitejs/plugin-vue@5.2.4(vite@5.4.21(@types/node@18.19.130)(lightningcss@1.32.0))(vue@3.5.38(typescript@5.8.3))':
-    dependencies:
-      vite: 5.4.21(@types/node@18.19.130)(lightningcss@1.32.0)
-      vue: 3.5.38(typescript@5.8.3)
-
   '@vitejs/plugin-vue@5.2.4(vite@5.4.21(@types/node@18.19.130)(lightningcss@1.32.0))(vue@3.5.38(typescript@5.9.3))':
     dependencies:
       vite: 5.4.21(@types/node@18.19.130)(lightningcss@1.32.0)
       vue: 3.5.38(typescript@5.9.3)
+
+  '@vitejs/plugin-vue@5.2.4(vite@5.4.21(@types/node@26.1.1)(lightningcss@1.32.0))(vue@3.5.38(typescript@5.8.3))':
+    dependencies:
+      vite: 5.4.21(@types/node@26.1.1)(lightningcss@1.32.0)
+      vue: 3.5.38(typescript@5.8.3)
 
   '@vitest/coverage-v8@4.1.9(vitest@4.1.9)':
     dependencies:
@@ -4429,7 +4464,7 @@ snapshots:
       obug: 2.1.1
       std-env: 4.1.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.9(@types/node@18.19.130)(@vitest/coverage-v8@4.1.9)(happy-dom@17.6.3)(vite@8.0.16(@types/node@18.19.130)(esbuild@0.20.2)(jiti@2.4.2)(tsx@4.22.4))
+      vitest: 4.1.9(@types/node@18.19.130)(@vitest/coverage-v8@4.1.9)(happy-dom@20.11.1)(vite@8.0.16(@types/node@18.19.130)(esbuild@0.20.2)(jiti@2.4.2)(tsx@4.22.4))
 
   '@vitest/expect@4.1.9':
     dependencies:
@@ -4650,6 +4685,10 @@ snapshots:
   braces@3.0.2:
     dependencies:
       fill-range: 7.0.1
+
+  buffer-image-size@0.6.4:
+    dependencies:
+      '@types/node': 18.19.130
 
   bumpp@8.2.1:
     dependencies:
@@ -4990,10 +5029,18 @@ snapshots:
       once: 1.4.0
       path-is-absolute: 1.0.1
 
-  happy-dom@17.6.3:
+  happy-dom@20.11.1:
     dependencies:
-      webidl-conversions: 7.0.0
+      '@types/node': 26.1.1
+      '@types/whatwg-mimetype': 3.0.2
+      '@types/ws': 8.18.1
+      buffer-image-size: 0.6.4
+      entities: 7.0.1
       whatwg-mimetype: 3.0.0
+      ws: 8.21.1
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
 
   has-flag@4.0.0: {}
 
@@ -5887,6 +5934,8 @@ snapshots:
 
   undici-types@5.26.5: {}
 
+  undici-types@8.3.0: {}
+
   unist-util-is@6.0.0:
     dependencies:
       '@types/unist': 3.0.3
@@ -5945,6 +5994,16 @@ snapshots:
       rollup: 4.55.1
     optionalDependencies:
       '@types/node': 18.19.130
+      fsevents: 2.3.3
+      lightningcss: 1.32.0
+
+  vite@5.4.21(@types/node@26.1.1)(lightningcss@1.32.0):
+    dependencies:
+      esbuild: 0.21.5
+      postcss: 8.5.12
+      rollup: 4.55.1
+    optionalDependencies:
+      '@types/node': 26.1.1
       fsevents: 2.3.3
       lightningcss: 1.32.0
 
@@ -6011,7 +6070,7 @@ snapshots:
       - typescript
       - universal-cookie
 
-  vitest@4.1.9(@types/node@18.19.130)(@vitest/coverage-v8@4.1.9)(happy-dom@17.6.3)(vite@8.0.16(@types/node@18.19.130)(esbuild@0.20.2)(jiti@2.4.2)(tsx@4.22.4)):
+  vitest@4.1.9(@types/node@18.19.130)(@vitest/coverage-v8@4.1.9)(happy-dom@20.11.1)(vite@8.0.16(@types/node@18.19.130)(esbuild@0.20.2)(jiti@2.4.2)(tsx@4.22.4)):
     dependencies:
       '@vitest/expect': 4.1.9
       '@vitest/mocker': 4.1.9(vite@8.0.16(@types/node@18.19.130)(esbuild@0.20.2)(jiti@2.4.2)(tsx@4.22.4))
@@ -6036,7 +6095,7 @@ snapshots:
     optionalDependencies:
       '@types/node': 18.19.130
       '@vitest/coverage-v8': 4.1.9(vitest@4.1.9)
-      happy-dom: 17.6.3
+      happy-dom: 20.11.1
     transitivePeerDependencies:
       - msw
 
@@ -6059,8 +6118,6 @@ snapshots:
       '@vue/shared': 3.5.38
     optionalDependencies:
       typescript: 5.9.3
-
-  webidl-conversions@7.0.0: {}
 
   webpack-virtual-modules@0.6.2: {}
 
@@ -6092,6 +6149,8 @@ snapshots:
       strip-ansi: 7.0.1
 
   wrappy@1.0.2: {}
+
+  ws@8.21.1: {}
 
   y18n@4.0.3:
     optional: true
