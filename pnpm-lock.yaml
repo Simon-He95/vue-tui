@@ -62,13 +62,13 @@ importers:
         version: 3.0.4(typescript@5.9.3)(vue@3.5.38(typescript@5.9.3))
       publint:
         specifier: ^0.3.21
-        version: 0.3.21
+        version: 0.3.23
       rimraf:
         specifier: ^3.0.2
         version: 3.0.2
       tsdown:
         specifier: ^0.9.9
-        version: 0.9.9(publint@0.3.21)(typescript@5.9.3)
+        version: 0.9.9(publint@0.3.23)(typescript@5.9.3)
       tsx:
         specifier: ^4.22.4
         version: 4.22.4
@@ -95,7 +95,7 @@ importers:
         version: 18.19.130
       tsdown:
         specifier: ^0.9.9
-        version: 0.9.9(publint@0.3.21)(typescript@5.9.3)
+        version: 0.9.9(publint@0.3.23)(typescript@5.9.3)
       tsx:
         specifier: ^4.22.4
         version: 4.22.4
@@ -113,7 +113,7 @@ importers:
         version: 18.19.130
       tsdown:
         specifier: ^0.9.9
-        version: 0.9.9(publint@0.3.21)(typescript@5.9.3)
+        version: 0.9.9(publint@0.3.23)(typescript@5.9.3)
       tsx:
         specifier: ^4.22.4
         version: 4.22.4
@@ -182,7 +182,7 @@ importers:
         version: 18.19.130
       tsdown:
         specifier: ^0.9.9
-        version: 0.9.9(publint@0.3.21)(typescript@5.9.3)
+        version: 0.9.9(publint@0.3.23)(typescript@5.9.3)
       tsx:
         specifier: ^4.22.4
         version: 4.22.4
@@ -204,7 +204,7 @@ importers:
         version: 18.19.130
       tsdown:
         specifier: ^0.9.9
-        version: 0.9.9(publint@0.3.21)(typescript@5.9.3)
+        version: 0.9.9(publint@0.3.23)(typescript@5.9.3)
       tsx:
         specifier: ^4.22.4
         version: 4.22.4
@@ -1278,8 +1278,8 @@ packages:
     engines: {node: '>=18'}
     hasBin: true
 
-  '@publint/pack@0.1.4':
-    resolution: {integrity: sha512-HDVTWq3H0uTXiU0eeSQntcVUTPP3GamzeXI41+x7uU9J65JgWQh3qWZHblR1i0npXfFtF+mxBiU2nJH8znxWnQ==}
+  '@publint/pack@0.1.6':
+    resolution: {integrity: sha512-3uVNyGcVplhPZSLVyeIpL7+cIRn1YCSNHLG/rUIlBQMVH8YuN9++YF+5+UDIIO9RW98dujiUoTltO7RDB5bFJA==}
     engines: {node: '>=18'}
 
   '@quansync/fs@0.1.2':
@@ -1654,6 +1654,7 @@ packages:
 
   '@ungap/structured-clone@1.3.0':
     resolution: {integrity: sha512-WmoN8qaIAo7WTYWbAZuG8PYEhn5fkz7dZrqTBZ7dtt//lL2Gwms1IcnQ5yHqjDfX8Ft5j4YzDM23f87zBfDe9g==}
+    deprecated: Potential CWE-502 - Update to 1.3.1 or higher
 
   '@valibot/to-json-schema@1.0.0':
     resolution: {integrity: sha512-/9crJgPptVsGCL6X+JPDQyaJwkalSZ/52WuF8DiRUxJgcmpNdzYRfZ+gqMEP8W3CTVfuMWPqqvIgfwJ97f9Etw==}
@@ -2159,7 +2160,7 @@ packages:
 
   glob@7.1.6:
     resolution: {integrity: sha512-LwaxwyZ72Lk7vZINtNNrywX0ZuLyStrdDtabefZKAY5ZGJhVtgdznluResxNmPitE0SAO+O26sWTHeKSI2wMBA==}
-    deprecated: Glob versions prior to v9 are no longer supported
+    deprecated: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 
   happy-dom@17.6.3:
     resolution: {integrity: sha512-UVIHeVhxmxedbWPCfgS55Jg2rDfwf2BCKeylcPSqazLz5w3Kri7Q4xdBJubsr/+VUzFLh0VjIvh13RaDA2/Xug==}
@@ -2611,8 +2612,8 @@ packages:
     resolution: {integrity: sha512-R4nPAVTAU0B9D35/Gk3uJf/7XYbQcyohSKdvAxIRSNghFl4e71hVoGnBNQz9cWaXxO2I10KTC+3jMdvvoKw6dQ==}
     engines: {node: '>=6'}
 
-  package-manager-detector@1.6.0:
-    resolution: {integrity: sha512-61A5ThoTiDG/C8s8UMZwSorAGwMJ0ERVGj2OjoW5pAalsNOg15+iQiPzrLJ4jhZ1HJzmC2PIHT2oEiH3R5fzNA==}
+  package-manager-detector@1.8.0:
+    resolution: {integrity: sha512-yQA4H19AmPEoMUeavPMDIe1higySl/gH/yaQrkT/s07Qp+7pp2hYz30N3z2l5BkjVkF9Ow6o0wjJamm2y7Sn0A==}
 
   path-exists@4.0.0:
     resolution: {integrity: sha512-ak9Qy5Q7jYb2Wwcey5Fpvg2KoAc/ZIhLSLOSBmRmygPsGwkVVt0fZa0qrtMz+m6tJTAHfZQ8FnmB4MG4LWy7/w==}
@@ -2701,8 +2702,8 @@ packages:
   property-information@7.1.0:
     resolution: {integrity: sha512-TwEZ+X+yCJmYfL7TPUOcvBZ4QfoT5YenQiJuX//0th53DE6w0xxLEtfK3iyryQFddXuvkIk51EEgrJQ0WJkOmQ==}
 
-  publint@0.3.21:
-    resolution: {integrity: sha512-OqejcnMV6E9zel2oCrUOJEiiFkGiAAni0A6ibfQNh1k9Gu5z4F+Yso8lllam7AzmV6Do0vp7u3UpZNRBwuXaHQ==}
+  publint@0.3.23:
+    resolution: {integrity: sha512-5MQipUPcB7MWw84zLUkHrg/H/UBtk3LL+A0GngTTBSsiNJLQurMUaSIRG3edlOrRz4UFe0AOKK9TZdIWviV+jQ==}
     engines: {node: '>=18'}
     hasBin: true
 
@@ -2909,6 +2910,10 @@ packages:
 
   tinyexec@1.0.2:
     resolution: {integrity: sha512-W/KYk+NFhkmsYpuHq5JykngiOCnxeVL8v8dFnqxSD8qEEdRfXk1SDM6JzNqcERbcGYj9tMrDQBYV9cjgnunFIg==}
+    engines: {node: '>=18'}
+
+  tinyexec@1.3.0:
+    resolution: {integrity: sha512-QKAl9m8gWWGHV8jZcPeym6j+XULi6tOf1mT83WYJ4Lk2ytW/uwAWkrP0uFsdoYMdueVJ0qs26wZ+23xeB4ibNQ==}
     engines: {node: '>=18'}
 
   tinyglobby@0.2.13:
@@ -3936,7 +3941,9 @@ snapshots:
     dependencies:
       playwright: 1.61.0
 
-  '@publint/pack@0.1.4': {}
+  '@publint/pack@0.1.6':
+    dependencies:
+      tinyexec: 1.3.0
 
   '@quansync/fs@0.1.2':
     dependencies:
@@ -5223,7 +5230,7 @@ snapshots:
   p-try@2.2.0:
     optional: true
 
-  package-manager-detector@1.6.0: {}
+  package-manager-detector@1.8.0: {}
 
   path-exists@4.0.0:
     optional: true
@@ -5284,10 +5291,10 @@ snapshots:
 
   property-information@7.1.0: {}
 
-  publint@0.3.21:
+  publint@0.3.23:
     dependencies:
-      '@publint/pack': 0.1.4
-      package-manager-detector: 1.6.0
+      '@publint/pack': 0.1.6
+      package-manager-detector: 1.8.0
       picocolors: 1.1.1
       sade: 1.8.1
 
@@ -5546,6 +5553,8 @@ snapshots:
 
   tinyexec@1.0.2: {}
 
+  tinyexec@1.3.0: {}
+
   tinyglobby@0.2.13:
     dependencies:
       fdir: 6.4.4(picomatch@4.0.2)
@@ -5571,7 +5580,7 @@ snapshots:
 
   trim-lines@3.0.1: {}
 
-  tsdown@0.9.9(publint@0.3.21)(typescript@5.9.3):
+  tsdown@0.9.9(publint@0.3.23)(typescript@5.9.3):
     dependencies:
       ansis: 3.17.0
       cac: 6.7.14
@@ -5589,7 +5598,7 @@ snapshots:
       unconfig: 7.3.2
       unplugin-lightningcss: 0.3.3
     optionalDependencies:
-      publint: 0.3.21
+      publint: 0.3.23
     transitivePeerDependencies:
       - '@oxc-project/runtime'
       - supports-color
