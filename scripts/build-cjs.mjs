@@ -95,7 +95,7 @@ const cjsBrowserResult = await build({
   // CJS intentionally bundles stream-markdown-parser because it only exposes
   // ESM entrypoints. Keep optional peers external so they can be loaded
   // through dynamic import at render time.
-  external: ["vue", "beautiful-mermaid", "katex"],
+  external: ["vue", "beautiful-mermaid", "katex", "mathjax-full", "@resvg/resvg-js"],
   plugins: [forbidNodeBuiltinsPlugin, instrumentationStripPlugin],
   define: productionDefine,
 });
@@ -133,7 +133,7 @@ const cjsCliResult = await build({
   minifySyntax: true,
   metafile: true,
   supported: { "dynamic-import": true },
-  external: ["vue", "bun-webgpu", "katex"],
+  external: ["vue", "bun-webgpu", "katex", "mathjax-full", "@resvg/resvg-js"],
   define: productionDefine,
   plugins: [instrumentationStripPlugin],
 });

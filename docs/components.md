@@ -957,7 +957,966 @@ Markdown renderer for static or streaming text content。它走独立的 `parser
 
 > Markdown import: `@simon_he/vue-tui/markdown`
 >
-> Inline math initially keeps the original KaTeX/LaTeX syntax, including `$...$` delimiters. When the optional `katex` peer is installed, the Markdown renderer loads it on demand and automatically replaces supported formulas with terminal text; when it is absent, the raw syntax remains visible.
+> 数学公式：`$...$` 块级公式在支持图形协议的终端（Kitty/Ghostty/WezTerm/iTerm2）渲染为图片，否则以 box 包裹原始 TeX；`$...---
+title: Vue Terminal UI Components
+description: Reference for Vue TUI components such as TerminalProvider, TBox, TInput, TList, TTable, TLogView, TVirtualMarkdown, and agent primitives.
+---
+
+# Components 使用文档
+
+本文档覆盖 `@simon_he/vue-tui` 当前内置的 Vue 组件，用于统一「渲染/参数/事件」的契约，便于实现一致的验收与测试。
+
+> 坐标/尺寸单位：所有 `x/y/w/h` 均以「cell（字符格）」为单位，而不是像素。
+
+> 完整的 Props/Events 列表请以自动生成文件为准：`docs/generated/components-api.md`（运行 `pnpm run docs:gen` 生成）。
+
+## 导入入口
+
+| API maturity | Import                            | 组件                                                                                                                                                                                                                                                                                                          |
+| ------------ | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Public       | `@simon_he/vue-tui`               | `TerminalProvider` `TBox` `TCommandPalette` `TDataTable` `TDialog` `TInput` `TLink` `TLinkifyText` `TList` `TSelect` `TTable` `TText` `TTree` `TView` form helpers 和 `TBadge`/`TTag`/`TDivider`/`TCode`                                                                                                      |
+| Advanced     | `@simon_he/vue-tui/vue`           | `TAnchor` `TDebugOverlay` `TFlex` `TFlexItem` `TFlow` `TForm` `TInputBox` `TJsonEditor` `TMermaid` `TMermaidText` `TMultilineModal` `TPathPicker` `TProgress` `TSpinner` `TSplitPane` `TTabs` `TToastViewport` `TRenderLayer` `TRenderPlane` `TRouterView` `TTransition` 和 overlay/navigation/status helpers |
+| Public       | `@simon_he/vue-tui/markdown`      | `TMarkdownText` `TVirtualMarkdown`                                                                                                                                                                                                                                                                            |
+| Public       | `@simon_he/vue-tui/mermaid`       | `TMermaid` `TMermaidText` `TBeautifulMermaidText` `beautifulMermaidRenderer` `createBeautifulMermaidRenderer`                                                                                                                                                                                                 |
+| Experimental | `@simon_he/vue-tui/experimental`  | `TCandlestickChart` `TContributionGraph` `TLineChart` `TPieChart` `TVideo` `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogVirtualSearchResults` `TLogVirtualLinksPanel` `TLogScrollbar` `TLogMinimap`                                |
+| Experimental | `@simon_he/vue-tui/agent`         | `TAgentTerminalGraphic` `TAgentTranscript` `TMermaid` `TMermaidText` `TThinkingView` `TUserMessageView` `TToolCallView` `TToolLogView` `TVirtualMarkdown` `TVirtualList` `TRenderPlane` 和 agent/console 常用基础组件                                                                                         |
+| Experimental | `@simon_he/vue-tui/agent/mermaid` | `TMermaid` `TMermaidText` `TBeautifulMermaidText` `beautifulMermaidRenderer` `createBeautifulMermaidRenderer`                                                                                                                                                                                                 |
+
+下面的组件速读按用途分组，不代表 root entrypoint 导出。每个组件的 primary import 以生成的 [组件 API](/generated/components-api) 为准。
+
+## 组件速读
+
+| 类别          | 组件                                                                                                                                                                                               | 典型用途                                          | 适配性判断                                         |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | -------------------------------------------------- |
+| Root          | `TerminalProvider`                                                                                                                                                                                 | 创建 terminal / renderer / event manager 上下文   | 通用，适合所有宿主                                 |
+| Layout        | `TBox` `TView` `TAnchor` `TFlex` `TFlexItem` `TFlow` `TRenderLayer` `TRenderPlane`                                                                                                                 | 布局、裁剪、层级、分层组合                        | 通用，和 CLI 业务无关                              |
+| Text / Action | `TText` `TLink` `TLinkifyText` `TMermaid` `TMermaidText` `TBadge` `TTag` `TDivider` `TCode` `TKeyHint` `TTransition`                                                                               | 文本渲染、链接操作、结构图、徽标、分隔符          | 通用                                               |
+| Input / Form  | `TInput` `TInputBox` `TAutocompleteInput` `TCheckbox` `TFormField` `TPasswordInput` `TRadioGroup` `TSlider` `TSwitch` `TJsonEditor`                                                                | prompt、表单、结构化文本编辑                      | 通用，但推荐把补全/校验放到插件层                  |
+| Data / Tree   | `TTable` `TDataTable` `TTree`                                                                                                                                                                      | 多列数据、排序过滤、层级选择                      | 通用                                               |
+| Charts        | `TContributionGraph` `TLineChart` `TCandlestickChart` `TPieChart`                                                                                                                                  | 贡献热力图、趋势、K 线、占比图                    | 通用，适合 dashboard / agent token usage           |
+| Pickers       | `TCommandPalette` `TList` `TVirtualList` `TTranscriptView` `TLogView` `TLogSearchBar` `TLogSearchResults` `TLogSearchPager` `TLogLinksPanel` `TLogScrollbar` `TLogMinimap` `TSelect` `TPathPicker` | palette、列表、transcript、日志、路径选择         | `TPathPicker` 本体可复用，路径语义由 provider 注入 |
+| Overlay       | `TDialog` `TContextMenu` `TPopover` `TTooltip` `TToastViewport` `TMultilineModal` `TDebugOverlay`                                                                                                  | 对话框、菜单、提示、toast、详情查看、调试覆盖层   | 通用，适合多种宿主                                 |
+| Navigation    | `TBreadcrumb` `TStatusBar` `TTabs` `TSplitPane` `TRouterView` + `createTerminalRouter()`                                                                                                           | 路径导航、状态栏、多页面 TUI / shell              | 通用                                               |
+| Media         | `TVideo`                                                                                                                                                                                           | terminal video、动态 ASCII 降级                   | Experimental；按终端图形能力自适应                 |
+| Agent Chrome  | `TAgentTerminalGraphic` `TThinkingView` `TUserMessageView` `TToolCallView`                                                                                                                         | terminal graphics、thinking/user/tool-call chrome | 默认对齐 best-agent 风格，可通过 style props 覆盖  |
+
+如果你更关心“哪些地方还应该继续做插件化”，建议配合阅读：[扩展性与插件化](./extensibility.md)。
+
+如果你在实现完整 CLI surface、dialog/input 交互、transcript 或高频渲染区域，建议先读：[Terminal UI Best Practices](./terminal-ui-best-practices.md)。
+
+## 基础约定
+
+### Style（样式）
+
+`style` 使用 `Style`（ANSI 风格语义）：
+
+- `fg`/`bg`: ANSI 颜色名（例如 `whiteBright`/`blue` 等）
+- `bold`/`dim`/`italic`/`underline`/`inverse`: 布尔开关
+
+`TerminalProvider` 提供 `defaultStyle` 作为默认渲染样式；组件的 `style` 传入后会覆盖默认值（通常是整行/整块生效）。
+未显式传入时，`defaultStyle` 仍是普通可变对象；如果要触发依赖它的组件重新绘制，推荐替换整个对象，而不是原地修改字段。
+
+`TThinkingView`、`TUserMessageView`、`TToolCallView` 这种 agent/console 组件保留通用数据边界：只接收 `title`、`content`、`status`、`collapsed`、`suffix`、`preview` 等渲染语义，不接收 provider/session/tool schema。默认样式对齐 best-agent CLI 的 transcript chrome；宿主可以用各组件的 `style`、`headerStyle`、`contentStyle`、`titleStyle`、`suffixStyle`、`previewStyle` 等 props 覆盖颜色。
+
+### zIndex（层级）
+
+- 渲染层：同一 stack 内按 `zIndex` 决定覆盖顺序（大者覆盖小者）。
+- 事件层：可交互组件会注册到 EventManager，命中测试会偏向 **更高 zIndex** 或 **更小面积** 的节点。
+
+### 事件（点击/键盘/焦点）
+
+可交互组件遵循 Vue 事件命名习惯：
+
+- 监听：`@click` / `@keydown` / `@focus` / `@blur` …
+- v-model：`modelValue` + `update:modelValue`
+
+事件 payload 为终端事件（`TerminalPointerEvent` / `TerminalKeyboardEvent`），携带 `cellX/cellY` 等信息。
+
+## TerminalProvider
+
+终端 UI 的根组件：创建 `terminal`、DOM renderer、EventManager、调度器（rAF）。
+
+### Props
+
+- `cols` `(number, required)`: 终端列数
+- `rows` `(number, required)`: 终端行数
+- `defaultStyle` `(Style)`: 默认样式（默认 `{}`）
+- `autoResize` `(boolean)`: 是否根据容器尺寸自动 resize（默认 `false`）
+- `minCols`/`minRows` `(number)`: autoResize 下最小尺寸
+- `recordEvents` `(fn?)`: 录制事件回调（用于 record/replay）
+- `selection` `(boolean | TerminalProviderSelectionOptions)`: 开启 terminal cell selection；鼠标松开时可自动复制；`toast` 只影响 `TerminalProvider` 的复制提示 UI
+- `clipboard` `(ClipboardApi?)`: 给 selection auto-copy 注入 clipboard；不传时 browser 使用运行时 clipboard
+- `inputPlugins` `(TInputPlugin[])`: 给子树里的 `TInput` / `TInputBox` 注入宿主插件（例如 terminal clipboard、TTY 风格快捷键）；init-only，修改后需重新挂载 provider/input
+- `pathPickerProvider` `(PathPickerProvider?)`: 给子树里的 `TPathPicker` 注入宿主路径 provider
+- `linkOpener` `(TerminalLinkOpener | function?)`: 给 `TLink openMode="host"` 注入外部链接打开能力；浏览器 `TerminalProvider` 默认使用 `window.open`，CLI/headless 需要通过 `createTerminalApp({ linkOpener })` 显式提供
+- `theme` `(TuiThemeOverrides?)`: 组件主题 token 覆盖；传入 partial overrides 即可，例如 `{ colors: { link: "blueBright" } }`，`TerminalProvider` 会用 `createTheme()` 归一化；局部 `style` props 仍然优先
+- `debugIme` `(boolean)`: 输出 IME 调试信息
+- `debugTrace` `(boolean)`: 开启 trace（commit/event/focus）
+- `domRendererOptions` `(DomRendererOptions?)`: DOM renderer 配置，例如 `syncFlushMaxRows` / `syncFlushCellBudget`；link options 会在更新时刷新，其他选项按 mount-time 使用，修改后需重新挂载 provider
+
+### Slots
+
+- `default`: 渲染你的 TUI 组件树
+
+### Example
+
+```vue
+<TerminalProvider :cols="80" :rows="24" :default-style="{ fg: 'whiteBright' }">
+  <TBox :x="0" :y="0" :w="80" :h="24" title="Demo" border :padding="1">
+    <TText :x="0" :y="0" :w="78" value="Hello" />
+  </TBox>
+</TerminalProvider>
+```
+
+## TText
+
+渲染纯文本（可多行、可自动换行），并会对控制字符做清洗，避免写出组件矩形区域。
+
+### Props
+
+- `x`/`y` `(number, required)`
+- `zIndex` `(number)`
+- `value` `(string, required)`
+- `w`/`h` `(number?)`: 不传则按文本实际宽高推导
+- `style` `(Style?)`
+- `clear` `(boolean)`: 每次 paint 是否先清空区域（默认 `true`）
+- `wrap` `(boolean)`: 是否按 `w` 自动换行（默认 `false`）
+- `depsKey` `(unknown?)`: 参与 render-node 依赖追踪的可选 key（用于强制 repaint）
+
+### Notes
+
+- `wrap=true` 会保留显式 `\n` 为硬换行，并按 cell 宽度进行自动折行。
+- 多字节/宽字符（例如中文）按 cell 宽度计算，不会半个字符被截断。
+
+## TBox
+
+绘制一个矩形容器（可选边框/标题/内边距），并为子节点提供 layout（clipRect + origin 偏移），支持 `scrollX/scrollY`。
+
+### Props
+
+- `x`/`y`/`w`/`h` `(number, required)`
+- `zIndex` `(number)`
+- `border` `(boolean)`: 是否绘制边框（默认 `true`）
+- `title` `(string)`: 标题（会被安全截断）
+- `padding` `(number)`: 内边距（会自动 clamp，避免把内容挤没）
+- `scrollX`/`scrollY` `(number)`: 内容滚动偏移（单位 cell）
+- `style` `(Style?)`
+- `clear` `(boolean)`: 是否先清空区域（默认 `true`）
+
+### Slots
+
+- `default`: 内容区子组件
+
+### Events
+
+`TBox` 主要用于绘制与裁剪，但也会对其矩形区域注册 hover 事件：
+
+`@pointerenter` / `@pointerleave`（含 Capture 版本）
+
+## TView
+
+一个可交互的矩形“视口”节点：提供 layout（origin/clipRect）与事件（click/key/focus/blur…），支持 `scrollX/scrollY`。
+
+### Props
+
+- `x`/`y`/`w`/`h` `(number, required)`
+- `zIndex` `(number)`
+- `scrollX`/`scrollY` `(number)`
+- `focusable` `(boolean)`: 是否可获得焦点（默认 `false`）
+- `selectable` `(boolean?)`: 是否允许文本选择（默认 `undefined` 由上层决定）
+- `autoFocus` `(boolean)`: 可见时自动聚焦（默认 `false`）
+
+### Events
+
+`@click`/`@dblclick`/`@pointerdown`/`@pointerup`/`@pointermove`/`@pointerenter`/`@pointerleave`/`@wheel`/`@keydown`/`@keyup`/`@focus`/`@blur`
+
+> 同时支持对应的 `Capture` 版本（例如 `@clickCapture`）。
+
+## TLink
+
+可点击、可聚焦、可键盘激活的单行链接组件。除 `disabled` / `openMode="none"` 外，它会把 DOM-safe `href` 写入 `Style.href`，因此 DOM renderer links 开启时可以得到原生 anchor，CLI/stdout renderer 可以继续输出 OSC8 hyperlink。
+
+默认 `openMode="host"`：点击或按 `Enter` 时会先 emit `activate`，再调用 `TerminalProvider.linkOpener` 或 `createTerminalApp({ linkOpener })` 注入的 `openExternal()` 尝试打开；浏览器 `TerminalProvider` 默认使用 `window.open`，CLI/headless 不会默认执行系统命令。
+
+`openMode` 语义：
+
+- `host`: emit `activate`，阻止 DOM native anchor 默认行为，并调用 `linkOpener`
+- `event`: emit `activate`，阻止组件处理的 DOM native anchor click，不调用 `linkOpener`；仍会写入 `Style.href` metadata，terminal OSC8 或 browser context menu 仍可能暴露 href，如需完全不输出 link metadata 请使用 `none`
+- `native`: click emit `activate` 并允许 renderer/native link activation；keyboard emit `activate` 后在有 `linkOpener` 时作为 terminal focus fallback 打开；如果 `modifierClick` 不满足，会阻止 native click
+- `none`: 只渲染文本，不写入 href metadata，不激活
+
+`TLink` 接受 absolute `https:` / `http:` / `mailto:` 和 `/docs`、`#section` 这类 relative href；宿主应按自己的策略重新解析或拒绝 relative href。`TLink` 有意拒绝 `file:` URL；terminal-specific `file:` opt-in 只适用于底层 `Style.href` 写入者、stdout renderer 或 TLog retained index 这类显式 provider。
+
+`modifierClick="meta"` 和 `ctrlOrMeta` 里的 Meta/Cmd 只对 browser/DOM 事件有意义；真实 CLI SGR mouse report 只携带 Shift/Alt/Ctrl，所以 CLI 下 `ctrlOrMeta` 等价于 Ctrl，`meta` 不会被真实鼠标输入满足。
+
+`domRendererOptions.links.activation="event"` 面向 markdown/static rich text 这类直接写入 `Style.href` 的链接。它会在 DOM anchor 层先 `preventDefault()` 并调用 renderer-level `onActivate`；`TLink` 会尊重这个 defaultPrevented 状态，不再执行组件级 `activate` / host opener。组件化链接推荐由 `TLink` 自己拥有 activation。
+
+### Props
+
+- `x`/`y` `(number, required)`
+- `w` `(number?)`: 不传时按 `label || href` 的 cell 宽度计算
+- `h` `(number)`: 命中区域高度，默认 `1`
+- `href` `(string, required)`
+- `label` `(string?)`
+- `style` / `hoverStyle` / `focusStyle` / `activeStyle` `(Style?)`
+- `disabled` `(boolean)`
+- `openMode` `('native' | 'host' | 'event' | 'none')`
+- `activationKeys` `(string[])`: 默认 `['Enter']`
+- `modifierClick` `('none' | 'ctrl' | 'meta' | 'ctrlOrMeta')`
+- `autoFocus` `(boolean)`
+
+### Events
+
+- `activate`: `{ href, label, source }`
+- `open`: `{ href, label, source }`，host opener 返回 true 时触发，表示请求已被接受/尝试；不保证 OS 或 browser 实际打开了目标
+- `invalidHref`: `{ href, reason }`
+- `click` / `keydown` / `focus` / `blur`
+
+```vue
+<TLink
+  :x="2"
+  :y="4"
+  href="https://example.com"
+  label="Open example.com"
+  :focus-style="{ inverse: true }"
+  @activate="onLinkActivate"
+/>
+```
+
+## TLinkifyText
+
+自动识别纯文本里的 URL，并把匹配片段渲染成带 `Style.href` metadata 的文本。它不自己打开链接，也不注册点击事件；DOM renderer 是否生成 `<a>` 仍由 `domRendererOptions.links` 控制，CLI/stdout 是否输出 OSC8 仍由 stdout renderer 的 href sanitizer 控制。
+
+默认只识别 `http:` / `https:` / `mailto:`。relative href 需要显式 opt in，避免把日志或路径文本误标成可打开链接；`file:` 不属于 public linkify 协议。
+
+Public helper `linkifyTextSegments("")` returns an empty segment array; non-empty plain text with no links returns one plain `{ text }` segment.
+
+### Props
+
+- `x`/`y` `(number, required)`
+- `w`/`h` `(number?)`
+- `value` `(string, required)`
+- `style` `(Style?)`
+- `linkStyle` `(Style?)`: 默认 `{ fg: 'cyanBright', underline: true }`
+- `clear` `(boolean)`
+- `wrap` `(boolean)`
+- `protocols` `(('http' | 'https' | 'mailto')[]?)`
+- `allowRelative` `(boolean)`
+- `maxUrlLength` `(number?)`
+
+```vue
+<TLinkifyText :x="2" :y="6" :w="80" value="build failed: see https://example.com/docs" />
+```
+
+## TBadge
+
+小型状态徽标，渲染为单行 `[value]` 文本。适合 tab badge、计数和短状态，不拥有交互或生命周期。
+
+## TTag
+
+小型标签，渲染为单行 `<label>` 文本。`tone` 只影响语义色，不表示稳定性或权限边界。
+
+## TDivider
+
+单行分隔符，可选 `title`。只负责绘制，不拥有折叠、分组或焦点行为。
+
+## TCode
+
+单行 code 文本，用于命令、路径或短 token。它只做 cell 截断和样式渲染，不执行命令、不复制内容。
+
+## TMermaid / TMermaidText
+
+Mermaid 组件详见下方 [TMermaidText](#tmermaidtext)。这里仅作为 Text / Action 分类索引：基础组件从 `@simon_he/vue-tui/vue` 或 `@simon_he/vue-tui/agent` 导入并显式传 `renderer`；内置 `beautiful-mermaid` bridge 从 `@simon_he/vue-tui/mermaid` 或 `@simon_he/vue-tui/agent/mermaid` 导入，使用前需要安装 `beautiful-mermaid`。
+
+## TAgentTerminalGraphic
+
+Agent terminal graphics 组件，从 `@simon_he/vue-tui/agent` 引入。它面向真实 stdout terminal：组件在 TUI buffer 中占用指定 cell rect，并通过 `createStdoutRenderer()` 注册的 terminal graphics output 在帧末尾写入 Kitty / iTerm2 / Sixel 等 raw escape payload。DOM/headless 或不支持图像协议时自动显示 `fallback` 文本；未传 `fallback` 时，`kind="image"` 默认为空文本，`kind="math"` 使用 `content`。
+
+组件本身不 import KaTeX、不读取图片文件、不执行外部命令。宿主传入 `renderer(content, context)`，根据 `context.protocol` 或 `context.capabilities.preferredProtocol` 返回 `{ type: "sequence", protocol, sequence, fallback?, clearSequence?, rows?, cols? }` 作为可信 terminal image escape，或返回 `{ type: "text", text }` 作为 Unicode/ANSI fallback。返回 `null` / `undefined` 会使用组件 `fallback`，不会进入错误态；renderer 抛错时同样显示 fallback，但会使用 `errorStyle`。为了避免 terminal escape injection，bare string 只会按普通文本 fallback 处理，不会作为 raw escape 写入 stdout。`h` 省略时会优先使用 renderer result 的 `rows` 推导占用高度，仍建议宿主显式传入最终 cell 高度。`kind="math"` 可用于 KaTeX/LaTeX，`kind="image"` 可用于普通图片。
+
+虚拟滚动或重内容场景建议使用 `deferRenderUntilVisible`、`suspendRenderWhileScrolling` / `suspended` 和 `createTerminalGraphicRenderQueue()` 控制懒渲染、取消、缓存与并发。PNG 渲染链路可用 `createPngTerminalGraphicRenderer()` 组合 Kitty / iTerm2 序列；Sixel 需要宿主提供 `toSixel` encoder，例如 libsixel binding、`img2sixel` 包装或自定义 renderer。传给 PNG/Sixel renderer 的转换函数应观察 `context.signal` 并及时 settle；queue 会在 caller abort 后 reject，但并发 slot 会等实际转换 settle 后释放。默认 PNG cache key 覆盖 `kind`、尺寸、`final`、content/组件 `cacheKey` 和 renderer `cacheSalt`，不包含 protocol，因此使用默认 key 时 `toPngBase64()` 应保持协议无关；随 PNG frame 返回的 `fallback` 也会进入同一缓存，如果它依赖 protocol、主题、字体、DPR、KaTeX macro 或 renderer options，应传 `cacheSalt`、自行提供完整 `cacheKey()`，或改用 renderer 的 `fallback()` option。terminal 不支持图像、raw 不可见、组件不可见或缺少 Sixel encoder 时只会走 renderer-level `fallback()` 或组件 `fallback`，不会为了读取 PNG frame `fallback` 而执行 `toPngBase64()`。Kitty 支持显式 delete sequence；组件级自定义 Kitty `clearSequence` 只接受 `context.imageId` / `context.placementId` 对应的 `d=i` / `d=I` delete，current-cell `d=c` / `d=C` 不会作为组件 clear 使用。iTerm2 inline image 和 Sixel clear 是 best-effort，通过重绘占用的 cell rect 清理。自定义 Kitty renderer 如果依赖组件默认 clear，应使用 `context.imageId` / `context.placementId` 创建 draw sequence；否则应返回同一组 id/placement 的可靠 `clearSequence`。
+
+真实终端 smoke checklist：
+
+- [ ] Kitty native
+- [ ] iTerm2 inline image
+- [ ] tmux passthrough
+- [ ] Sixel-capable terminal
+- [ ] unsupported / CI / non-TTY fallback
+
+```vue
+<TAgentTerminalGraphic
+  :x="0"
+  :y="2"
+  :w="72"
+  :h="12"
+  kind="math"
+  content="\\frac{a}{b}"
+  fallback="a / b"
+  :renderer="terminalMathRenderer"
+/>
+```
+
+## TVideo
+
+`TVideo` 是实验性的 terminal video 组件。组件本身保持 browser-safe；Node 侧 FFmpeg 和 yt-dlp adapter 从 `@simon_he/vue-tui/experimental/video/node` 单独导入，并在真正开始播放时才动态加载 `node:child_process`。系统需要能执行 `ffmpeg`；解析 YouTube 等视频页面时还需要 `yt-dlp`。两者都可以通过对应的 path option 指定可执行文件，不会在安装包时下载二进制。按照当前 [yt-dlp EJS 安装说明](https://github.com/yt-dlp/yt-dlp/wiki/EJS)，完整 YouTube 支持还需要 `yt-dlp-ejs` 和受支持的 JavaScript runtime；Demo 推荐安装默认启用的 Deno 2.3+。
+
+`src` 可以是本地路径、`file:` URL 或 `http(s)` 视频链接。FFmpeg 先按 `maxFps` 降帧，再用 fast bilinear 缩放并 pad 到受控尺寸。Kitty / iTerm2 使用 PNG `image2pipe`，默认 12fps，自动像素尺寸会保持 cell 区域比例并限制在 640×360；普通 Unicode terminal 使用 `gray8` raw frame，最高 10fps，并映射为纯 ASCII 文本，不执行 PNG 压缩、base64 转换或图形 escape sequence。ASCII 路径按 terminal cell 约 1:2 的宽高比采样：每行请求约一半 cell 数的灰度样本，再将每个亮度 glyph 横向绘制两次，从而保持视频比例。帧泵只保留 latest frame，被覆盖的帧不会进入渲染阶段；连续重复帧也会在转换前去重。暂停、隐藏、离开 viewport、滚动期间和卸载都会 abort decoder；恢复时 adapter 使用最后一帧的近似时间戳继续 seek。
+
+开启 `controls` 后，点击视频画面会切换暂停/继续。`controlsLayout` 支持 `"compact" | "cinema"`，默认为 `"compact"`：`compact` 把播放/暂停、进度条和 1×/2×/3× 倍速放在底部 1 cell 的单行控制栏，`cinema` 使用底部 2 cells 的双行布局。鼠标可以拖动进度条；聚焦视频区域后可用 Enter 播放/暂停、Up/Down 切换倍速，CLI 下也支持 Space 和数字 1/2/3。进度拖动期间只更新预览并停止旧 decoder，松手后才按目标时间启动一次新 decoder；暂停状态 seek 只解码一帧作为预览。`paused` 和 `playbackRate` 不绑定时由组件内部维护，使用 `v-model:paused` / `v-model:playback-rate` 时则由父组件控制。
+
+可 seek 的进度条需要 `durationMs`，或由 frame source 在帧上提供 `durationMs`。`TVideoFrameSourceContext` 同时包含 `startAtMs`、`playbackRate` 和 `loop`；自定义 source 应据此定位媒体时间和控制播放速度。FFmpeg 在 2×/3× 时仍按墙钟限制到 `maxFps`，不会成倍增加 PNG/ASCII 转换；yt-dlp adapter 会短期复用已经成功解析的媒体直链，暂停、seek 和换速不会重复启动 yt-dlp。
+
+`TVideoFrameSourceContext.preferredFormat` 会请求 `png` 或 `gray8`，自定义 frame source 应按请求返回对应帧。Kitty 使用固定 image/placement id，并由 stdout renderer 在同一 terminal frame 内完成旧帧清理和新帧绘制；没有图形协议时自动显示动态 ASCII 视频，Sixel video encoder 尚未接入。普通 HTTP MP4 需要服务端支持 Range，或使用把 `moov` 放在文件头的 faststart 文件。
+
+```ts
+import { TVideo } from "@simon_he/vue-tui/experimental";
+import { createFfmpegVideoFrameSource } from "@simon_he/vue-tui/experimental/video/node";
+
+const videoFrames = createFfmpegVideoFrameSource();
+
+h(TVideo, {
+  x: 0,
+  y: 0,
+  w: 60,
+  h: 18,
+  src: "https://example.com/video.mp4",
+  frameSource: videoFrames,
+  maxFps: 12,
+  controls: true,
+  controlsLayout: "compact",
+  durationMs: 60_000,
+});
+```
+
+直播源应使用 `createFfmpegVideoFrameSource({ live: true })`，避免 FFmpeg 的 input readrate 对实时流产生丢包。adapter 只允许本地 `file` 或 `http(s)` 输入协议，且始终使用 `shell: false` 把 `src` 作为单独 argv 传递。
+
+YouTube `watch` URL 是网页而不是媒体流，不能直接交给 FFmpeg。`createYtDlpVideoFrameSource` 会先让 `yt-dlp` 解析一个 video-only HTTP(S) 流，再把临时 URL 和必要的 HTTP headers 交给同一 FFmpeg 管线。默认会根据 `TVideo` 的实际解码尺寸和 `maxFps` 自适应选择 source；常见终端区域通常选择 360p、至多 30fps 的源，再由 FFmpeg 降到最终 PNG/ASCII 尺寸和播放帧率。`maxSourceHeight` 只是可选上限。暂停、滚动或卸载时，解析进程与 FFmpeg 都会被终止。只应播放你有权访问和再利用的内容。
+
+```ts
+import { createYtDlpVideoFrameSource } from "@simon_he/vue-tui/experimental/video/node";
+
+const youtubeFrames = createYtDlpVideoFrameSource({
+  ytDlpPath: "yt-dlp",
+});
+
+h(TVideo, {
+  x: 0,
+  y: 0,
+  w: 60,
+  h: 18,
+  src: "https://www.youtube.com/watch?v=aqz-KE-bpKQ",
+  frameSource: youtubeFrames,
+  maxFps: 12,
+  controls: true,
+  controlsLayout: "cinema",
+});
+```
+
+`pnpm run showcase` 的 Video Tab 使用带 CC BY 3.0 署名的 Big Buck Bunny 短片和原生 `HTMLVideoElement + Canvas 2D`；`pnpm run showcase:terminal` 默认使用同一离线短片。准备好上面的 yt-dlp、EJS 和 runtime 后，可运行 `VUE_TUI_YOUTUBE_DEMO=1 pnpm run showcase:terminal`，直接解析 Blender 官方 YouTube 4K60 页面。三种路径都只在切入 Video Tab 后开始解码，离开 Tab 即取消并释放媒体资源。
+
+## TCommandPalette
+
+命令面板组件，组合 `TDialog`、`TInput` 和列表行渲染。默认按 `label` / `detail` / `keywords` 做 substring 过滤，也支持 `v-model:query`、custom matcher、async `itemsProvider`、group/separator 行和 `closeOnSelect`。`select` payload 包含 `{ item, index, sourceIndex, query, source }`，其中 `index` 是过滤/渲染后的 row index，`sourceIndex` 是原始 `items` 或 provider result index；默认选择命令不会自动关闭面板，宿主可在 `@select` 中更新 `v-model`，或显式开启 `closeOnSelect`。`itemsProvider` rejection 会渲染错误行并 emit `loadError`。
+
+```vue
+<TCommandPalette
+  v-model="paletteOpen"
+  :items="commands"
+  title="Command"
+  placeholder="Search commands"
+  @select="runCommand"
+/>
+```
+
+## TTable
+
+`TTable` 是多列静态表格，负责列宽、表头、可选边框和 row click。它只从 `rows` 顶部按当前高度取可见行，不内置 `scrollTop`、分页或 virtualization；大数据浏览应组合外部分页/offset，或使用 `TVirtualList` 一类窗口化视图。
+
+## TDataTable
+
+`TDataTable` 在 `TTable` 上增加受控排序、过滤、行选择和受控 viewport offset；点击表头会 emit `sortChange` / `update:sortBy` / `update:sortDirection`。`scrollTop` 表示过滤/排序后结果集里的顶部可见行。`rowSelect` payload 里的 `index` 是当前 viewport 内的 visible row index，`dataIndex` 是过滤/排序后结果集里的绝对 index，`originalIndex` 是输入 `rows` 数组里的 index。`rowKey` 函数收到的 `index` 是原始 rows index，排序/过滤后仍保持行 identity。列 `format(value, row, index)` 里的 `index` 也是原始 rows index，过滤和渲染阶段保持一致。列 `format` 会影响显示和过滤匹配，排序使用 `row[sortBy]` 的原始值。键盘移动的 active row 使用 `activeStyle`，已提交选择继续使用 `selectedStyle`。它仍然是 non-virtual：rows 会在内存中排序/过滤，然后只把当前 visible slice 传给 `TTable`。
+
+```vue
+<TDataTable
+  :x="0"
+  :y="0"
+  :w="80"
+  :h="12"
+  :columns="columns"
+  :rows="rows"
+  row-key="id"
+  sortable
+  filterable
+  selectable
+/>
+```
+
+## TContributionGraph
+
+贡献热力图组件，按列优先顺序把 `values` 映射到固定行数的 cell 网格。默认是 7 行、列间留 1 cell 间隔，适合 GitHub contributions 风格、agent token usage、每日/每轮计数密度这类紧凑历史视图。
+
+```vue
+<TContributionGraph :x="0" :y="0" :values="dailyTokens" :rows="7" />
+```
+
+## TLineChart
+
+单色终端折线图组件，把 `values` 采样到给定 `w`/`h` 区域内，用 box-drawing glyph 绘制阶梯折线。适合 token 总量、延迟、吞吐等小型 dashboard 曲线。
+
+```vue
+<TLineChart :x="0" :y="8" :w="40" :h="8" :values="tokenTotals" />
+```
+
+## TCandlestickChart
+
+K 线图组件，接收 `{ open, high, low, close }` 数组并在宽度不足时保留最新 candles。默认上涨为绿色、下跌为红色，可通过 `upStyle`、`downStyle`、`wickStyle` 覆盖。
+
+```vue
+<TCandlestickChart :x="0" :y="17" :w="50" :h="10" :candles="prices" />
+```
+
+## TPieChart
+
+终端饼图组件，按 `values` 从顶部开始顺时针分段，用 segment styles 给不同区域着色。适合展示 token 分类、状态占比或简单资源分布。
+
+```vue
+<TPieChart :x="44" :y="8" :w="16" :h="8" :values="[prompt, completion]" />
+```
+
+## TTree
+
+`TTree` 渲染层级节点，`expandedIds` 和 `selectedId` 都是受控状态。默认点击或 Space/Enter 可展开节点会 toggle；开启 `selectableParents` 后，点击 marker toggle，点击 label 或按 Enter select 父节点，Space 继续 toggle。
+
+## TCheckbox
+
+checkbox 控件，使用 `modelValue` / `update:modelValue`，Space / Enter / click 切换。
+
+## TRadioGroup
+
+radio group 控件，使用 `options` 和受控 `modelValue` 渲染单选列表。
+
+## TSwitch
+
+switch 控件，适合二元配置开关。
+
+## TSlider
+
+slider 控件，使用 `min` / `max` / `step` 和 ArrowLeft / ArrowRight 调整数值。
+
+## TFormField
+
+`TFormField` 统一 label、help、error、required、disabled 的展示边界，不内置验证系统。
+`style` 会作为 label、help、error 的基础样式；`disabled` 只让 label 变暗，slot 内容是否禁用由宿主组件控制。
+
+```vue
+<TFormField :x="0" :y="0" :w="44" :h="3" label="Token" help="Paste your API token" :error="error">
+  <TPasswordInput v-model="token" :x="0" :y="0" :w="40" />
+</TFormField>
+```
+
+## TPasswordInput
+
+`TPasswordInput` 是 `TInput secret` 的轻量包装，输入值仍由宿主通过 `v-model` 控制，渲染时隐藏明文。
+
+## TAutocompleteInput
+
+`TAutocompleteInput` 组合 `TInput` 和 suggestions 列表。静态 `suggestions` 保持宿主受控，也可以用 `suggestionProvider(query, { signal })` 走异步路径；provider rejection 会渲染错误行并 emit `loadError`。选择 suggestion 时 emit `update:modelValue`、`change` 和包含 `{ value, index, sourceIndex, option, query, source }` 的 `select`，不 emit `input`。
+
+## TForm
+
+Advanced 表单上下文组件，从 `@simon_he/vue-tui/vue` 引入。它提供 validation/error context：`model`、同步 `rules`、`submit`、`validation`，以及 `TFormField name` 对错误文本的读取。自定义字段可以通过 `/vue` 的 `useTForm()` 或 `TFormContextKey` 消费上下文。`validate()` 会在 submit 或宿主显式调用时更新 errors，不会在 `model` / `rules` 变化时自动重新校验。`TForm` 通过 template ref 暴露 `validate()`、`submit()`、`clearValidation()` 和 `setFieldError()`。`disabled` 会通过 form context 禁用当前已接入的内置表单控件（`TCheckbox`、`TSwitch`、`TRadioGroup`、`TSlider`）；`TInput`、`TPasswordInput`、`TAutocompleteInput` 仍需要宿主显式处理禁用语义。`readOnly` 目前只是通过 form context 提供给自定义字段消费者的提示，不会自动让后代输入控件只读。它不规定 schema 格式，也不拥有远程提交。
+
+## TContextMenu
+
+`TContextMenu` 是轻量菜单 overlay，基于现有 `TBox` / `TText` / `TView` 渲染。默认会在外部点击时关闭；如需保持 non-modal 行为，可设置 `closeOnOutside=false`。`x` / `y` / `w` 是 caller-owned placement，组件不会自动贴边 clamp 或 flip。它不会直接操作系统 clipboard 或浏览器窗口；菜单项动作通过 `select` 交给宿主处理。
+
+```vue
+<TContextMenu
+  v-model="open"
+  :x="cursor.x"
+  :y="cursor.y"
+  :items="[{ id: 'open', label: 'Open Link' }]"
+  @select="handleMenuSelect"
+/>
+```
+
+## TPopover
+
+`TPopover` 是带边框的轻量内容浮层，可以传 `content`，也可以用 default slot 自定义内容。`x` / `y` / `w` / `h` 是 caller-owned placement，组件不会自动贴边 clamp 或 flip。
+
+## TTooltip
+
+`TTooltip` 是单行提示文本，适合说明 unfamiliar controls 或链接打开条件。
+
+## TToastViewport
+
+Advanced toast 视口，从 `@simon_he/vue-tui/vue` 引入。它只渲染传入的 `items`，不会创建全局 singleton，也不会自己启动计时器；宿主负责 duration、dismiss 和队列状态。
+
+`placement` 基于当前 layout / clipRect 放置 toast stack；`offsetX` / `offsetY` 是相对所选角的 cell inset，因此组件可以放在 `TView`、`TBox` 或 split pane 子树里。`w` 是单个 toast item 的宽度；当父 layout 没有 clipRect 时，用 `viewportW` / `viewportH` 指定用于 placement 的 viewport 尺寸。
+
+## TProgress
+
+Advanced determinate progress，渲染 `value / max`、可选 label 和百分比。它不启动动画，适合 stdout/headless 快照。
+
+## TSpinner
+
+Advanced indeterminate spinner，通过 `frameIndex` 选择帧。组件不会无条件开启 interval；宿主按自己的 scheduler 或 tick 更新 `frameIndex`。
+
+## TStatusBar
+
+`TStatusBar` 用于 terminal app 的底部状态栏。它是纯渲染组件，不注册全局快捷键。
+
+```vue
+<TStatusBar :x="0" :y="23" :w="80" left="Ready" center="main" right="Ctrl+K" />
+```
+
+## TBreadcrumb
+
+`TBreadcrumb` 渲染路径导航，点击 item 只 emit `select`。
+
+```vue
+<TBreadcrumb :x="0" :y="0" :w="60" :items="pathSegments" @select="goToPath" />
+```
+
+## TKeyHint
+
+`TKeyHint` 渲染快捷键提示，不绑定或监听快捷键。
+
+```vue
+<TKeyHint :x="62" :y="0" combo="Esc" label="Close" />
+```
+
+## TTabs
+
+Advanced tab header，从 `@simon_he/vue-tui/vue` 引入。它只管理 header 选择和 `activeKey`，不拥有 pane 内容。
+
+## TSplitPane
+
+Advanced pane group，从 `@simon_he/vue-tui/vue` 引入。`sizes` 是受控的 cell size；空间不足时按 `minSizes` 压缩，空间有剩余时补到最后一个 pane。separator 支持键盘微调；default slot 接收 `{ panes }`，pane 内容由宿主按返回 rect 渲染。
+
+## Theme Tokens
+
+`createTheme()` 生成完整主题对象；`TerminalProvider.theme` 通常直接接收 partial overrides，例如 `{ colors: { link: "cyanBright" } }`，provider 会自行归一化。主题 token 只提供默认样式；组件局部传入的 `style`、`hoverStyle`、`focusStyle` 等 props 会覆盖主题。
+
+```ts
+const theme = createTheme({
+  colors: {
+    link: "cyanBright",
+    linkVisited: "magentaBright",
+    danger: "redBright",
+  },
+  components: {
+    TLink: {
+      underline: true,
+      hoverUnderline: true,
+    },
+  },
+});
+```
+
+## TAnchor
+
+类似 `TView`，但用「定位约束」描述矩形：`left/top/right/bottom/w/h`。用于做相对定位（例如贴右/贴底的浮层）。
+
+### Props
+
+- `left`/`top`/`right`/`bottom` `(number?)`
+- `w`/`h` `(number?)`
+- `zIndex` `(number)`
+- `focusable` `(boolean)`
+- `selectable` `(boolean?)`
+
+### Events
+
+`@click`/`@dblclick`/`@pointerdown`/`@pointerup`/`@pointermove`/`@wheel`/`@keydown`/`@keyup`/`@focus`/`@blur`
+
+> 同时支持对应的 `Capture` 版本（例如 `@clickCapture`）。
+>
+> 注：`TAnchor` 当前不提供 `@pointerenter/@pointerleave`（需要 hover 事件时请用 `TView`）。
+
+## TFlow
+
+按方向把 `items` 映射成若干子视口（每个子项一个 `TView`），用于列表式布局（更偏 layout 工具）。
+
+### Props
+
+- `x`/`y`/`w`/`h` `(number, required)`
+- `items` `(unknown[], required)`
+- `direction` `('vertical'|'horizontal')`（默认 `vertical`）
+- `gap` `(number)`：子项间隔（cell）
+- `itemSize` `(number)`：子项主轴尺寸（cell）
+- `zIndex` `(number)`
+
+### Slots
+
+- `item`: `({ item, index }) => VNode`
+
+## TFlex / TFlexItem
+
+用 Flexbox 风格约束声明 row/column 布局，最终仍生成 `TView` 子视口。适合 header/content/footer、左右栏和需要在 resize 后按 grow/shrink 重新分配 cell 的布局。
+
+`TFlexItem` 的 `width`/`height`、`w`/`h`、`basis`、`minWidth`/`minHeight`、`maxWidth`/`maxHeight` 支持 cell 数值或百分比字符串。百分比会先扣除 `TFlex` padding；main-axis 百分比再扣除 gap 后计算，cross-axis 百分比按 content box 交叉轴计算。
+
+`wrap` 会按 item 的显式主轴尺寸、`basis` 和 min/max 约束分行或分列；当前不读取 slot 内容固有尺寸。
+
+`rowGap`/`columnGap` 可覆盖 `gap` 在对应轴上的值。`alignContent` 只影响 wrap 后的多行/多列交叉轴分布。
+
+`paddingX`/`paddingY`/`paddingTop`/`paddingRight`/`paddingBottom`/`paddingLeft` 可覆盖 `padding`。`TFlexItem` 支持 `margin`、`marginX`/`marginY` 和四个方向的 margin；margin 参与主轴分配和 wrap 判断，最终子内容仍渲染在 margin 内侧。
+
+`TFlexItem.order` 控制视觉排列顺序；相同 order 的 item 保持原 slot 顺序。
+
+需要内容固有尺寸时，可以在 `TFlexItem.measure` 中返回 preferred `width`/`height`。`measure` 会收到扣除 padding 后的 `maxWidth`/`maxHeight` 和当前 `direction`，返回值会在没有显式尺寸或 `basis` 时参与布局。
+
+### Props
+
+- `TFlex`: `x`/`y`/`w`/`h`、`direction`、`gap`、`rowGap`、`columnGap`、`padding`、`paddingX`/`paddingY`、`paddingTop`/`paddingRight`/`paddingBottom`/`paddingLeft`、`wrap`、`alignItems`、`justifyContent`、`alignContent`、`zIndex`
+- `TFlexItem`: `grow`、`shrink`、`basis`、`width`/`height`、`w`/`h`、`minWidth`/`minHeight`、`maxWidth`/`maxHeight`、`measure`、`order`、`zIndex`、`margin`、`marginX`/`marginY`、`marginTop`/`marginRight`/`marginBottom`/`marginLeft`、`alignSelf`
+
+### Slots
+
+- `TFlexItem.default`: `({ rect }) => VNode`
+
+## TInput
+
+单行文本输入框（含光标、选择、剪贴板、IME 组合输入、快捷键），通过 `v-model` 管理值。
+
+### Props（常用）
+
+- `x`/`y`/`w` `(number, required)`
+- `h` `(number)`：高度（默认 `1`）
+- `modelValue` `(string)` + `update:modelValue`
+- `placeholder` `(string?)`
+- `placeholderWhenFocused` `(boolean)`：聚焦时是否显示 placeholder（默认 `false`）
+- `autoFocus` `(boolean)`
+- `cursorBlink` `(boolean)`
+- `cursorShape` `('block'|'underline'|'bar')`
+- `style` `(Style?)`
+- `secret` `(boolean)` / `maskChar` `(string)`：密码模式
+- `plugins` `(TInputPlugin[])`：输入增强插件（见下方）；init-only，修改后需重新挂载 `TInput`
+
+> `TInput` 功能较多，完整参数以源码为准：`src/vue/components/TInput.ts`。
+>
+> 跨宿主注意：`TInput` 本体已经开始把 terminal clipboard、TTY 判定、路径 href 这类宿主行为往 plugin 边界迁移。现在更推荐通过 `TerminalProvider.inputPlugins`、`createTerminalApp({ inputPlugins })` 或局部 `plugins` 注入宿主能力，而不是继续把平台差异写死到组件里。像 copy toast 这种 UI 反馈也应由宿主显式提供，不再依赖默认全局 hook。
+
+### Events（补充）
+
+- `input` / `change` / `keydown` / `focus` / `blur`
+- `update:mentions` / `mentionClick`：`collectMentions=true` 时（见 `createPromptMentionPlugin()`）
+- `update:multilineTexts` / `multilineClick`：多行 token 相关
+- `validationError`：文本过滤/校验插件上报
+
+## TInput Plugins
+
+用于扩展 `TInput` 的输入体验：通过 `:plugins="[...]"` 注入。插件列表是 init-only；如果需要切换宿主插件、path provider 或 prompt plugin，请重新挂载对应的 `TInput`。
+
+宿主级插件也可以统一从上层注入：
+
+- `TerminalProvider.inputPlugins`
+- `createTerminalApp({ inputPlugins })`
+- `createTerminalApp({ clipboard })`：只需要接入 clipboard 时的简化入口；传入 `inputPlugins` 时仍由宿主完全控制插件组合
+
+`TerminalProvider.inputPlugins` 也是 init-only；已经挂载的 `TInput` 不会重新安装插件列表。
+
+### `createTInputHostPlugin()`
+
+把宿主能力封装成 `TInput` 插件。适合注入：
+
+- `readClipboardText` / `writeClipboardText`
+- `showToast`
+- `resolvePath` / `pathToHref`
+- `isTerminalLike`
+
+`@simon_he/vue-tui` 导出 browser-safe 的 `createTInputHostPlugin()`。CLI 侧的 `defaultTInputHostPlugin` 和 `createDefaultTInputHostAdapter()` 从 `@simon_he/vue-tui/cli` 导出，负责 Node-like 的 clipboard / path 行为，不会自动附带 UI toast。如果宿主希望保留 `Copied` / `Copy failed` 这类提示，需要显式提供 `showToast`。
+
+`createOsc52ClipboardProvider()` 可作为 terminal clipboard 写入 provider 显式传给 `createTerminalApp({ clipboard })`。它不会默认执行系统剪贴板命令。
+
+一个最小宿主接线示例：
+
+```ts
+import { createTInputHostPlugin } from "@simon_he/vue-tui";
+import { createDefaultTInputHostAdapter } from "@simon_he/vue-tui/cli";
+import { createTerminalApp } from "@simon_he/vue-tui/cli";
+
+const baseHost = createDefaultTInputHostAdapter();
+
+const app = createTerminalApp({
+  cols: 80,
+  rows: 24,
+  component: App,
+  inputPlugins: [
+    createTInputHostPlugin({
+      ...baseHost,
+      showToast(message) {
+        toastStore.show(message);
+      },
+    }),
+  ],
+});
+```
+
+### `createPromptMentionPlugin()`
+
+提供 prompt/mention 的浮层补全：
+
+- prompt：基于 `promptSuggestions` + `promptTrigger`（默认 `/`）匹配并弹出列表
+- mention：基于 `mentionTrigger`（默认 `@`）匹配；配合 `collectMentions=true` 会把选择结果写入 `mentions`（通过 `update:mentions`）
+- mention 数据源既可以来自 `mentionSuggestions` / `mentionSuggestionProviders`，也可以通过 `mentionPathProvider` 注入路径补全能力
+- 如果宿主就是 Node / 本地文件系统语义，可以直接用 `createNodeMentionPathProvider()`
+- 键盘：`↑/↓` 选择，`Tab`/`Enter` 接受，`Esc` 关闭浮层
+
+### `createTextRestrictionPlugin({ rules })`
+
+注册输入过滤规则（allow/deny/replace/filter），用于限制字符集、替换非法字符或做整体校验。
+
+- 命中过滤/拒绝时会触发 `TInput` 的 `validationError` 事件（payload 含 `originalText/acceptedText` 等）
+
+### `TInputPluginsContextKey`
+
+高级宿主如果希望按子树组合/覆盖输入插件，可以直接用公开导出的 `TInputPluginsContextKey` 做 `provide/inject`。
+
+- 适合像 reference app 那样，在某个页面根节点统一补一个局部 host plugin
+- 比起给每个 `TInput` 单独传 `plugins`，更适合做“页面级宿主接线”
+
+## TInputBox
+
+带边框的输入框组合组件（内部是 `TBox` + `TInput`）。
+
+### Props（常用）
+
+- `x`/`y`/`w`/`h` `(number, required)`
+- `modelValue` `(string)` + `update:modelValue`
+- `title` `(string?)`
+- `placeholder` `(string?)`
+- `autoFocus` `(boolean)`
+- `plugins` `(TInputPlugin[])`
+
+## TList
+
+可滚动列表（单选）：支持点击/双击、键盘导航、滚轮滚动，`v-model` 维护选中 index。
+
+`TList` 适合小数据选择器。大数据选择/浏览场景请使用 `TVirtualList`，日志、streaming transcript、append-only output 场景请使用 experimental `TLogView`，避免把大数组直接传进 Vue deep reactivity。
+
+> Limitation: TList wheel optimization coalesces bursts and repaints viewport rows; it does not reuse shifted rows or repaint only exposed rows. Large datasets should use `TVirtualList` / `TLogView`.
+
+### Props
+
+- `x`/`y`/`w`/`h` `(number, required)`
+- `items` `(string[], required)`
+- `itemVersion` `(number)`：同长度内容更新时可递增，触发 repaint
+- `modelValue` `(number)` + `update:modelValue`
+- `style` `(Style?)`
+- `autoFocus` `(boolean)`
+- `closeOnBlur` `(boolean)`
+
+### Events
+
+- `change`: `{ index, value }`
+- `scroll`: `scrollTop`（number）
+- `close` / `focus` / `blur` / `keydown`
+
+### Wheel scrolling and selection
+
+Behavior change for the wheel-mailbox release:
+
+- `TList` wheel is viewport-only.
+- `TList` wheel no longer updates `modelValue`.
+- `TList` wheel no longer moves the active selection.
+- `TList` wheel burst applies only the final `scrollTop` in the next frame and
+  emits `scroll` at most once per frame.
+- `TList` treats `update:modelValue` as selection-change, not selection-confirm.
+- Enter and double click emit `change`; they do not emit `update:modelValue`
+  when committing the already-active item.
+- Keyboard-driven and external-model-driven viewport changes no longer emit
+  `scroll`.
+- `TList` `scroll` now represents viewport-driven scroll changes, especially
+  wheel scrolling and programmatic clamp.
+- `onScroll` is a result notification, not a veto/cancel hook.
+- Same-length item text changes require replacing the `items` array reference or
+  bumping `itemVersion`.
+
+`TList` treats wheel scrolling as viewport-only. Wheel scrolling emits `scroll`,
+but it does not update `modelValue` and does not move the active selection.
+Keyboard navigation, click, double click, and Enter reattach selection to the
+visible viewport.
+Each applied `TList` wheel scroll still repaints the visible viewport; exposed
+row-only slow scrolling remains a `TVirtualList` / `TLogView` / renderer follow-up.
+If existing code depended on wheel scrolling to update `modelValue`, listen to
+`scroll` instead. If selection should follow scroll, synchronize that explicitly
+from `onScroll`; `onScroll` is a result notification, not a veto/cancel hook.
+
+Migration example:
+
+```vue
+<TList
+  :items="items"
+  :model-value="selectedIndex"
+  @update:model-value="selectedIndex = $event"
+  @scroll="viewportTop = $event"
+  @change="confirmItem"
+/>
+```
+
+Before this release, wheel scrolling could move `selectedIndex`. After this
+release, wheel scrolling only updates `viewportTop`; keyboard navigation and
+click still update `selectedIndex`, while Enter and double click call
+`confirmItem`.
+
+`TList` uses the same full-rect clipping model as `TText`/`TVirtualList`: when
+the list is clipped from the top or left, paint and hit testing keep the source
+row/column offset instead of rebasing the clipped area to a new viewport origin.
+x/y/w/h are cell coordinates. Fractional geometry is normalized by flooring the
+start and end cell edges; pass integers for deterministic layout.
+When changing styles, replace the style object instead of mutating it in place.
+Replace the `items` array reference when item text changes without changing
+length, or bump `itemVersion`. For large mutable data sources, prefer
+`TVirtualList` with `itemVersion`.
+
+`scroll(top)` represents viewport-driven scroll changes, not every internal
+viewport-top mutation.
+
+`scroll(top)` is emitted when:
+
+- wheel scrolling changes the viewport top
+- item-count or clipped-viewport changes programmatically clamp the viewport top
+
+Hidden `v-show=false` lists still emit `scroll(top)` when item-count changes
+force a real internal `scrollTop` clamp, but they do not dirty terminal rows or
+commit visible output. A fully clipped viewport keeps detached `scrollTop`
+without clamping to `0` until a finite viewport height is restored. If a wheel
+frame is still pending when the viewport becomes hidden or fully clipped, that
+pending wheel is canceled and does not emit `scroll`.
+
+`scroll(top)` is not emitted when:
+
+- keyboard selection calls `ensureActiveVisible()`
+- external `modelValue` synchronization calls `ensureActiveVisible()`
+- click / double click selection calls `ensureActiveVisible()`
+
+Terminal-level DOM wheel handling may still prevent browser page scrolling even
+when `TList` itself does not consume an edge wheel event. Handler-level
+`preventDefault()` here only describes whether the list consumes the wheel
+internally.
+
+### Selection event semantics
+
+`TList` treats `update:modelValue` as a selection-change event, not a
+selection-confirm event.
+
+- Arrow / Home / End / PageUp / PageDown emit `update:modelValue` only when the
+  active index changes.
+- Click emits `update:modelValue` only when the clicked index differs from the
+  current active index.
+- Enter and double click emit `change`.
+- Enter and double click do not emit `update:modelValue` when they commit the
+  already-active index.
+
+`scroll` is emitted synchronously after internal viewport state changes. If an
+`onScroll` handler synchronously mutates `modelValue` or replaces `items`,
+`TList` may render the viewport change first and reconcile controlled props on
+the next Vue tick; `onScroll` is not a synchronous veto point for wheel
+scrolling.
+
+Mutating `style` in place does not schedule repaint by itself. Replace the
+style object, or rely on a later repaint-triggering interaction if you choose
+to mutate it in place. Derived active/dim style caching only applies to stable
+frozen style objects and the internal empty-style cache; mutable non-empty
+style objects favor correctness over allocation reuse.
+
+Detached wheel state is reattached only when selection changes, external
+`modelValue` changes, click/double-click/Enter/keyboard navigation happens, or
+data/geometry clamps require it. A parent re-render with the same `modelValue`
+does not reset the viewport. Reattaching detached state by itself does not
+request repaint; repaint only happens when active rows or `scrollTop` change.
+
+## TVirtualList
+
+大数据选择/浏览列表：使用 `itemCount` / `itemVersion` / `getItem` 从外部数据源读取可见行，避免把大数组本体放进 Vue deep reactivity。它不是日志/streaming 组件；append-only 输出请使用 `TLogView`。
+
+> Phase 1 experimental API：当前从 `@simon_he/vue-tui/experimental` 导出，暂不进入 root 入口。API 仍可能在 overscan、TLogView 等后续能力落地前调整。
+
+### Props
+
+- `x`/`y`/`w`/`h` `(number, required)`
+- `itemCount` `(number, required)`
+- `itemVersion` `(number, required)`：数据变更版本号
+- `getItem` `((index: number) => unknown, required)`
+- `renderItem` `((item, index) => unknown)`
+- `modelValue` `(number)` + `update:modelValue`
+- `scrollTop` `(number?)` + `update:scrollTop`：受控 viewport scrollTop；省略时由组件内部维护
+- `style` / `activeStyle` `(Style?)`
+- `autoFocus` `(boolean)`
+- `rowScrollMode` `("off" | "unsafe-full-row")`：实验性 unsafe wheel 优化；当前 `TVirtualList` 仅在 terminal/headless（非 DOM rows）路径、组件占满整行、未被裁剪、renderer 支持 `scrollOperations`、且调用方确认组件独占这些 plane rows 时使用 exposed-row row-scroll；DOM 路径仍保持 viewport repaint，否则保持默认 `"off"`
+
+### Data source
+
+`getItem` 和 `renderItem` 应保持稳定引用，数据变化用 `itemVersion` 通知组件。`style` / `activeStyle` 对象也应按 immutable 方式使用；样式变化时替换对象 identity。
+
+```ts
+const items = markRaw(bigArray);
+const itemVersion = ref(0);
+const getItem = (index: number) => items[index];
+const renderItem = (item: Row) => item.title;
+```
+
+避免在模板里传 inline function：
+
+```vue
+<TVirtualList :get-item="(index) => items[index]" />
+```
+
+### Wheel Scroll
+
+Wheel burst 通过 frame mailbox 合并；同一帧只应用最后的 `scrollTop`。滚动 repaint 只调用 `markDirtyRows(viewportRows)`，dirty rows 不超过可见 viewport 高度，也不会走 exposed-row fast path 或提交 `scrollOperations`。组件 hidden、fully clipped、unmount 或受控 `scrollTop` 在 RAF 前变化时，会取消 pending wheel，不会让旧 wheel 覆盖新的受控位置。
+
+### Selection model
+
+`modelValue` 使用 optimistic controlled 语义：键盘和点击会先更新组件内部 active row 并 emit `update:modelValue`。如果父组件稍后接受、延迟应用或改成其它 `modelValue`，组件会在 prop 同步时跟随；如果父组件完全忽略 update，组件会保留本地 optimistic active state。
+
+### Events
+
+- `change`: `{ index, value }`
+- `update:scrollTop`: `scrollTop`（number）
+- `scroll`: `scrollTop`（number）
+- `focus` / `blur` / `keydown`
+
+## TTranscriptView
+
+Transcript row viewport：渲染 message / action / tool-call / approval rows，支持 row-scoped action/link hit regions、focus navigation、cell selection copy 和 wrapped visual rows。
+
+> Experimental prototype：当前从 `@simon_he/vue-tui/experimental` 导出，暂不进入 root 入口。它会在当前 layout state 中 flatten source rows 到 visual rows；适合小到中等 transcript 和交互原型，建议控制在 few thousand visual rows 量级，不适合作为几十万 visual rows 的高吞吐 retained transcript 视图。大规模 append-only output 继续使用 `TLogView`。
+
+### Props
+
+- `x`/`y`/`w`/`h` `(number, required)`
+- `source` `(TTranscriptDataSource, required)`：提供 `rowCount()`、`getRow(index)`，可选提供 `getRowKey(index)`、`getRowVersion(index)`、`firstRowIndex()`
+- `version` `(number, required)`：数据变化版本号
+- `scrollTop` `(number?)` + `update:scrollTop`
+- `defaultScrollTop` `(number?)`
+- `autoStickToBottom` `(boolean)`
+- `selectable` `(boolean)`
+- `wrap` `(boolean)`
+- `style` / `hoverStyle` / `focusStyle` `(Style?)`
+- `autoFocus` / `focusable` / `wheelScroll` `(boolean)`
+- `keyboardRegions` `(boolean)`：默认 `true`，获得焦点时 `Tab` / `Shift+Tab` 在当前 viewport 的 hit regions 间循环 focus，`Enter` 激活 focused region，`Escape` 清除 focus
+
+### Events
+
+- `actionClick` / `linkClick` / `foldToggle` / `toolClick`: `{ region, row, rowIndex, absoluteRowIndex, event }`
+- `rowClick`: `{ row, rowIndex, absoluteRowIndex, event }`
+- `hoverRegion`: region event or `null`
+- `scroll`: scroll metrics
+- `update:scrollTop`: `scrollTop`（number）
+
+`TTranscriptSegment.text` 是 inline-only 文本；显式 `\n` / `\r` / `\t` 会按 inline cell 文本规整。需要保留显式换行时，请在 source 层拆成多个 transcript rows，或拆成独立 visual row blocks。
+
+## TMarkdownText
+
+Markdown renderer for static or streaming text content。它走独立的 `parser -> block -> visual row -> paint` 链路，不会把 Markdown AST 直接交给 `TText`。
+
+> Markdown import: `@simon_he/vue-tui/markdown`
+>
+ 行内公式在图形终端混排进文字行（≤2 行高），超高公式（矩阵等）与无图形环境保持原始文本，格式错误的公式也会回退为原始文本。需要安装可选 peer `mathjax-full` + `@resvg/resvg-js` 才会启用图片路径。详见 [Markdown 数学公式渲染](/guide/markdown-math)。
 >
 > `content` string 路径仍然只做 **per-frame coalescing**：一帧内多次 append 会合并成一次 rebuild，但 rebuild 本身仍然会从当前 full markdown string parse。长文档 streaming transcript 场景可以使用 `createMarkdownBlockSource()`，在消息、tool fence 或代码块完成时 `finalizeBlock()`，再把 `blocks` 传给 `TVirtualMarkdown`，避免反复重 parse 已 finalize 的历史。
 

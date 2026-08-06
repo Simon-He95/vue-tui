@@ -16,9 +16,11 @@ export type TuiMarkdownImageSize = Readonly<{
 }>;
 
 export type TuiMarkdownGraphicSegment = Readonly<{
-  kind: "image";
-  src: string;
+  kind: "image" | "math";
+  src?: string;
   alt?: string;
+  tex?: string;
+  raw?: string;
   mime?: string;
   base64?: string;
   originalBase64?: string;
@@ -67,6 +69,14 @@ export type TuiMarkdownMathSegment = Readonly<{
   source: string;
   raw: string;
   rendered: boolean;
+  /**
+   * Set on the boxed fallback of block-level math / raw inline math: the
+   * formula still needs to be rasterized once the graphics/raster stack is
+   * available. `mode` tells the rasterizer whether to render inline (fits one
+   * line, baseline-aligned) or display style.
+   */
+  pendingImage?: boolean;
+  mode?: "inline" | "display";
 }>;
 
 export type TuiMarkdownMathActionPayload = Readonly<{

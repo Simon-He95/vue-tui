@@ -673,11 +673,19 @@
         "TVirtualMarkdown",
         "buildMarkdownBlocks",
         "buildMarkdownVisualRows",
+        "clearMarkdownMathImageCache",
         "createMarkdownBlockSource",
         "createTuiMarkdownParser",
+        "enqueueMarkdownMathImages",
+        "getCachedMarkdownMathImage",
+        "getMarkdownMathImage",
+        "isMarkdownMathImageRendererReady",
         "isSafeMarkdownLink",
         "layoutMarkdownBlocks",
-        "loadMarkdownMathRenderer"
+        "loadMarkdownMathImageRenderer",
+        "loadMarkdownMathRenderer",
+        "setMarkdownMathRasterizer",
+        "subscribeMarkdownMathImage"
       ],
       "typeExports": [
         "TuiMarkdownBlock",
@@ -693,6 +701,11 @@
         "TuiMarkdownLayoutOptions",
         "TuiMarkdownLinkActionPayload",
         "TuiMarkdownMathActionPayload",
+        "TuiMarkdownMathImageCells",
+        "TuiMarkdownMathImageOptions",
+        "TuiMarkdownMathMode",
+        "TuiMarkdownMathOptions",
+        "TuiMarkdownMathRasterizer",
         "TuiMarkdownMathSegment",
         "TuiMarkdownNode",
         "TuiMarkdownParseConfig",
@@ -6835,6 +6848,62 @@
           "descriptionSource": "component-default"
         },
         {
+          "name": "mathImages",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Renders markdown math as terminal graphics images when the terminal supports it.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "mathCellWidthPx",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Terminal cell width in pixels used to map rendered formulas to cells.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "mathCellHeightPx",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Terminal cell height in pixels used to map rendered formulas to cells.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "mathScale",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Rasterization DPI scale for rendered formulas (does not change cell size).",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "mathColor",
+          "type": "string",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Hex color used for rendered formula glyphs; defaults to the text foreground.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "mathMaxWidthCells",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Maximum width in terminal cells for block-level formulas before they are scaled down.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "mathBaselineRatio",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Inline formula baseline position as a fraction of cell height, used to align formulas with text.",
+          "descriptionSource": "component-default"
+        },
+        {
           "name": "imageActions",
           "type": "boolean",
           "required": false,
@@ -10830,6 +10899,62 @@
           "required": false,
           "defaultValue": "true",
           "description": "Preserves markdown image aspect ratio while fitting width and height bounds.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "mathImages",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Renders markdown math as terminal graphics images when the terminal supports it.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "mathCellWidthPx",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Terminal cell width in pixels used to map rendered formulas to cells.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "mathCellHeightPx",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Terminal cell height in pixels used to map rendered formulas to cells.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "mathScale",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Rasterization DPI scale for rendered formulas (does not change cell size).",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "mathColor",
+          "type": "string",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Hex color used for rendered formula glyphs; defaults to the text foreground.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "mathMaxWidthCells",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Maximum width in terminal cells for block-level formulas before they are scaled down.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "mathBaselineRatio",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined",
+          "description": "Inline formula baseline position as a fraction of cell height, used to align formulas with text.",
           "descriptionSource": "component-default"
         },
         {

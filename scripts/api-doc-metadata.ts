@@ -89,6 +89,16 @@ export const sharedPublicPropDescriptions: Record<string, string> = {
   imageActions: "Enables pointer actions for rendered markdown images.",
   mathActions: "Enables pointer actions for rendered or raw markdown math syntax.",
   linkActions: "Enables pointer actions for rendered markdown links.",
+  mathImages:
+    "Renders markdown math as terminal graphics images when the terminal supports it.",
+  mathCellWidthPx: "Terminal cell width in pixels used to map rendered formulas to cells.",
+  mathCellHeightPx: "Terminal cell height in pixels used to map rendered formulas to cells.",
+  mathScale: "Rasterization DPI scale for rendered formulas (does not change cell size).",
+  mathColor: "Hex color used for rendered formula glyphs; defaults to the text foreground.",
+  mathMaxWidthCells:
+    "Maximum width in terminal cells for block-level formulas before they are scaled down.",
+  mathBaselineRatio:
+    "Inline formula baseline position as a fraction of cell height, used to align formulas with text.",
   imageOcclusionRects:
     "Terminal rectangles that markdown image layout treats as unavailable for graphics placement.",
   columns: "Table column definitions.",
@@ -384,6 +394,13 @@ export const componentPublicPropDescriptions: Record<string, Record<string, stri
       "mathActions",
       "linkActions",
       "imageOcclusionRects",
+      "mathImages",
+      "mathCellWidthPx",
+      "mathCellHeightPx",
+      "mathScale",
+      "mathColor",
+      "mathMaxWidthCells",
+      "mathBaselineRatio",
     ),
   },
   TList: {
@@ -495,6 +512,13 @@ export const componentPublicPropDescriptions: Record<string, Record<string, stri
       "mathActions",
       "linkActions",
       "imageOcclusionRects",
+      "mathImages",
+      "mathCellWidthPx",
+      "mathCellHeightPx",
+      "mathScale",
+      "mathColor",
+      "mathMaxWidthCells",
+      "mathBaselineRatio",
     ),
   },
 };

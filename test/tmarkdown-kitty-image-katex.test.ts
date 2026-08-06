@@ -98,7 +98,7 @@ describe("markdown kitty images and optional KaTeX rendering", () => {
     );
   });
 
-  it("loads optional KaTeX on demand and replaces raw syntax", async () => {
+  it("keeps inline math raw text while loading KaTeX", async () => {
     const mounted = await mountTerminal(
       () =>
         h(TMarkdownText, {
@@ -121,9 +121,8 @@ describe("markdown kitty images and optional KaTeX rendering", () => {
       mounted.scheduler()?.flushNow();
       const visible = [0, 1, 2, 3].map((y) => rowText(mounted, y)).join("\n");
       expect(visible).toContain("Euler");
-      expect(visible).not.toContain("$e^{i\\pi}+1=0$");
-      expect(visible).not.toContain("$\\frac{a}{b}$");
-      expect(visible).toMatch(/π|pi/i);
+      expect(visible).toContain("$e^{i\\pi}+1=0$");
+      expect(visible).toContain("$\\frac{a}{b}$");
     } finally {
       mounted.unmount();
     }

@@ -52,7 +52,7 @@ export function markdownImageGraphicId(
   identity: string,
 ): string {
   return `md-image:${stableTerminalGraphicNumericId(
-    `${identity}:${segment.src}:${segment.displayWidth ?? 0}:${segment.displayHeight ?? 0}:${segment.base64 ?? ""}`,
+    `${identity}:${segment.src ?? segment.tex ?? ""}:${segment.displayWidth ?? 0}:${segment.displayHeight ?? 0}:${segment.base64 ?? ""}`,
   )}`;
 }
 
@@ -97,7 +97,7 @@ function canAttemptMarkdownImageGraphic(
   terminal: Terminal,
   segment: NonNullable<TuiMarkdownVisualRow["segments"][number]["graphic"]>,
 ): boolean {
-  if (segment.kind !== "image" || !segment.base64) return false;
+  if (!segment.base64) return false;
   const output = getTerminalGraphicsOutput(terminal);
   const protocol = output?.capabilities.preferredProtocol;
   return Boolean(output?.capabilities.supported && isTerminalGraphicsProtocol(protocol));
@@ -129,7 +129,7 @@ function queueMarkdownImageGraphic(
   identity: string,
   rect: Readonly<{ x: number; y: number; w: number }>,
 ): MarkdownImageGraphicQueueResult {
-  if (segment.kind !== "image" || !segment.base64) return "unavailable";
+  if (!segment.base64) return "unavailable";
   const output = getTerminalGraphicsOutput(terminal);
   const protocol = output?.capabilities.preferredProtocol;
   if (!output?.capabilities.supported || !isTerminalGraphicsProtocol(protocol)) {
@@ -186,7 +186,8 @@ function queueMarkdownImageGraphic(
     sequence,
     resizeSequence,
     clearSequence,
-    fallbackText: segment.alt ?? "image",
+    fallbackText:
+      segment.alt ?? (segment.kind === "math" ? (segment.raw ?? segment.tex ?? "math") : "image"),
   });
   markdownImageDebug(
     `queue id=${id}`,
@@ -346,7 +347,11 @@ export function paintMarkdownVisualRow(
         suppressFallback
           ? spaces(visibleCells)
           : sliceByCellsRange(
-              segment.fallbackText ?? segment.graphic.alt ?? "image",
+              segment.fallbackText ??
+                segment.graphic.alt ??
+                (segment.graphic.kind === "math"
+                  ? (segment.graphic.raw ?? segment.graphic.tex ?? "math")
+                  : "image"),
               0,
               visibleCells,
             ) || spaces(visibleCells),

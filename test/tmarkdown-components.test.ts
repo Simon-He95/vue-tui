@@ -951,13 +951,13 @@ describe("markdown components", () => {
 
     await nextTick();
     clickCell(mounted, 12, 1);
-    clickCell(mounted, 25, 1);
+    clickCell(mounted, 30, 1);
 
     expect(actions).toHaveLength(2);
     expect(actions[0]).toMatchObject({
       cellX: 12,
       cellY: 1,
-      math: { raw: "$\\frac{a}{b}$", source: "\\frac{a}{b}", rendered: true },
+      math: { raw: "$\\frac{a}{b}$", source: "\\frac{a}{b}", rendered: false },
     });
     expect(actions[1]).toMatchObject({
       cellY: 1,

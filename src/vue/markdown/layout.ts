@@ -222,6 +222,7 @@ function wrapLineSegments(
         cells,
         graphic: segment.graphic,
         fallbackText: segment.text,
+        ...(segment.mathAction ? { mathAction: segment.mathAction } : {}),
       });
 
       row.remaining -= cells;
@@ -578,7 +579,8 @@ function inlineSegmentSignature(segment: TuiMarkdownInlineSegment): string {
   const graphic = segment.graphic
     ? [
         segment.graphic.kind,
-        segment.graphic.src,
+        segment.graphic.src ?? "",
+        segment.graphic.tex ?? "",
         segment.graphic.alt ?? "",
         segment.graphic.mime ?? "",
         segment.graphic.base64 ?? "",

@@ -11,23 +11,31 @@ import {
   createTerminalApp,
   installTerminalCleanup,
 } from "../src/cli.js";
-import { TMarkdownText, type TuiMarkdownMathActionPayload } from "../src/markdown.js";
+import {
+  TMarkdownText,
+  loadMarkdownMathImageRenderer,
+  type TuiMarkdownMathActionPayload,
+} from "../src/markdown.js";
+import { detectTerminalGraphicsCapabilities } from "../src/renderer/terminal-graphics.js";
 import { TText, useLayout, useTerminal } from "../src/vue.js";
 
 const CONTENT = [
-  "Optional KaTeX terminal text rendering",
+  "Markdown math: block images, inline images, boxed/raw fallbacks",
   "",
-  "Rendered after the optional KaTeX peer loads:",
-  "Euler: $e^{i\\pi}+1=0$",
-  "Fraction: $\\frac{a}{b}+\\sqrt{x}$",
-  "Operators: $\\int_0^1 x^2 dx + \\sum_{n=1}^{10} n$",
+  "Block math renders as an image when the terminal supports",
+  "graphics and the raster stack (mathjax-full + @resvg/resvg-js) is loaded,",
+  "otherwise it stays inside a box:",
   "",
-  "Unsupported formulas stay raw:",
-  "Matrix: $\\begin{bmatrix}1&2\\\\3&4\\end{bmatrix}$",
-  "Cases: $\\begin{cases}x&x>0\\\\-x&x<0\\end{cases}$",
-  "Unsupported command: $\\operatorname{softmax}(x)$",
+  "$$",
+  "\\int_0^1 x^2\\,dx + \\frac{1}{2}\\sum_{n=1}^{\\infty} \\frac{1}{n^2} = \\frac{\\pi^2}{12}",
+  "$$",
   "",
-  "Click any formula to copy its original KaTeX text.",
+  "Inline math is rendered into the text row: Euler $e^{i\\pi}+1=0$ and a",
+  "fraction $\\frac{a}{b}$ plus $x^{2}+\\sqrt{y}$.",
+  "",
+  "Tall inline (matrices) stays raw: $\\begin{bmatrix}1&2\\\\3&4\\end{bmatrix}$",
+  "",
+  "Click any formula (image or raw text) to copy its original TeX.",
   "Press q / Escape / Ctrl+C to exit.",
 ].join("\n");
 
@@ -41,6 +49,18 @@ const App = defineComponent({
     const cols = computed(() => Math.max(1, layout.clipRect?.w ?? 80));
     const rows = computed(() => Math.max(1, layout.clipRect?.h ?? 24));
     const status = ref("");
+    const diag = ref("");
+
+    // Self-diagnostic: show which gate decided the rendering path.
+    void (async () => {
+      const caps = detectTerminalGraphicsCapabilities();
+      const raster = await loadMarkdownMathImageRenderer();
+      diag.value =
+        `graphics=${caps.protocol} supported=${caps.supported ? "yes" : "NO"} ` +
+        `(reason: ${caps.reason ?? "auto-detected"}) ` +
+        `raster=${raster ? "ready" : "missing (install mathjax-full + @resvg/resvg-js)"}`;
+      scheduler.flushNow();
+    })();
 
     async function copyMath(payload: TuiMarkdownMathActionPayload): Promise<void> {
       try {
@@ -71,6 +91,15 @@ const App = defineComponent({
             w: Math.max(1, cols.value - 2),
             value: status.value,
             style: { fg: "cyan" },
+          })
+        : null,
+      diag.value
+        ? h(TText, {
+            x: 1,
+            y: Math.max(1, rows.value - 1),
+            w: Math.max(1, cols.value - 2),
+            value: diag.value,
+            style: { fg: "yellow" },
           })
         : null,
     ];

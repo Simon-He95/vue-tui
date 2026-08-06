@@ -244,6 +244,13 @@ const pageMeta: Record<
     keywords:
       "markdown transcript, streaming markdown, Vue markdown renderer, terminal markdown UI",
   },
+  "guide/markdown-math.md": {
+    title: "Markdown 数学公式渲染",
+    description:
+      "在终端里渲染 LaTeX/KaTeX 数学公式：块级公式输出为 Kitty 图形协议图片，行内公式混排进文字行，无图形能力时回退为 box 包裹或原始文本。",
+    keywords:
+      "markdown math, latex, katex, mathjax, kitty graphics, terminal math, 公式渲染",
+  },
 };
 
 function pageUrl(page: string): string {
@@ -428,6 +435,7 @@ export default defineConfig({
           { text: "CLI Stdout Renderer", link: "/guide/cli-stdout-renderer" },
           { text: "Terminal Log Viewer", link: "/guide/terminal-log-viewer" },
           { text: "Markdown Transcript", link: "/guide/markdown-transcript" },
+          { text: "Markdown Math", link: "/guide/markdown-math" },
         ],
       },
       { text: "Examples", link: "/examples" },
@@ -461,6 +469,7 @@ export default defineConfig({
           { text: "CLI Stdout Renderer", link: "/guide/cli-stdout-renderer" },
           { text: "Terminal Log Viewer", link: "/guide/terminal-log-viewer" },
           { text: "Markdown Transcript", link: "/guide/markdown-transcript" },
+          { text: "Markdown Math", link: "/guide/markdown-math" },
           { text: "Examples Index", link: "/examples" },
           { text: "Agent Console", link: "/agent-console" },
           { text: "TLogView Lab", link: "/tlog-view-lab" },

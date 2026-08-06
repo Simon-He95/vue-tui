@@ -2,6 +2,7 @@ import type { PropType } from "vue";
 import type { Style } from "../../core/types.js";
 import type { Rect, TerminalPointerEvent } from "../../events/manager/types.js";
 import {
+  getTerminalGraphicsOutput,
   getTerminalGraphicsOutputVersion,
   subscribeTerminalGraphicsOutput,
 } from "../../renderer/terminal-graphics.js";
@@ -20,6 +21,14 @@ import { buildMarkdownVisualRows } from "../markdown/document.js";
 import { findMarkdownImageActionAt } from "../markdown/image-actions.js";
 import { findMarkdownLinkActionAt } from "../markdown/link-actions.js";
 import { findMarkdownMathActionAt } from "../markdown/math-actions.js";
+import {
+  enqueueMarkdownMathImages,
+  isMarkdownMathImageRendererReady,
+  loadMarkdownMathImageRenderer,
+  resolveMarkdownMathColor,
+  subscribeMarkdownMathImage,
+} from "../markdown/math-image.js";
+import { type TuiMarkdownMathOptions } from "../markdown/ast.js";
 import { subscribeMarkdownMathRenderer } from "../markdown/math.js";
 import { createTuiMarkdownParser } from "../markdown/parser.js";
 import {
@@ -74,6 +83,13 @@ export const TMarkdownText = defineComponent({
     imageMinHeight: { type: Number, default: undefined },
     imageMaxHeight: { type: Number, default: undefined },
     imagePreserveAspectRatio: { type: Boolean, default: true },
+    mathImages: { type: Boolean, default: true },
+    mathCellWidthPx: { type: Number, default: undefined },
+    mathCellHeightPx: { type: Number, default: undefined },
+    mathScale: { type: Number, default: undefined },
+    mathColor: { type: String, default: undefined },
+    mathMaxWidthCells: { type: Number, default: undefined },
+    mathBaselineRatio: { type: Number, default: undefined },
     imageActions: { type: Boolean, default: false },
     mathActions: { type: Boolean, default: false },
     linkActions: { type: Boolean, default: false },
@@ -110,8 +126,12 @@ export const TMarkdownText = defineComponent({
     const graphicsOutputVersion = shallowRef(getTerminalGraphicsOutputVersion(terminal));
     const unsubscribeGraphicsOutput = subscribeTerminalGraphicsOutput(terminal, () => {
       graphicsOutputVersion.value = getTerminalGraphicsOutputVersion(terminal);
+      enqueuePendingMathImages();
     });
     const unsubscribeMathRenderer = subscribeMarkdownMathRenderer(() => {
+      scheduleRebuild();
+    });
+    const unsubscribeMathImage = subscribeMarkdownMathImage(() => {
       scheduleRebuild();
     });
 
@@ -127,6 +147,32 @@ export const TMarkdownText = defineComponent({
       },
     );
 
+    function mathOptions(): TuiMarkdownMathOptions {
+      if (props.mathImages === false) return { enabled: false };
+      const resolvedColor = props.mathColor ?? resolveMarkdownMathColor(defaultStyle.value.fg);
+      return {
+        enabled: true,
+        ...(props.mathCellWidthPx != null ? { cellWidthPx: props.mathCellWidthPx } : {}),
+        ...(props.mathCellHeightPx != null ? { cellHeightPx: props.mathCellHeightPx } : {}),
+        ...(props.mathScale != null ? { scale: props.mathScale } : {}),
+        ...(resolvedColor != null ? { color: resolvedColor } : {}),
+        ...(props.mathBaselineRatio != null ? { baselineRatio: props.mathBaselineRatio } : {}),
+        maxWidthCells: props.mathMaxWidthCells ?? props.w,
+      };
+    }
+
+    function enqueuePendingMathImages(): void {
+      if (props.mathImages === false) return;
+      if (!getTerminalGraphicsOutput(terminal)?.capabilities.supported) return;
+      if (!isMarkdownMathImageRendererReady()) {
+        void loadMarkdownMathImageRenderer().then((ready) => {
+          if (ready && alive) scheduleRebuild();
+        });
+        return;
+      }
+      enqueueMarkdownMathImages(rows.value, mathOptions());
+    }
+
     function rebuildRows(): void {
       rows.value = markRaw(
         withTextWidthProvider(widthProvider, () =>
@@ -141,10 +187,12 @@ export const TMarkdownText = defineComponent({
               maxHeight: props.imageMaxHeight,
               preserveAspectRatio: props.imagePreserveAspectRatio,
             },
+            math: mathOptions(),
           }),
         ),
       );
       documentVersion.value++;
+      enqueuePendingMathImages();
     }
 
     function scheduleRebuild(): void {
@@ -183,6 +231,13 @@ export const TMarkdownText = defineComponent({
         () => props.imageMinHeight,
         () => props.imageMaxHeight,
         () => props.imagePreserveAspectRatio,
+        () => props.mathImages,
+        () => props.mathCellWidthPx,
+        () => props.mathCellHeightPx,
+        () => props.mathScale,
+        () => props.mathColor,
+        () => props.mathMaxWidthCells,
+        () => props.mathBaselineRatio,
       ],
       () => {
         scheduleRebuild();
@@ -195,6 +250,7 @@ export const TMarkdownText = defineComponent({
       rebuildVersion++;
       unsubscribeGraphicsOutput();
       unsubscribeMathRenderer();
+      unsubscribeMathImage();
       clearMarkdownImageGraphics(terminal, fullRect.value);
     });
 

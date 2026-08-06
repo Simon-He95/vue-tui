@@ -39,11 +39,14 @@ export function findMarkdownMathActionAt(
 
       const visibleStart = Math.max(segmentStart, clipStart);
       const visibleEnd = Math.min(segmentEnd, clipEnd);
+      const graphicHeight = segment.graphic
+        ? Math.max(1, Math.floor(segment.graphic.displayHeight ?? 1))
+        : 1;
       const rect = {
         x: r.x + visibleStart - clipStart,
         y: r.y + rowIndex - firstRow,
         w: visibleEnd - visibleStart,
-        h: 1,
+        h: graphicHeight,
       };
       if (
         point.cellX < rect.x ||

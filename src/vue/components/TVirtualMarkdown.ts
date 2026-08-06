@@ -28,12 +28,21 @@ import { buildMarkdownBlocks } from "../markdown/document.js";
 import { findMarkdownImageActionAt } from "../markdown/image-actions.js";
 import { findMarkdownLinkActionAt } from "../markdown/link-actions.js";
 import { findMarkdownMathActionAt } from "../markdown/math-actions.js";
+import {
+  enqueueMarkdownMathImages,
+  isMarkdownMathImageRendererReady,
+  loadMarkdownMathImageRenderer,
+  resolveMarkdownMathColor,
+  subscribeMarkdownMathImage,
+} from "../markdown/math-image.js";
+import { type TuiMarkdownMathOptions } from "../markdown/ast.js";
 import { subscribeMarkdownMathRenderer } from "../markdown/math.js";
 import {
   terminalSelectionRowSpans,
   terminalSelectionVisibleRowSpans,
 } from "../../selection/terminal-selection.js";
 import {
+  getTerminalGraphicsOutput,
   getTerminalGraphicsOutputVersion,
   subscribeTerminalGraphicsOutput,
 } from "../../renderer/terminal-graphics.js";
@@ -166,6 +175,13 @@ export const TVirtualMarkdown = defineComponent({
     imageMinHeight: { type: Number, default: undefined },
     imageMaxHeight: { type: Number, default: undefined },
     imagePreserveAspectRatio: { type: Boolean, default: true },
+    mathImages: { type: Boolean, default: true },
+    mathCellWidthPx: { type: Number, default: undefined },
+    mathCellHeightPx: { type: Number, default: undefined },
+    mathScale: { type: Number, default: undefined },
+    mathColor: { type: String, default: undefined },
+    mathMaxWidthCells: { type: Number, default: undefined },
+    mathBaselineRatio: { type: Number, default: undefined },
     imageActions: { type: Boolean, default: false },
     mathActions: { type: Boolean, default: false },
     linkActions: { type: Boolean, default: false },
@@ -211,10 +227,44 @@ export const TVirtualMarkdown = defineComponent({
     const graphicsOutputVersion = shallowRef(getTerminalGraphicsOutputVersion(terminal));
     const unsubscribeGraphicsOutput = subscribeTerminalGraphicsOutput(terminal, () => {
       graphicsOutputVersion.value = getTerminalGraphicsOutputVersion(terminal);
+      enqueuePendingMathImages();
     });
     const unsubscribeMathRenderer = subscribeMarkdownMathRenderer(() => {
       scheduleRebuild();
     });
+    const unsubscribeMathImage = subscribeMarkdownMathImage(() => {
+      scheduleRebuild();
+    });
+
+    function mathOptions(): TuiMarkdownMathOptions {
+      if (props.mathImages === false) return { enabled: false };
+      const resolvedColor = props.mathColor ?? resolveMarkdownMathColor(defaultStyle.value.fg);
+      return {
+        enabled: true,
+        ...(props.mathCellWidthPx != null ? { cellWidthPx: props.mathCellWidthPx } : {}),
+        ...(props.mathCellHeightPx != null ? { cellHeightPx: props.mathCellHeightPx } : {}),
+        ...(props.mathScale != null ? { scale: props.mathScale } : {}),
+        ...(resolvedColor != null ? { color: resolvedColor } : {}),
+        ...(props.mathBaselineRatio != null ? { baselineRatio: props.mathBaselineRatio } : {}),
+        maxWidthCells: props.mathMaxWidthCells ?? props.w,
+      };
+    }
+
+    function enqueuePendingMathImages(): void {
+      if (props.mathImages === false) return;
+      if (!getTerminalGraphicsOutput(terminal)?.capabilities.supported) return;
+      if (!isMarkdownMathImageRendererReady()) {
+        void loadMarkdownMathImageRenderer().then((ready) => {
+          if (ready && alive) scheduleRebuild();
+        });
+        return;
+      }
+      const h = Math.max(0, Math.floor(props.h ?? absRect.value.h));
+      enqueueMarkdownMathImages(rows.value, mathOptions(), {
+        firstRow: internalScrollTop.value,
+        lastRow: internalScrollTop.value + h,
+      });
+    }
 
     watch(
       () => `${props.streaming ? 1 : 0}:${(props.customHtmlTags ?? []).join("\u0000")}`,
@@ -246,12 +296,14 @@ export const TVirtualMarkdown = defineComponent({
               maxHeight: props.imageMaxHeight,
               preserveAspectRatio: props.imagePreserveAspectRatio,
             },
+            math: mathOptions(),
           }).blocks;
         return layoutMarkdownBlocksCached(blocks, props.w, layoutCache);
       });
       layoutCache = markRaw(nextLayout.cache);
       const nextRows = nextLayout.rows;
       rows.value = markRaw(nextRows);
+      enqueuePendingMathImages();
       reconcileScrollTop();
       const nextScrollTop = internalScrollTop.value;
       const nextVisibleRows = visibleRowSignatures(nextRows, nextScrollTop);
@@ -432,6 +484,11 @@ export const TVirtualMarkdown = defineComponent({
       },
     );
 
+    // Rasterize formulas as they scroll into view (deduped by the cache).
+    watch(internalScrollTop, () => {
+      enqueuePendingMathImages();
+    });
+
     watch(
       [
         () => props.content,
@@ -446,6 +503,13 @@ export const TVirtualMarkdown = defineComponent({
         () => props.imageMinHeight,
         () => props.imageMaxHeight,
         () => props.imagePreserveAspectRatio,
+        () => props.mathImages,
+        () => props.mathCellWidthPx,
+        () => props.mathCellHeightPx,
+        () => props.mathScale,
+        () => props.mathColor,
+        () => props.mathMaxWidthCells,
+        () => props.mathBaselineRatio,
       ],
       () => {
         scheduleRebuild();
@@ -699,6 +763,7 @@ export const TVirtualMarkdown = defineComponent({
       rebuildVersion++;
       unsubscribeGraphicsOutput();
       unsubscribeMathRenderer();
+      unsubscribeMathImage();
       clearMarkdownImageGraphics(terminal, fullRect.value);
     });
 

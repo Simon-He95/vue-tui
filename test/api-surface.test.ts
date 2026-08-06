@@ -182,11 +182,19 @@ describe("public API surface", () => {
         "TVirtualMarkdown",
         "buildMarkdownBlocks",
         "buildMarkdownVisualRows",
+        "clearMarkdownMathImageCache",
         "createMarkdownBlockSource",
         "createTuiMarkdownParser",
+        "enqueueMarkdownMathImages",
+        "getCachedMarkdownMathImage",
+        "getMarkdownMathImage",
+        "isMarkdownMathImageRendererReady",
         "isSafeMarkdownLink",
         "layoutMarkdownBlocks",
+        "loadMarkdownMathImageRenderer",
         "loadMarkdownMathRenderer",
+        "setMarkdownMathRasterizer",
+        "subscribeMarkdownMathImage",
       ]
     `);
   });

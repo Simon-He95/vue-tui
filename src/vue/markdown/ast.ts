@@ -1,6 +1,6 @@
 import { sanitizeInlineText, sanitizeTextBlock, spaces, textCellWidth } from "../utils/text.js";
 import { readMarkdownImageDimensions, sanitizeMarkdownImageSource } from "./image.js";
-import { renderMarkdownInlineMathSegment } from "./math.js";
+import { getCachedMarkdownMathImage, type TuiMarkdownMathImageOptions } from "./math-image.js";
 import { sanitizeMarkdownLink } from "./parser.js";
 import { type TuiMarkdownTheme } from "./theme.js";
 import type {
@@ -15,11 +15,18 @@ import type {
   TuiMarkdownTableCellAlign,
 } from "./types.js";
 
+export type TuiMarkdownMathOptions = Readonly<
+  {
+    enabled?: boolean;
+  } & TuiMarkdownMathImageOptions
+>;
+
 type BlockContext = Readonly<{
   prefixSegments: readonly TuiMarkdownInlineSegment[];
   continuationPrefixSegments: readonly TuiMarkdownInlineSegment[];
   imageResolver?: TuiMarkdownImageResolver;
   imageSize?: TuiMarkdownImageSize;
+  math?: TuiMarkdownMathOptions;
 }>;
 
 const EMPTY_PREFIX: readonly TuiMarkdownInlineSegment[] = Object.freeze([]);
@@ -223,6 +230,7 @@ function inlineNodeSegments(
   options: Readonly<{
     imageResolver?: TuiMarkdownImageResolver;
     imageSize?: TuiMarkdownImageSize;
+    math?: TuiMarkdownMathOptions;
   }> = {},
 ): TuiMarkdownInlineSegment[] {
   const out: TuiMarkdownInlineSegment[] = [];
@@ -390,19 +398,39 @@ function inlineNodeSegments(
       case "math_inline":
         {
           const source = stringProp(node, "content");
-          const raw = stringProp(node, "raw") || `$${source}$`;
-          const rendered = renderMarkdownInlineMathSegment(source);
-          pushTextSegments(
-            out,
-            rendered.supported ? rendered.text : raw,
-            mergeStyle(inheritedStyle, theme.inlineCode),
-            undefined,
-            {
-              source,
+          const markup = stringProp(node, "markup") || "$";
+          const raw = stringProp(node, "raw") || `${markup}${source}${markup}`;
+          const mathStyle = mergeStyle(inheritedStyle, theme.inlineCode);
+          const tex = sanitizeInlineText(source);
+          const mathEnabled = options.math?.enabled !== false;
+          const cached =
+            tex && mathEnabled ? getCachedMarkdownMathImage(tex, "inline", options.math) : null;
+          if (cached) {
+            pushTextSegments(
+              out,
               raw,
-              rendered: rendered.supported,
-            },
-          );
+              mathStyle,
+              {
+                kind: "math",
+                tex,
+                raw,
+                base64: cached.base64,
+                displayWidth: cached.widthCells,
+                displayHeight: cached.heightCells,
+              },
+              { source: tex, raw, rendered: true },
+            );
+          } else {
+            pushTextSegments(
+              out,
+              raw,
+              mathStyle,
+              undefined,
+              tex && mathEnabled
+                ? { source: tex, raw, rendered: false, pendingImage: true, mode: "inline" }
+                : { source, raw, rendered: false },
+            );
+          }
         }
         break;
       case "reference":
@@ -453,6 +481,7 @@ function blockFromParagraph(
     inlineNodeSegments(nodeChildren(node), theme, undefined, {
       imageResolver: context.imageResolver,
       imageSize: context.imageSize,
+      math: context.math,
     }),
     context,
   );
@@ -470,6 +499,7 @@ function blockFromHeading(
     inlineNodeSegments(nodeChildren(node), theme, theme.heading[level - 1], {
       imageResolver: context.imageResolver,
       imageSize: context.imageSize,
+      math: context.math,
     }),
     context,
   );
@@ -510,7 +540,7 @@ function blockFromHtmlBlock(
       ],
       theme,
       undefined,
-      { imageResolver: context.imageResolver },
+      { imageResolver: context.imageResolver, math: context.math },
     ),
     context,
   );
@@ -545,6 +575,7 @@ function blockFromTable(
     segments: inlineNodeSegments(nodeChildren(cell), theme, theme.strong, {
       imageResolver: context.imageResolver,
       imageSize: context.imageSize,
+      math: context.math,
     }),
     align: tableCellAlign(cell),
   }));
@@ -553,6 +584,7 @@ function blockFromTable(
       segments: inlineNodeSegments(nodeChildren(cell), theme, undefined, {
         imageResolver: context.imageResolver,
         imageSize: context.imageSize,
+        math: context.math,
       }),
       align: tableCellAlign(cell),
     })),
@@ -609,10 +641,12 @@ function listItemBlocks(
   const firstContext: BlockContext = {
     prefixSegments: [...context.prefixSegments, markerSegment],
     continuationPrefixSegments: [...context.continuationPrefixSegments, indentSegment],
+    math: context.math,
   };
   const nestedContext: BlockContext = {
     prefixSegments: [...context.continuationPrefixSegments, indentSegment],
     continuationPrefixSegments: [...context.continuationPrefixSegments, indentSegment],
+    math: context.math,
   };
 
   const children = nodeChildren(item);
@@ -683,6 +717,58 @@ function listBlocks(
   return out;
 }
 
+/**
+ * Block-level display math (`$...$`). When a rasterized PNG is available this
+ * becomes a graphic segment rendered through the terminal graphics pipeline
+ * (Kitty/iTerm2/Sixel); otherwise it is wrapped in a box with the raw TeX text
+ * (also the permanent presentation when graphics/raster support is missing).
+ * Clicking either form emits `mathAction` so consumers can copy the raw content.
+ */
+function blockMathSegments(
+  source: string,
+  raw: string,
+  math: TuiMarkdownMathOptions,
+  theme: TuiMarkdownTheme,
+): TuiMarkdownInlineSegment[] {
+  const tex = sanitizeInlineText(source);
+  const canUseImage = Boolean(tex) && math.enabled !== false;
+  const cached = canUseImage ? getCachedMarkdownMathImage(tex, "display", math) : null;
+
+  if (canUseImage && cached) {
+    return [
+      {
+        text: raw,
+        style: theme.math,
+        graphic: {
+          kind: "math",
+          tex,
+          raw,
+          base64: cached.base64,
+          displayWidth: cached.widthCells,
+          displayHeight: cached.heightCells,
+        },
+        mathAction: { source: tex, raw, rendered: true },
+      },
+    ];
+  }
+
+  const maxWidth = Math.max(8, Math.floor(math.maxWidthCells ?? 0) || 40);
+  const rawCells = textCellWidth(raw);
+  const inner = Math.min(Math.max(1, rawCells + 2), maxWidth);
+  const pad = Math.max(0, inner - rawCells);
+  return [
+    { text: `┌${"─".repeat(inner)}┐`, style: theme.math },
+    HARD_BREAK_SEGMENT,
+    {
+      text: `│ ${raw}${" ".repeat(pad)}│`,
+      style: theme.math,
+      mathAction: { source: tex, raw, rendered: false, pendingImage: true },
+    },
+    HARD_BREAK_SEGMENT,
+    { text: `└${"─".repeat(inner)}┘`, style: theme.math },
+  ];
+}
+
 function nodeToBlocks(
   node: TuiMarkdownNode,
   context: BlockContext,
@@ -711,6 +797,19 @@ function nodeToBlocks(
           prefixSegments: context.prefixSegments,
         },
       ];
+    case "math_block":
+      return [
+        inlineBlock(
+          keyPrefix,
+          blockMathSegments(
+            stringProp(node, "content"),
+            stringProp(node, "raw") || `$${stringProp(node, "content")}$`,
+            context.math ?? { enabled: true },
+            theme,
+          ),
+          context,
+        ),
+      ];
     case "blockquote": {
       const quoteSegment: TuiMarkdownInlineSegment = {
         text: "│ ",
@@ -721,6 +820,7 @@ function nodeToBlocks(
         continuationPrefixSegments: [...context.continuationPrefixSegments, quoteSegment],
         imageResolver: context.imageResolver,
         imageSize: context.imageSize,
+        math: context.math,
       };
       return childSequenceToBlocks(nodeChildren(node), quoteContext, theme, keyPrefix);
     }
@@ -737,6 +837,7 @@ function nodeToBlocks(
           inlineNodeSegments(nodeChildren(node), theme, undefined, {
             imageResolver: context.imageResolver,
             imageSize: context.imageSize,
+            math: context.math,
           }),
           context,
         ),
@@ -748,7 +849,10 @@ function nodeToBlocks(
       return [
         inlineBlock(
           keyPrefix,
-          inlineNodeSegments([node], theme, undefined, { imageResolver: context.imageResolver }),
+          inlineNodeSegments([node], theme, undefined, {
+            imageResolver: context.imageResolver,
+            math: context.math,
+          }),
           context,
         ),
       ];
@@ -758,7 +862,10 @@ function nodeToBlocks(
   return [
     inlineBlock(
       keyPrefix,
-      inlineNodeSegments([node], theme, undefined, { imageResolver: context.imageResolver }),
+      inlineNodeSegments([node], theme, undefined, {
+        imageResolver: context.imageResolver,
+        math: context.math,
+      }),
       context,
     ),
   ];
@@ -770,6 +877,7 @@ export function markdownAstToBlocks(
   options: Readonly<{
     imageResolver?: TuiMarkdownImageResolver;
     imageSize?: TuiMarkdownImageSize;
+    math?: TuiMarkdownMathOptions;
   }> = {},
 ): readonly TuiMarkdownBlock[] {
   const blocks = trimBlockArray(
@@ -780,6 +888,7 @@ export function markdownAstToBlocks(
         continuationPrefixSegments: EMPTY_PREFIX,
         imageResolver: options.imageResolver,
         imageSize: options.imageSize,
+        math: options.math,
       },
       theme,
       "md",

@@ -101,6 +101,7 @@ This keeps token streaming from repainting the input or overlay regions.
 
 ## Related Pages
 
+- [Markdown Math](/guide/markdown-math)
 - [Agent Console](/agent-console)
 - [Terminal Log Viewer](/guide/terminal-log-viewer)
 - [Vue Terminal UI](/guide/vue-terminal-ui)

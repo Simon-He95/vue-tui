@@ -1,5 +1,5 @@
 import type { TuiMarkdownImageResolver, TuiMarkdownImageSize } from "./types.js";
-import { markdownAstToBlocks } from "./ast.js";
+import { markdownAstToBlocks, type TuiMarkdownMathOptions } from "./ast.js";
 import { layoutMarkdownBlocks } from "./layout.js";
 import { type TuiMarkdownParser } from "./parser.js";
 import { resolveTuiMarkdownTheme, type TuiMarkdownThemeOverrides } from "./theme.js";
@@ -19,6 +19,7 @@ export function buildMarkdownBlocks(
     theme?: TuiMarkdownThemeOverrides;
     imageResolver?: TuiMarkdownImageResolver;
     imageSize?: TuiMarkdownImageSize;
+    math?: TuiMarkdownMathOptions;
   }>,
 ): Readonly<{
   nodes: readonly TuiMarkdownNode[];
@@ -30,6 +31,7 @@ export function buildMarkdownBlocks(
     const blocks = markdownAstToBlocks(nodes, theme, {
       imageResolver: options?.imageResolver,
       imageSize: options?.imageSize,
+      math: options?.math,
     });
     return { nodes, blocks };
   } catch (error) {
@@ -51,6 +53,7 @@ export function buildMarkdownVisualRows(
     widthProvider?: WidthProvider;
     imageResolver?: TuiMarkdownImageResolver;
     imageSize?: TuiMarkdownImageSize;
+    math?: TuiMarkdownMathOptions;
   }>,
 ): readonly TuiMarkdownVisualRow[] {
   const { blocks } = buildMarkdownBlocks(content, parser, options);

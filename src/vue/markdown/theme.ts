@@ -12,6 +12,7 @@ export type TuiMarkdownTheme = Readonly<{
   codeBlock: Style;
   thematicBreak: Style;
   html: Style;
+  math: Style;
 }>;
 
 export type TuiMarkdownThemeOverrides = Readonly<
@@ -27,6 +28,7 @@ export type TuiMarkdownThemeOverrides = Readonly<
     codeBlock: Partial<Style>;
     thematicBreak: Partial<Style>;
     html: Partial<Style>;
+    math: Partial<Style>;
   }>
 >;
 
@@ -60,6 +62,7 @@ export const DEFAULT_TUI_MARKDOWN_THEME = Object.freeze({
   codeBlock: freezeStyle({ fg: "yellowBright" }),
   thematicBreak: freezeStyle({ dim: true }),
   html: freezeStyle({ dim: true }),
+  math: freezeStyle({ fg: "cyanBright" }),
 } satisfies TuiMarkdownTheme);
 
 function stableSerialize(value: unknown): string {
@@ -99,5 +102,6 @@ export function resolveTuiMarkdownTheme(overrides?: TuiMarkdownThemeOverrides): 
       overrides.thematicBreak,
     ),
     html: mergeFrozenStyle(DEFAULT_TUI_MARKDOWN_THEME.html, overrides.html),
+    math: mergeFrozenStyle(DEFAULT_TUI_MARKDOWN_THEME.math, overrides.math),
   });
 }

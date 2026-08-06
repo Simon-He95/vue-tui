@@ -691,7 +691,7 @@ describe("markdown image fallback and sizing", () => {
       createTuiMarkdownParser({ streaming: false }),
       {
         imageResolver: (image) => {
-          seen.push(image.src);
+          seen.push(image.src ?? "");
           return TINY_PNG_BASE64;
         },
         imageSize: { minWidth: 4, maxWidth: 8, minHeight: 1, maxHeight: 1 },

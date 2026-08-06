@@ -393,11 +393,19 @@ describe("package exports", () => {
       "TVirtualMarkdown",
       "buildMarkdownBlocks",
       "buildMarkdownVisualRows",
+      "clearMarkdownMathImageCache",
       "createMarkdownBlockSource",
       "createTuiMarkdownParser",
+      "enqueueMarkdownMathImages",
+      "getCachedMarkdownMathImage",
+      "getMarkdownMathImage",
+      "isMarkdownMathImageRendererReady",
       "isSafeMarkdownLink",
       "layoutMarkdownBlocks",
+      "loadMarkdownMathImageRenderer",
       "loadMarkdownMathRenderer",
+      "setMarkdownMathRasterizer",
+      "subscribeMarkdownMathImage",
     ]);
     expect(Object.keys(experimental).sort()).toEqual([
       "T3DViewport",
@@ -817,7 +825,7 @@ describe("package exports", () => {
       write: false,
       platform: "browser",
       format: "esm",
-      external: ["vue", "beautiful-mermaid", "katex"],
+      external: ["vue", "beautiful-mermaid", "katex", "mathjax-full", "@resvg/resvg-js"],
       plugins: [forbidNodeBuiltins],
     });
     const output = result.outputFiles
@@ -860,7 +868,7 @@ describe("package exports", () => {
         write: false,
         platform: "browser",
         format: "esm",
-        external: ["vue", "beautiful-mermaid", "katex"],
+        external: ["vue", "beautiful-mermaid", "katex", "mathjax-full", "@resvg/resvg-js"],
         plugins: [forbidNodeBuiltins],
       });
       const output = result.outputFiles
