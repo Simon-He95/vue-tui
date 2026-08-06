@@ -9,12 +9,14 @@ Vue TUI 的 markdown 渲染器支持 `$...$` 行内公式和 `$$...$$` 块级公
 
 ## 渲染策略
 
-| 公式 | 有图形能力 + 渲染栈 | 无图形能力 / 渲染栈缺失 |
-| ---- | ------------------ | ----------------------- |
-| 块级 `$$...$$` | Kitty/iTerm2 图片（替换 box） | box 包裹原始 TeX |
+| 公式           | 有图形能力 + 渲染栈           | 无图形能力 / 渲染栈缺失 |
+| -------------- | ----------------------------- | ----------------------- |
+| 块级 `$$...$$` | Kitty/iTerm2 图片（替换 box） | box 包裹原始 TeX        |
+
 | 行内 `$...---
 title: Markdown 数学公式渲染
 description: 在终端里渲染 LaTeX/KaTeX 数学公式：块级公式输出为 Kitty 图形协议图片，行内公式混排进文字行，无图形能力时回退为 box 包裹或原始文本。
+
 ---
 
 # Markdown 数学公式渲染
@@ -23,12 +25,14 @@ Vue TUI 的 markdown 渲染器支持 `$...$` 行内公式和 `$$...$$` 块级公
 
 ## 渲染策略
 
-| 公式 | 有图形能力 + 渲染栈 | 无图形能力 / 渲染栈缺失 |
-| ---- | ------------------ | ----------------------- |
-| 块级 `$$...$$` | Kitty/iTerm2 图片（替换 box） | box 包裹原始 TeX |
-（≤2 行高） | 混排进文字行的 1 行图片 | 原始 `$...---
+| 公式           | 有图形能力 + 渲染栈           | 无图形能力 / 渲染栈缺失 |
+| -------------- | ----------------------------- | ----------------------- |
+| 块级 `$$...$$` | Kitty/iTerm2 图片（替换 box） | box 包裹原始 TeX        |
+| （≤2 行高）    | 混排进文字行的 1 行图片       | 原始 `$...---           |
+
 title: Markdown 数学公式渲染
 description: 在终端里渲染 LaTeX/KaTeX 数学公式：块级公式输出为 Kitty 图形协议图片，行内公式混排进文字行，无图形能力时回退为 box 包裹或原始文本。
+
 ---
 
 # Markdown 数学公式渲染
@@ -37,11 +41,11 @@ Vue TUI 的 markdown 渲染器支持 `$...$` 行内公式和 `$$...$$` 块级公
 
 ## 渲染策略
 
-| 公式 | 有图形能力 + 渲染栈 | 无图形能力 / 渲染栈缺失 |
-| ---- | ------------------ | ----------------------- |
-| 块级 `$$...$$` | Kitty/iTerm2 图片（替换 box） | box 包裹原始 TeX |
- 文本 |
-| 行内超高公式（矩阵等） | 保持原始 `$...$` 文本 | 原始 `$...$` 文本 |
+| 公式                   | 有图形能力 + 渲染栈           | 无图形能力 / 渲染栈缺失 |
+| ---------------------- | ----------------------------- | ----------------------- |
+| 块级 `$$...$$`         | Kitty/iTerm2 图片（替换 box） | box 包裹原始 TeX        |
+| 文本                   |
+| 行内超高公式（矩阵等） | 保持原始 `$...$` 文本         | 原始 `$...$` 文本       |
 
 任何形态的公式（图片或文本）都可以点击，触发 `mathAction` 事件，携带原始 TeX 便于复制。
 
@@ -64,7 +68,7 @@ pnpm add mathjax-full @resvg/resvg-js
 
 ## 快速开始
 
-````vue
+```vue
 <script setup lang="ts">
 import { TVirtualMarkdown } from "@simon_he/vue-tui/markdown";
 
@@ -91,16 +95,14 @@ const content = [
     @math-action="onMathAction"
   />
 </template>
-````
+```
 
 ```ts
 import { createOsc52ClipboardProvider } from "@simon_he/vue-tui";
 
 const clipboard = createOsc52ClipboardProvider();
 
-async function onMathAction(payload: {
-  math: { raw: string };
-}): Promise<void> {
+async function onMathAction(payload: { math: { raw: string } }): Promise<void> {
   await clipboard.writeText(payload.math.raw);
 }
 ```
@@ -111,15 +113,15 @@ async function onMathAction(payload: {
 
 `TMarkdownText` 与 `TVirtualMarkdown` 共用以下数学相关 props：
 
-| Prop | 类型 | 默认 | 说明 |
-| ---- | ---- | ---- | ---- |
-| `mathImages` | `boolean` | `true` | 是否尝试把公式渲染为图片。`false` 时始终显示文本/bx |
-| `mathCellWidthPx` | `number` | `8` | 终端单元格宽度（px），用于公式像素 → 格子换算 |
-| `mathCellHeightPx` | `number` | `16` | 终端单元格高度（px） |
-| `mathScale` | `number` | `2` | 光栅化 DPI 倍率（不影响格子大小，越高越清晰） |
-| `mathColor` | `string` | 跟随文字前景色 | 公式颜色（hex）。默认取 `defaultStyle.fg`，浅色主题自动用深色字 |
-| `mathMaxWidthCells` | `number` | 容器宽度 | 块级公式最大宽度（格子），超宽会等比缩小 |
-| `mathBaselineRatio` | `number` | `0.78` | 行内公式基线在格高中的位置（0~1），用于和文字基线对齐 |
+| Prop                | 类型      | 默认           | 说明                                                            |
+| ------------------- | --------- | -------------- | --------------------------------------------------------------- |
+| `mathImages`        | `boolean` | `true`         | 是否尝试把公式渲染为图片。`false` 时始终显示文本/bx             |
+| `mathCellWidthPx`   | `number`  | `8`            | 终端单元格宽度（px），用于公式像素 → 格子换算                   |
+| `mathCellHeightPx`  | `number`  | `16`           | 终端单元格高度（px）                                            |
+| `mathScale`         | `number`  | `2`            | 光栅化 DPI 倍率（不影响格子大小，越高越清晰）                   |
+| `mathColor`         | `string`  | 跟随文字前景色 | 公式颜色（hex）。默认取 `defaultStyle.fg`，浅色主题自动用深色字 |
+| `mathMaxWidthCells` | `number`  | 容器宽度       | 块级公式最大宽度（格子），超宽会等比缩小                        |
+| `mathBaselineRatio` | `number`  | `0.78`         | 行内公式基线在格高中的位置（0~1），用于和文字基线对齐           |
 
 `mathScale` 只影响 PNG 分辨率；`mathCellWidthPx` / `mathCellHeightPx` 影响公式映射到多少个格子。字体偏大/偏小时先调这两个。
 

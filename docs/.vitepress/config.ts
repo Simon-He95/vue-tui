@@ -248,8 +248,7 @@ const pageMeta: Record<
     title: "Markdown 数学公式渲染",
     description:
       "在终端里渲染 LaTeX/KaTeX 数学公式：块级公式输出为 Kitty 图形协议图片，行内公式混排进文字行，无图形能力时回退为 box 包裹或原始文本。",
-    keywords:
-      "markdown math, latex, katex, mathjax, kitty graphics, terminal math, 公式渲染",
+    keywords: "markdown math, latex, katex, mathjax, kitty graphics, terminal math, 公式渲染",
   },
 };
 

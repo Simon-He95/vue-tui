@@ -958,9 +958,9 @@ Markdown renderer for static or streaming text content。它走独立的 `parser
 > Markdown import: `@simon_he/vue-tui/markdown`
 >
 > 数学公式：`$...$` 块级公式在支持图形协议的终端（Kitty/Ghostty/WezTerm/iTerm2）渲染为图片，否则以 box 包裹原始 TeX；`$...---
-title: Vue Terminal UI Components
-description: Reference for Vue TUI components such as TerminalProvider, TBox, TInput, TList, TTable, TLogView, TVirtualMarkdown, and agent primitives.
----
+> title: Vue Terminal UI Components
+
+## description: Reference for Vue TUI components such as TerminalProvider, TBox, TInput, TList, TTable, TLogView, TVirtualMarkdown, and agent primitives.
 
 # Components 使用文档
 
@@ -1916,7 +1916,7 @@ Markdown renderer for static or streaming text content。它走独立的 `parser
 
 > Markdown import: `@simon_he/vue-tui/markdown`
 >
- 行内公式在图形终端混排进文字行（≤2 行高），超高公式（矩阵等）与无图形环境保持原始文本，格式错误的公式也会回退为原始文本。需要安装可选 peer `mathjax-full` + `@resvg/resvg-js` 才会启用图片路径。详见 [Markdown 数学公式渲染](/guide/markdown-math)。
+> 行内公式在图形终端混排进文字行（≤2 行高），超高公式（矩阵等）与无图形环境保持原始文本，格式错误的公式也会回退为原始文本。需要安装可选 peer `mathjax-full` + `@resvg/resvg-js` 才会启用图片路径。详见 [Markdown 数学公式渲染](/guide/markdown-math)。
 >
 > `content` string 路径仍然只做 **per-frame coalescing**：一帧内多次 append 会合并成一次 rebuild，但 rebuild 本身仍然会从当前 full markdown string parse。长文档 streaming transcript 场景可以使用 `createMarkdownBlockSource()`，在消息、tool fence 或代码块完成时 `finalizeBlock()`，再把 `blocks` 传给 `TVirtualMarkdown`，避免反复重 parse 已 finalize 的历史。
 

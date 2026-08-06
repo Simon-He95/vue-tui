@@ -89,8 +89,7 @@ export const sharedPublicPropDescriptions: Record<string, string> = {
   imageActions: "Enables pointer actions for rendered markdown images.",
   mathActions: "Enables pointer actions for rendered or raw markdown math syntax.",
   linkActions: "Enables pointer actions for rendered markdown links.",
-  mathImages:
-    "Renders markdown math as terminal graphics images when the terminal supports it.",
+  mathImages: "Renders markdown math as terminal graphics images when the terminal supports it.",
   mathCellWidthPx: "Terminal cell width in pixels used to map rendered formulas to cells.",
   mathCellHeightPx: "Terminal cell height in pixels used to map rendered formulas to cells.",
   mathScale: "Rasterization DPI scale for rendered formulas (does not change cell size).",
