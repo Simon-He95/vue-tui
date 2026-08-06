@@ -268,6 +268,8 @@
     "profile:agent-console:abc": "tsx scripts/profile-agent-console-abc.ts",
     "profile:agent-console:abc:smoke": "AGENT_CONSOLE_PROFILE_SMOKE=1 tsx scripts/profile-agent-console-abc.ts",
     "example:tlog-view-lab": "pnpm run build && VT_SMOKE=1 tsx examples/tlog-view-lab.ts",
+    "example:chat-cli:smoke": "VT_SMOKE=1 tsx examples/chat-cli.ts",
+    "run:chat-cli:terminal": "pnpm run build && VT_INTERACTIVE=1 tsx examples/chat-cli.ts",
     "run:basic:terminal": "pnpm run build && pnpm -C examples/basic terminal",
     "run:agent-console:terminal": "pnpm run build && pnpm -C examples/agent-console terminal",
     "run:basic:multi-select:terminal": "pnpm run build && pnpm -C examples/basic build:terminal:multi-select && pnpm -C examples/basic terminal:multi-select",

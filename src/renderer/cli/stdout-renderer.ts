@@ -111,6 +111,13 @@ export type StdoutRenderer = Readonly<{
   capabilities: RendererCapabilities;
   graphicsCapabilities?: TerminalGraphicsCapabilities;
   render: () => void;
+  /**
+   * Force an immediate full repaint of the renderer's rows, bypassing frame
+   * throttling. For `anchor: "bottom"` (REPL bar) callers this re-anchors the
+   * bar and re-establishes the scroll region after the terminal resized or
+   * after native output was written above the bar.
+   */
+  forceRender: () => void;
   dispose: () => void;
   /** Move terminal cursor to specified cell position for IME input */
   setCursor: (x: number, y: number) => void;
@@ -136,6 +143,41 @@ export type StdoutRendererOptions = Readonly<{
   clear?: boolean;
   hideCursor?: boolean;
   altScreen?: boolean;
+  /**
+   * How the TUI buffer is anchored on the terminal screen.
+   *
+   * - `"top"` (default): buffer row 0 maps to screen row 1 — the renderer owns
+   *   the whole terminal screen (full-screen TUIs).
+   * - `"bottom"`: the buffer is pinned to the bottom `rows` of the terminal
+   *   screen (a REPL-style prompt bar). Everything above the buffer is native
+   *   terminal output owned by the caller (scrollback, right-click paste,
+   *   native scrolling) — the renderer only ever writes to its own pinned rows
+   *   and never clears or repaints the area above.
+   *
+   * In bottom mode the renderer:
+   * - repaints the full (small) buffer every frame, so an externally scrolled
+   *   screen can never leave stale bar rows behind;
+   * - never emits scroll-region operations that would disturb the caller's
+   *   scroll region above the bar;
+   * - skips the whole-screen clear even when `clear` is true;
+   * - establishes a scroll region that excludes the bar (`ESC[1;<screenRows-rows>r`)
+   *   so output written by the caller scrolls natively above the bar, and
+   *   restores it on dispose.
+   */
+  anchor?: "top" | "bottom";
+  /**
+   * Rows of blank space reserved between the native output region and the
+   * pinned bar in `anchor: "bottom"` mode. The bar stays at the very bottom;
+   * the scroll region the renderer establishes shrinks by `barGap` rows so
+   * caller output scrolls above a persistent blank gap. Default 0.
+   */
+  barGap?: number;
+  /**
+   * Live provider of the terminal screen height in rows (cells). Used only for
+   * `anchor: "bottom"` to compute the bar's pinned offset. Falls back to
+   * `output.rows` and then `process.stdout.rows` when omitted.
+   */
+  screenRows?: () => number;
   /** Fallback background color when a cell has no explicit bg. `null` = terminal default. */
   defaultBg?: string | null;
   /** Optional ANSI-name palette used when emitting ansi256/truecolor sequences. */
@@ -261,6 +303,36 @@ export function createStdoutRenderer(
   let palette: ThemePalette | null = options?.palette ?? null;
   const trackResize = options?.trackResize ?? true;
   const getImeAnchor = options?.getImeAnchor;
+  const anchorMode = options?.anchor === "bottom" ? "bottom" : "top";
+  const screenRowsFn = typeof options?.screenRows === "function" ? options.screenRows : undefined;
+  // Blank rows reserved between the output scroll region and the pinned bar.
+  const barGap = Math.max(0, Math.floor(Number(options?.barGap ?? 0)));
+  // Absolute screen-row offset for bottom-anchored (REPL bar) mode.
+  // Buffer row 0 maps to screen row `rowOffset` (0-based); 0 in top mode.
+  let rowOffset = 0;
+  // 1-based bottom row of the output scroll region (`ESC[1;<n>r`).
+  let scrollRegionBottom = 0;
+  const resolveScreenRows = (): number => {
+    let rows = 0;
+    if (screenRowsFn) {
+      const v = Math.floor(Number(screenRowsFn()));
+      if (Number.isFinite(v) && v > 0) rows = v;
+    }
+    if (!rows) {
+      const v = Math.floor(Number((out as any).rows));
+      if (Number.isFinite(v) && v > 0) rows = v;
+    }
+    if (!rows) {
+      const v = Math.floor(Number((process as any).stdout?.rows));
+      if (Number.isFinite(v) && v > 0) rows = v;
+    }
+    return rows;
+  };
+  const computeRowOffset = (bufferRows: number): number => {
+    if (anchorMode !== "bottom") return 0;
+    const offset = resolveScreenRows() - bufferRows;
+    return Number.isFinite(offset) && offset > 0 ? offset : 0;
+  };
   const allowFileUrls = options?.allowFileUrls ?? false;
   const cliLatency = getCliLatencyProfiler();
   const profiler = createTuiProfiler("stdout-renderer", {
@@ -1272,7 +1344,7 @@ export function createStdoutRenderer(
     let out = "";
 
     for (let row = 0; row < rect.h; row++) {
-      out += `\u001B[${rect.y + row + 1};${rect.x + 1}H${blank}`;
+      out += `\u001B[${rect.y + row + 1 + rowOffset};${rect.x + 1}H${blank}`;
     }
 
     return out;
@@ -2350,8 +2422,8 @@ export function createStdoutRenderer(
     rowCursorToCol1.length = rows;
     rowClearToEol.length = rows;
     for (let y = start; y < rows; y++) {
-      rowCursorToCol1[y] = `\u001B[${y + 1};1H`;
-      rowClearToEol[y] = `\u001B[${y + 1};1H\u001B[K`;
+      rowCursorToCol1[y] = `\u001B[${y + 1 + rowOffset};1H`;
+      rowClearToEol[y] = `\u001B[${y + 1 + rowOffset};1H\u001B[K`;
     }
   };
 
@@ -2818,6 +2890,26 @@ export function createStdoutRenderer(
       );
     }
     let terminalGraphicsBlockScrollRegions = false;
+    // Bottom-anchored REPL mode: the TUI owns only the last `size.rows` screen rows
+    // (the pinned bar). Repaint the whole (small) bar every frame so an externally
+    // scrolled screen can never leave stale bar rows, and drop scroll-region ops so
+    // the caller's scroll region above the bar is never disturbed. When the live
+    // screen height or bar gap changed, re-anchor and re-establish the region.
+    if (anchorMode === "bottom") {
+      dirtyRows = null;
+      scrollOperations = null;
+      const nextRowOffset = computeRowOffset(size.rows);
+      if (nextRowOffset !== rowOffset) {
+        rowOffset = nextRowOffset;
+        rowCursorToCol1.length = 0;
+        rowClearToEol.length = 0;
+      }
+      const nextRegionBottom = Math.max(1, nextRowOffset - barGap);
+      if (outputIsTTY && nextRegionBottom !== scrollRegionBottom) {
+        scrollRegionBottom = nextRegionBottom;
+        out.write(`\u001B[1;${nextRegionBottom}r`);
+      }
+    }
     ensureRowEscapes(Math.max(size.rows, lastRenderedRows));
     ensureFingerprints(size.cols, size.rows);
     const bgSeq = openBg(defaultBg);
@@ -3150,7 +3242,9 @@ export function createStdoutRenderer(
     frameParts.push(allowGraphicsOnlyWithoutBaseline || keepLineWrapDisabled ? "" : "\u001B[?7l");
     // Reset once at the start so we can avoid repeated resets for common style changes.
     frameParts.push(SGR_RESET, bgSeq);
-    if (hideCursor && !getImeAnchor) frameParts.push(CURSOR_HOME);
+    if (hideCursor && !getImeAnchor) {
+      frameParts.push(rowOffset > 0 ? `\u001B[${rowOffset + 1}H` : CURSOR_HOME);
+    }
 
     // Track consecutive row cursor optimization state
     let lastRenderedY = -1;
@@ -3263,7 +3357,7 @@ export function createStdoutRenderer(
 
         if (afterX >= size.cols) return;
 
-        parts.push(`\u001B[${y + 1};${afterX + 1}H`);
+        parts.push(`\u001B[${y + 1 + rowOffset};${afterX + 1}H`);
       };
 
       // Skip cursor positioning if disabled (ghostty workaround)
@@ -3274,7 +3368,7 @@ export function createStdoutRenderer(
           frameParts.push("\r\n");
         } else {
           frameParts.push(
-            spanStart === 0 ? rowCursorToCol1[y]! : `\u001B[${y + 1};${spanStart + 1}H`,
+            spanStart === 0 ? rowCursorToCol1[y]! : `\u001B[${y + 1 + rowOffset};${spanStart + 1}H`,
           );
         }
       }
@@ -3965,7 +4059,13 @@ export function createStdoutRenderer(
     // If rendered content shrank, clear the old extra rows.
     // But instead of using \u001B[J which causes flash, we fill with empty lines.
     // Do not write below the viewport during a rows-only terminal resize.
-    if (!rowsToRender && lastRenderedRows > size.rows && !rowsOnlyResizeBaseline) {
+    // Bottom-anchored bars never have rows below the buffer to clear.
+    if (
+      !rowsToRender &&
+      lastRenderedRows > size.rows &&
+      !rowsOnlyResizeBaseline &&
+      anchorMode !== "bottom"
+    ) {
       const extraRows = lastRenderedRows - size.rows;
       if (activeStyleKey !== bgKey) {
         frameParts.push(SGR_RESET, bgSeq);
@@ -4033,7 +4133,7 @@ export function createStdoutRenderer(
           !overlayTouchedRowSet?.has(y) &&
           Boolean(spans?.some((span) => span.start < rect.x + rect.w && span.end > rect.x));
         if ((!rowsToRender || rowWasPaintedByTextRenderer(y)) && !preservedGraphicSpan) continue;
-        out += `\u001B[${y + 1};${rect.x + 1}H${clearStyle}${erase}${SGR_RESET}`;
+        out += `\u001B[${y + 1 + rowOffset};${rect.x + 1}H${clearStyle}${erase}${SGR_RESET}`;
       }
 
       return out;
@@ -4092,7 +4192,7 @@ export function createStdoutRenderer(
 
         const cell = rect ? { x: rect.x, y: rect.y } : clampCellToViewport(fallbackCell, size);
         frameParts.push(
-          countGraphicsBytes(`\u001B[${cell.y + 1};${cell.x + 1}H`),
+          countGraphicsBytes(`\u001B[${cell.y + 1 + rowOffset};${cell.x + 1}H`),
           countGraphicsBytes(maybeWrapTerminalGraphic(sequence)),
           countGraphicsBytes(SGR_RESET),
         );
@@ -4373,7 +4473,9 @@ export function createStdoutRenderer(
     // Reset style at end to leave terminal in clean state
     if (enableOsc8Links && activeStyle.href) frameParts.push(OSC8_CLOSE);
     frameParts.push(SGR_RESET);
-    if (hideCursor && !getImeAnchor) frameParts.push(CURSOR_HOME);
+    if (hideCursor && !getImeAnchor) {
+      frameParts.push(rowOffset > 0 ? `\u001B[${rowOffset + 1}H` : CURSOR_HOME);
+    }
     // Re-enable line wrap and end synchronized output when this frame used it.
     // Alt-screen TUI sessions keep autowrap disabled between frames so terminal
     // window resizes clip existing content instead of reflowing it.
@@ -4980,7 +5082,7 @@ export function createStdoutRenderer(
   if (altScreen && outputIsTTY) out.write("\u001B[?1049h");
   if (keepLineWrapDisabled) out.write("\u001B[?7l");
   if (hideCursor) out.write("\u001B[?25l");
-  if (clear) {
+  if (clear && anchorMode !== "bottom") {
     out.write(`${SGR_RESET}${openBg(defaultBg)}\u001B[2J\u001B[H${SGR_RESET}`);
   }
 
@@ -5089,7 +5191,7 @@ export function createStdoutRenderer(
       { cols: size.cols, rows: size.rows },
     );
     // ANSI cursor position is 1-based: ESC [ row ; col H
-    out.write(`\u001B[${cy + 1};${cx + 1}H`);
+    out.write(`\u001B[${cy + 1 + rowOffset};${cx + 1}H`);
     lastCursorX = cx;
     lastCursorY = cy;
   }
@@ -5145,7 +5247,7 @@ export function createStdoutRenderer(
               ? { x: visibleRect.x, y: visibleRect.y }
               : clampCellToViewport({ cellX: active.x, cellY: active.y }, size);
             clearParts.push(
-              `\u001B[${cell.y + 1};${cell.x + 1}H`,
+              `\u001B[${cell.y + 1 + rowOffset};${cell.x + 1}H`,
               maybeWrapTerminalGraphic(active.clearSequence),
             );
             wroteClear = true;
@@ -5192,6 +5294,8 @@ export function createStdoutRenderer(
       if (keepLineWrapDisabled) out.write("\u001B[?7h");
       if (hideCursor) out.write("\u001B[?25h");
       if (altScreen && outputIsTTY) out.write("\u001B[?1049l");
+      // Restore the full-screen scroll region the REPL bar narrowed.
+      if (anchorMode === "bottom" && outputIsTTY && scrollRegionBottom > 0) out.write("\u001B[r");
     } catch (err) {
       if (disposeError == null) disposeError = err;
     }
@@ -5230,6 +5334,7 @@ export function createStdoutRenderer(
     capabilities: STDOUT_RENDERER_CAPABILITIES,
     graphicsCapabilities,
     render,
+    forceRender: () => render(undefined, true),
     dispose,
     setCursor,
     showCursor,
