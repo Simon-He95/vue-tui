@@ -440,6 +440,7 @@ const stdoutRendererMock: StdoutRenderer = {
     domRows: false,
   },
   render: () => {},
+  forceRender: () => {},
   dispose: () => {},
   setCursor: () => {},
   showCursor: () => {},

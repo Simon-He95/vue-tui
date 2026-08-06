@@ -315,6 +315,14 @@ function extractSvgMarkup(containerMarkup: string): string {
   return containerMarkup.slice(start, end + "</svg>".length);
 }
 
+/**
+ * resvg is a Node-only native addon. Keeping the specifier in a variable (a
+ * non-literal dynamic import) stops browser bundlers (vite/rolldown) from
+ * statically resolving it and failing on its platform `.node` binding; at
+ * runtime a browser load fails and the rasterizer falls back to raw text.
+ */
+const RESVG_MODULE_ID = "@resvg/resvg-js";
+
 function loadBuiltinMathRasterizer(): Promise<TuiMarkdownMathRasterizer | null> {
   if (!builtinRasterizerLoad) {
     builtinRasterizerLoad = (async () => {
@@ -334,7 +342,7 @@ function loadBuiltinMathRasterizer(): Promise<TuiMarkdownMathRasterizer | null> 
           import("mathjax-full/js/adaptors/liteAdaptor.js"),
           import("mathjax-full/js/handlers/html.js"),
           import("mathjax-full/js/input/tex/AllPackages.js"),
-          import("@resvg/resvg-js"),
+          import(RESVG_MODULE_ID),
         ]);
 
         const adaptor = liteAdaptor();
