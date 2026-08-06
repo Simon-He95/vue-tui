@@ -4,10 +4,7 @@ import type {
 } from "../components/TAgentTerminalGraphic.js";
 import type { TerminalGraphicRenderQueue } from "../../renderer/terminal-graphic-render-queue.js";
 import {
-  createIterm2InlineImageSequence,
-  createKittyDeleteGraphicsSequence,
-  createKittyGraphicsSequence,
-  createKittyPlacementSequence,
+  createTerminalGraphicPngSequence,
   hashTerminalGraphicsString,
   isSafeTerminalGraphicsSequence,
   normalizeTerminalGraphicSize,
@@ -160,57 +157,6 @@ function normalizeCachedPngFrame(
   };
 }
 
-function resolveKittyViewportPlacement(
-  png: CachedPngTerminalGraphicFrame,
-  context: TAgentTerminalGraphicRendererContext,
-): Readonly<{
-  columns: number;
-  rows?: number;
-  sourceX?: number;
-  sourceY?: number;
-  sourceWidth?: number;
-  sourceHeight?: number;
-}> {
-  const rect = context.viewport.rect;
-  const full = context.viewport.fullRect;
-  const columns = positiveInt(rect.w) ?? png.cols;
-  const rows = positiveInt(rect.h) ?? png.rows;
-  const sourceWidth = positiveInt(png.sourceWidth);
-  const sourceHeight = positiveInt(png.sourceHeight);
-
-  if (!sourceWidth || !sourceHeight || full.w <= 0 || full.h <= 0) {
-    return { columns, rows };
-  }
-
-  const offsetX = Math.max(0, rect.x - full.x);
-  const offsetY = Math.max(0, rect.y - full.y);
-  const visibleW = Math.max(0, Math.min(rect.w, full.w - offsetX));
-  const visibleH = Math.max(0, Math.min(rect.h, full.h - offsetY));
-  if (offsetX <= 0 && offsetY <= 0 && visibleW >= full.w && visibleH >= full.h) {
-    return { columns, rows };
-  }
-
-  const x0 = Math.max(0, Math.min(sourceWidth - 1, Math.floor((offsetX * sourceWidth) / full.w)));
-  const y0 = Math.max(0, Math.min(sourceHeight - 1, Math.floor((offsetY * sourceHeight) / full.h)));
-  const x1 = Math.max(
-    x0 + 1,
-    Math.min(sourceWidth, Math.ceil(((offsetX + visibleW) * sourceWidth) / full.w)),
-  );
-  const y1 = Math.max(
-    y0 + 1,
-    Math.min(sourceHeight, Math.ceil(((offsetY + visibleH) * sourceHeight) / full.h)),
-  );
-
-  return {
-    columns,
-    rows,
-    sourceX: x0,
-    sourceY: y0,
-    sourceWidth: x1 - x0,
-    sourceHeight: y1 - y0,
-  };
-}
-
 function pngFrameBytes(frame: CachedPngTerminalGraphicFrame): number {
   return frame.base64.length + (frame.fallback?.length ?? 0);
 }
@@ -305,61 +251,30 @@ export function createPngTerminalGraphicRenderer(
       return textFallbackResult(await fallback());
     }
 
-    if (protocol === "kitty") {
-      const placement = resolveKittyViewportPlacement(png, context);
-      const sequence = createKittyGraphicsSequence(png.base64, {
+    if (protocol === "kitty" || protocol === "iterm2") {
+      const rect = context.viewport.rect;
+      const fullRect = context.viewport.fullRect;
+      const result = createTerminalGraphicPngSequence({
+        protocol,
+        base64: png.base64,
         imageId: context.imageId,
         placementId: context.placementId,
-        zIndex: options.zIndex,
-        ...placement,
-      });
-      const resizeSequence = createKittyPlacementSequence({
-        imageId: context.imageId,
-        placementId: context.placementId,
-        zIndex: options.zIndex,
-        ...placement,
-      });
-      if (!isSafeTerminalGraphicsSequence(sequence, "kitty", "draw")) {
-        return textFallbackResult(await fallback());
-      }
-
-      return {
-        type: "sequence",
-        protocol: "kitty",
-        sequence,
-        resizeSequence,
-        clearSequence: createKittyDeleteGraphicsSequence({
-          imageId: context.imageId,
-          placementId: context.placementId,
-        }),
-        ...(await sequenceFallback()),
         cols: png.cols,
         rows: png.rows,
         sourceWidth: png.sourceWidth,
         sourceHeight: png.sourceHeight,
+        placementColumns: positiveInt(rect.w) ?? png.cols,
+        placementRows: positiveInt(rect.h) ?? png.rows,
+        rect,
+        fullRect,
         zIndex: options.zIndex,
-      };
-    }
-
-    if (protocol === "iterm2") {
-      const sequence = createIterm2InlineImageSequence(png.base64, {
-        width: png.cols,
-        height: png.rows,
-        preserveAspectRatio: true,
-        doNotMoveCursor: true,
+        fallback: await fallback(),
       });
-      if (!isSafeTerminalGraphicsSequence(sequence, "iterm2", "draw")) {
+      if (!result) return textFallbackResult(await fallback());
+      if (!isSafeTerminalGraphicsSequence(result.sequence, protocol, "draw")) {
         return textFallbackResult(await fallback());
       }
-
-      return {
-        type: "sequence",
-        protocol: "iterm2",
-        sequence,
-        ...(await sequenceFallback()),
-        cols: png.cols,
-        rows: png.rows,
-      };
+      return result;
     }
 
     if (protocol === "sixel") {

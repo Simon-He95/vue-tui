@@ -1,10 +1,7 @@
 import type { TerminalKeyboardEvent, TerminalPointerEvent } from "../../events/manager/types.js";
 import type { ExtractPublicPropTypes, PropType } from "vue";
 import type { Style } from "../../core/types.js";
-import type {
-  TAgentTerminalGraphicRenderer,
-  TAgentTerminalGraphicRendererContext,
-} from "./TAgentTerminalGraphic.js";
+import type { TAgentTerminalGraphicRenderer } from "./TAgentTerminalGraphic.js";
 import type {
   TVideoFrame,
   TVideoFrameEvent,
@@ -23,10 +20,7 @@ import {
   watch,
 } from "vue";
 import {
-  createIterm2InlineImageSequence,
-  createKittyDeleteGraphicsSequence,
-  createKittyGraphicsSequence,
-  createKittyPlacementSequence,
+  createTerminalGraphicPngSequence,
   getTerminalGraphicsOutput,
   getTerminalGraphicsOutputVersion,
   subscribeTerminalGraphicsOutput,
@@ -243,51 +237,6 @@ function bytesToBase64(bytes: Uint8Array): string {
   return chunks.join("");
 }
 
-function resolveKittyPlacement(
-  frame: NormalizedVideoFrame,
-  context: TAgentTerminalGraphicRendererContext,
-) {
-  const rect = context.viewport.rect;
-  const full = context.viewport.fullRect;
-  const columns = Math.max(1, Math.floor(rect.w));
-  const rows = Math.max(1, Math.floor(rect.h));
-  if (full.w <= 0 || full.h <= 0) return { columns, rows };
-
-  const offsetX = Math.max(0, rect.x - full.x);
-  const offsetY = Math.max(0, rect.y - full.y);
-  const visibleW = Math.max(0, Math.min(rect.w, full.w - offsetX));
-  const visibleH = Math.max(0, Math.min(rect.h, full.h - offsetY));
-  if (offsetX <= 0 && offsetY <= 0 && visibleW >= full.w && visibleH >= full.h) {
-    return { columns, rows };
-  }
-
-  const sourceX = Math.max(
-    0,
-    Math.min(frame.pixelWidth - 1, Math.floor((offsetX * frame.pixelWidth) / full.w)),
-  );
-  const sourceY = Math.max(
-    0,
-    Math.min(frame.pixelHeight - 1, Math.floor((offsetY * frame.pixelHeight) / full.h)),
-  );
-  const sourceRight = Math.max(
-    sourceX + 1,
-    Math.min(frame.pixelWidth, Math.ceil(((offsetX + visibleW) * frame.pixelWidth) / full.w)),
-  );
-  const sourceBottom = Math.max(
-    sourceY + 1,
-    Math.min(frame.pixelHeight, Math.ceil(((offsetY + visibleH) * frame.pixelHeight) / full.h)),
-  );
-
-  return {
-    columns,
-    rows,
-    sourceX,
-    sourceY,
-    sourceWidth: sourceRight - sourceX,
-    sourceHeight: sourceBottom - sourceY,
-  };
-}
-
 function createFrameRenderer(
   frame: NormalizedVideoFrame,
   cellWidth: number,
@@ -303,51 +252,24 @@ function createFrameRenderer(
     if (!context.visible || !context.rawVisible) return null;
     base64 ??= bytesToBase64(frame.png);
 
-    if (context.protocol === "kitty") {
-      const placement = resolveKittyPlacement(frame, context);
-      return {
-        type: "sequence",
-        protocol: "kitty",
-        sequence: createKittyGraphicsSequence(base64, {
-          imageId: context.imageId,
-          placementId: context.placementId,
-          ...placement,
-        }),
-        resizeSequence: createKittyPlacementSequence({
-          imageId: context.imageId,
-          placementId: context.placementId,
-          ...placement,
-        }),
-        clearSequence: createKittyDeleteGraphicsSequence({
-          imageId: context.imageId,
-          placementId: context.placementId,
-          freeImageData: true,
-        }),
-        cols: context.width,
-        rows: context.height,
-        sourceWidth: frame.pixelWidth,
-        sourceHeight: frame.pixelHeight,
-      };
-    }
+    const protocol = context.protocol;
+    if (protocol !== "kitty" && protocol !== "iterm2") return null;
 
-    if (context.protocol === "iterm2") {
-      return {
-        type: "sequence",
-        protocol: "iterm2",
-        sequence: createIterm2InlineImageSequence(base64, {
-          width: context.width,
-          height: context.height,
-          preserveAspectRatio: true,
-          doNotMoveCursor: true,
-        }),
-        cols: context.width,
-        rows: context.height,
-        sourceWidth: frame.pixelWidth,
-        sourceHeight: frame.pixelHeight,
-      };
-    }
-
-    return null;
+    return createTerminalGraphicPngSequence({
+      protocol,
+      base64,
+      imageId: context.imageId,
+      placementId: context.placementId,
+      cols: context.width,
+      rows: context.height,
+      sourceWidth: frame.pixelWidth,
+      sourceHeight: frame.pixelHeight,
+      placementColumns: Math.max(1, Math.floor(context.viewport.rect.w)),
+      placementRows: Math.max(1, Math.floor(context.viewport.rect.h)),
+      rect: context.viewport.rect,
+      fullRect: context.viewport.fullRect,
+      freeImageData: true,
+    });
   };
 }
 

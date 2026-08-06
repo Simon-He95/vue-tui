@@ -1199,3 +1199,170 @@ export function wrapTerminalGraphicsForMultiplexer(
 
   return sequence;
 }
+
+export type TerminalGraphicPngViewport = Readonly<{
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}>;
+
+export type CreateTerminalGraphicPngSequenceOptions = Readonly<{
+  protocol: "kitty" | "iterm2";
+  base64: string;
+  imageId: number;
+  placementId: number;
+  cols?: number;
+  rows?: number;
+  sourceWidth?: number;
+  sourceHeight?: number;
+  placementColumns?: number;
+  placementRows?: number;
+  rect?: TerminalGraphicPngViewport;
+  fullRect?: TerminalGraphicPngViewport;
+  zIndex?: number;
+  freeImageData?: boolean;
+  fallback?: string;
+}>;
+
+export type TerminalGraphicPngSequenceResult = Readonly<{
+  type: "sequence";
+  protocol: "kitty" | "iterm2";
+  sequence: string;
+  resizeSequence?: string;
+  clearSequence?: string;
+  fallback?: string;
+  cols?: number;
+  rows?: number;
+  sourceWidth?: number;
+  sourceHeight?: number;
+  zIndex?: number;
+}>;
+
+function resolveKittyPngSourceCrop(
+  rect: TerminalGraphicPngViewport,
+  fullRect: TerminalGraphicPngViewport,
+  sourceWidth: number,
+  sourceHeight: number,
+): Readonly<{
+  sourceX: number;
+  sourceY: number;
+  sourceWidth: number;
+  sourceHeight: number;
+}> | null {
+  if (fullRect.w <= 0 || fullRect.h <= 0) return null;
+
+  const offsetX = Math.max(0, rect.x - fullRect.x);
+  const offsetY = Math.max(0, rect.y - fullRect.y);
+  const visibleW = Math.max(0, Math.min(rect.w, fullRect.w - offsetX));
+  const visibleH = Math.max(0, Math.min(rect.h, fullRect.h - offsetY));
+  if (offsetX <= 0 && offsetY <= 0 && visibleW >= fullRect.w && visibleH >= fullRect.h) {
+    return null;
+  }
+
+  const sourceX = Math.max(
+    0,
+    Math.min(sourceWidth - 1, Math.floor((offsetX * sourceWidth) / fullRect.w)),
+  );
+  const sourceY = Math.max(
+    0,
+    Math.min(sourceHeight - 1, Math.floor((offsetY * sourceHeight) / fullRect.h)),
+  );
+  const sourceRight = Math.max(
+    sourceX + 1,
+    Math.min(sourceWidth, Math.ceil(((offsetX + visibleW) * sourceWidth) / fullRect.w)),
+  );
+  const sourceBottom = Math.max(
+    sourceY + 1,
+    Math.min(sourceHeight, Math.ceil(((offsetY + visibleH) * sourceHeight) / fullRect.h)),
+  );
+  return {
+    sourceX,
+    sourceY,
+    sourceWidth: sourceRight - sourceX,
+    sourceHeight: sourceBottom - sourceY,
+  };
+}
+
+/**
+ * Build a kitty/iTerm2 graphics sequence that renders one PNG. Shared by the
+ * image renderer factory (`createPngTerminalGraphicRenderer`) and the video
+ * frame renderer (`TVideo`) so both emit the same terminal sequences.
+ *
+ * Returns null for protocols this helper does not handle (callers fall back).
+ */
+export function createTerminalGraphicPngSequence(
+  options: CreateTerminalGraphicPngSequenceOptions,
+): TerminalGraphicPngSequenceResult | null {
+  if (options.protocol === "kitty") {
+    let placement: Readonly<{
+      columns: number | undefined;
+      rows?: number;
+      sourceX?: number;
+      sourceY?: number;
+      sourceWidth?: number;
+      sourceHeight?: number;
+    }> = {
+      columns: options.placementColumns,
+      rows: options.placementRows,
+    };
+
+    if (options.rect && options.fullRect && options.sourceWidth && options.sourceHeight) {
+      const crop = resolveKittyPngSourceCrop(
+        options.rect,
+        options.fullRect,
+        options.sourceWidth,
+        options.sourceHeight,
+      );
+      if (crop) placement = { ...placement, ...crop };
+    }
+
+    return {
+      type: "sequence",
+      protocol: "kitty",
+      sequence: createKittyGraphicsSequence(options.base64, {
+        imageId: options.imageId,
+        placementId: options.placementId,
+        zIndex: options.zIndex,
+        ...placement,
+      }),
+      resizeSequence: createKittyPlacementSequence({
+        imageId: options.imageId,
+        placementId: options.placementId,
+        zIndex: options.zIndex,
+        ...placement,
+      }),
+      clearSequence: createKittyDeleteGraphicsSequence({
+        imageId: options.imageId,
+        placementId: options.placementId,
+        freeImageData: options.freeImageData,
+      }),
+      ...(options.fallback != null ? { fallback: options.fallback } : {}),
+      ...(options.cols != null ? { cols: options.cols } : {}),
+      ...(options.rows != null ? { rows: options.rows } : {}),
+      ...(options.sourceWidth != null ? { sourceWidth: options.sourceWidth } : {}),
+      ...(options.sourceHeight != null ? { sourceHeight: options.sourceHeight } : {}),
+      ...(options.zIndex != null ? { zIndex: options.zIndex } : {}),
+    };
+  }
+
+  if (options.protocol === "iterm2") {
+    return {
+      type: "sequence",
+      protocol: "iterm2",
+      sequence: createIterm2InlineImageSequence(options.base64, {
+        width: options.cols,
+        height: options.rows,
+        preserveAspectRatio: true,
+        doNotMoveCursor: true,
+      }),
+      ...(options.fallback != null ? { fallback: options.fallback } : {}),
+      ...(options.cols != null ? { cols: options.cols } : {}),
+      ...(options.rows != null ? { rows: options.rows } : {}),
+      ...(options.sourceWidth != null ? { sourceWidth: options.sourceWidth } : {}),
+      ...(options.sourceHeight != null ? { sourceHeight: options.sourceHeight } : {}),
+    };
+  }
+
+  return null;
+}
