@@ -19,11 +19,7 @@ import {
   type TerminalCleanupHandle,
 } from "../src/cli.js";
 import { nextTick } from "vue";
-import {
-  CHAT_CLI_BAR_GAP,
-  CHAT_CLI_BAR_ROWS,
-  createChatCliApp,
-} from "./chat-cli/App.js";
+import { CHAT_CLI_BAR_GAP, CHAT_CLI_BAR_ROWS, createChatCliApp } from "./chat-cli/App.js";
 
 const interactive = process.env.VT_INTERACTIVE === "1";
 const smoke = process.env.VT_SMOKE === "1" || !interactive;
