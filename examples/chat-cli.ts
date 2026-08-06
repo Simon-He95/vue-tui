@@ -150,6 +150,7 @@ const out = createStdoutRenderer(
         anchor: "bottom",
         barGap: CHAT_CLI_BAR_GAP,
         screenRows: () => SMOKE_ROWS,
+        getImeAnchor: () => app.getImeAnchor(),
       }
     : {
         output: process.stdout,
@@ -160,6 +161,7 @@ const out = createStdoutRenderer(
         anchor: "bottom",
         barGap: CHAT_CLI_BAR_GAP,
         screenRows: () => liveRows(),
+        getImeAnchor: () => app.getImeAnchor(),
       },
 );
 

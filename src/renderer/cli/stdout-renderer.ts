@@ -155,9 +155,11 @@ export type StdoutRendererOptions = Readonly<{
    *   and never clears or repaints the area above.
    *
    * In bottom mode the renderer:
+   * - initially scrolls existing terminal contents upward to reserve the bar
+   *   rows and one fresh native-output row without overwriting prior history;
    * - repaints the full (small) buffer every frame, so an externally scrolled
    *   screen can never leave stale bar rows behind;
-   * - never emits scroll-region operations that would disturb the caller's
+   * - never emits buffer scroll operations that would disturb the caller's
    *   scroll region above the bar;
    * - skips the whole-screen clear even when `clear` is true;
    * - establishes a scroll region that excludes the bar (`ESC[1;<screenRows-rows>r`)
@@ -306,12 +308,17 @@ export function createStdoutRenderer(
   const anchorMode = options?.anchor === "bottom" ? "bottom" : "top";
   const screenRowsFn = typeof options?.screenRows === "function" ? options.screenRows : undefined;
   // Blank rows reserved between the output scroll region and the pinned bar.
-  const barGap = Math.max(0, Math.floor(Number(options?.barGap ?? 0)));
+  const rawBarGap = Math.floor(Number(options?.barGap ?? 0));
+  const barGap = Number.isFinite(rawBarGap) ? Math.max(0, rawBarGap) : 0;
   // Absolute screen-row offset for bottom-anchored (REPL bar) mode.
   // Buffer row 0 maps to screen row `rowOffset` (0-based); 0 in top mode.
   let rowOffset = 0;
   // 1-based bottom row of the output scroll region (`ESC[1;<n>r`).
   let scrollRegionBottom = 0;
+  // Existing terminal contents must be moved above the rows claimed by the bar
+  // exactly once, before narrowing the scroll region. Otherwise pre-existing
+  // output gets frozen in the gap or overwritten by the first native message.
+  let bottomRegionInitialized = false;
   const resolveScreenRows = (): number => {
     let rows = 0;
     if (screenRowsFn) {
@@ -2905,6 +2912,19 @@ export function createStdoutRenderer(
         rowClearToEol.length = 0;
       }
       const nextRegionBottom = Math.max(1, nextRowOffset - barGap);
+      if (outputIsTTY && !bottomRegionInitialized) {
+        const screenRows = resolveScreenRows();
+        if (screenRows > 0 && nextRowOffset > 0) {
+          // Make physical room before narrowing the scroll region. Merely setting
+          // DECSTBM would freeze pre-existing output in the gap/bar rows, and the
+          // caller's first native line would overwrite the old region-bottom row.
+          // One extra scroll leaves that region-bottom row fresh for the caller.
+          const reservedRows = Math.max(0, screenRows - nextRegionBottom);
+          const scrollCount = Math.min(screenRows, reservedRows + 1);
+          out.write(`\u001B[r\u001B[${screenRows};1H${"\n".repeat(scrollCount)}`);
+          bottomRegionInitialized = true;
+        }
+      }
       if (outputIsTTY && nextRegionBottom !== scrollRegionBottom) {
         scrollRegionBottom = nextRegionBottom;
         out.write(`\u001B[1;${nextRegionBottom}r`);
@@ -4456,9 +4476,10 @@ export function createStdoutRenderer(
         if (hasFrameOutput || x !== lastCursorX || y !== lastCursorY) {
           hasFrameOutput = true;
           emittedCursorPos = { x, y };
-          // ANSI cursor position is 1-based: ESC [ row ; col H
+          // ANSI cursor position is 1-based. Bottom-anchored buffers use local
+          // row coordinates, so map the IME anchor to its absolute screen row.
           closeActiveHrefBeforeCursorMove();
-          frameParts.push(`\u001B[${y + 1};${x + 1}H`);
+          frameParts.push(`\u001B[${y + 1 + rowOffset};${x + 1}H`);
         }
       }
     }

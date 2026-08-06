@@ -276,6 +276,55 @@ describe("stdout renderer bottom anchor (REPL bar)", () => {
     }
   });
 
+  it("preserves existing output before reserving the gap and bar rows", () => {
+    const terminal = createTerminal({ cols: 20, rows: 3 });
+    const { output, text } = createCapturingOutput();
+    const renderer = createStdoutRenderer(terminal, {
+      output,
+      clear: false,
+      hideCursor: false,
+      altScreen: false,
+      anchor: "bottom",
+      barGap: 2,
+      screenRows: () => 15,
+    });
+
+    try {
+      terminal.write("bar", { x: 0, y: 0 });
+      terminal.commit({ sync: true });
+
+      const frame = text();
+      // Before narrowing the scroll region, the renderer moves existing screen
+      // contents up by 3 bar rows + 2 gap rows + 1 fresh output row.
+      expect(frame).toContain(`\u001B[r\u001B[15;1H${"\n".repeat(6)}`);
+      expect(frame).toContain("\u001B[1;10r");
+
+      const existingOutput = "\u001B[12;1Hbuild 1\nbuild 2";
+      const nativeOutput = "\u001B[10;1H❯ hi\n\u001B[10;1Hecho: hi\n";
+      const screen = applyAnsiToScreen(existingOutput + frame + nativeOutput, 20, 15);
+
+      // Older output remains above newer caller output instead of being frozen
+      // below it in the reserved gap.
+      expect(screen[3]!.trimEnd()).toBe("build 1");
+      expect(screen[4]!.trimEnd()).toBe("build 2");
+      expect(screen[7]!.trimEnd()).toBe("❯ hi");
+      expect(screen[8]!.trimEnd()).toBe("echo: hi");
+      expect(screen[9]!.trim()).toBe("");
+      expect(screen[10]!.trim()).toBe("");
+      expect(screen[11]!.trim()).toBe("");
+      expect(screen[12]!.trimEnd()).toBe("bar");
+
+      // Repainting the bar must not reserve rows or scroll history again.
+      output.chunks.length = 0;
+      renderer.forceRender();
+      expect(text()).not.toContain(`\u001B[r\u001B[15;1H`);
+      expect(text()).not.toContain("\n".repeat(6));
+    } finally {
+      renderer.dispose();
+      terminal.dispose();
+    }
+  });
+
   it("leaves top-anchored rendering unchanged when anchor is unset", () => {
     const terminal = createTerminal({ cols: 20, rows: 3 });
     const { output, text } = createCapturingOutput();
