@@ -1,6 +1,6 @@
 {
   "schemaVersion": 5,
-  "measurementRef": "7ab61b37cffa2d7660d26aa02e614aafd0060757",
+  "measurementRef": "fa6d22ec886f783047f555aa445a4708f25a4fa1",
   "measurementInputs": {
     "examples/agent-console/src/AgentConsoleSurface.ts": "af637520b7323160fe433ddbfb4a41d965c62d92654c8014d279ff55291aa129",
     "examples/agent-console/src/App.vue": "0ac4ae6fb1279e8ed98e6a82f6eb0e98feacb85b67a0544ae8005cf70f583d8f",
@@ -23,13 +23,13 @@
     "scripts/build-cjs.mjs": "cfefe2a44d1aceb33ea51dd213ac85b8d875219a1f7c70eb5e83953cc4cfc9bc",
     "scripts/run-build-checked.mjs": "94ba7210a715891d28fe40bb4cb02694e9d0b7d7861a35d81d3457a6940d2afd",
     "scripts/check-build-warnings.mjs": "d09f9bc01718e15e1f36b70f5bcf6357183674971b23eeedd3188550016a0701",
-    "scripts/profile-agent-console-abc.ts": "cedda9ba248d08d641a618b203d2ccd26f34f5bfc3ef82a08e7fdeb0c9f638ce",
-    "scripts/profile-agent-console-browser.ts": "901657115cfc9b661a32e6a3cd37afc700594a27962d62b5f3304cbb6f55097b",
+    "scripts/profile-agent-console-abc.ts": "101c087f97446e760aca87f3451ec58abbb7d60709964fc4bda80fd0c74a7a93",
+    "scripts/profile-agent-console-browser.ts": "49c9aeae611761bf1786d5bf4e27ef5c80a2051b46d28dbb355e52fd8289d83e",
     "scripts/profile-agent-console-cli-worker.ts": "dde64bb57f6943f68d10c6faba47fd3cc03afd268eb682a8bedbb81a73fc6537",
     "scripts/profile-agent-console-cli.ts": "f990d7d144b6c8830c09339ebb8145624569eff85dbee9046ad122edbaa01544",
     "scripts/tsconfig.agent-console-profile-dist.json": "43f8b7a5af20c2c15bd025e0e0ee6e6dc35f6bd09a64e07fb6324fdbdfcb10f6"
   },
-  "verificationRef": "7ab61b37cffa2d7660d26aa02e614aafd0060757",
+  "verificationRef": "fa6d22ec886f783047f555aa445a4708f25a4fa1",
   "verificationInputs": {
     "scripts/agent-console-cpu-profile.ts": "20330b5fae6506344a36c5d2703f745a7ac3376f996d50ce54653c41e488de1f",
     "scripts/agent-console-profile-environment.ts": "5b2df314bfe1afeab5e7c5af9c457212a366c76e56d4fa9fa584fa016fcc9504",
@@ -19264,7 +19264,7 @@
           }
         }
       },
-      "productionRef": "7ab61b37cffa2d7660d26aa02e614aafd0060757"
+      "productionRef": "fa6d22ec886f783047f555aa445a4708f25a4fa1"
     },
     "B": {
       "schemaVersion": 2,
@@ -38465,7 +38465,7 @@
           }
         }
       },
-      "productionRef": "7ab61b37cffa2d7660d26aa02e614aafd0060757"
+      "productionRef": "fa6d22ec886f783047f555aa445a4708f25a4fa1"
     },
     "C": {
       "schemaVersion": 2,
@@ -57689,7 +57689,7 @@
           }
         }
       },
-      "productionRef": "7ab61b37cffa2d7660d26aa02e614aafd0060757"
+      "productionRef": "fa6d22ec886f783047f555aa445a4708f25a4fa1"
     }
   },
   "comparisons": {
