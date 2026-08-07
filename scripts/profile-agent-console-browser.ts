@@ -19,9 +19,15 @@ const outputDir = resolve(
   root,
   process.env.VUE_TUI_PROFILE_OUTPUT_DIR ?? ".tmp/perf/agent-console",
 );
-const port = Number(process.env.VUE_TUI_AGENT_CONSOLE_PORT ?? 4178);
+const requestedPort = Number(process.env.VUE_TUI_AGENT_CONSOLE_PORT ?? 4178);
 const profileVariant = process.env.AGENT_CONSOLE_PROFILE_VARIANT ?? "C";
-const baseUrl = `http://127.0.0.1:${port}/?profile=1&variant=${profileVariant}`;
+// A requested port of 0 lets the OS assign a free ephemeral port. The harness
+// previously reserved fixed ports in the 45178+ range, which fall inside the
+// Linux ephemeral range (32768-60999) and could collide with an outbound TCP
+// source port ("Port is already in use"), so the bound port is resolved from
+// the server address after it starts listening.
+let port = requestedPort;
+let baseUrl = `http://127.0.0.1:${port}/?profile=1&variant=${profileVariant}`;
 const smoke = process.env.AGENT_CONSOLE_PROFILE_SMOKE === "1";
 const canonicalOptions = resolveAgentConsoleProfileOptions(
   smoke
@@ -72,11 +78,18 @@ type ScenarioResult = Readonly<{
 const cpuProfileScenarios = new Set(AGENT_CONSOLE_CPU_PROFILE_SCENARIOS);
 
 async function startServer(): Promise<PreviewServer> {
-  return preview({
+  const server = await preview({
     root: resolve(root, "examples/agent-console"),
-    preview: { host: "127.0.0.1", port, strictPort: true },
+    preview: { host: "127.0.0.1", port, strictPort: port > 0 },
     logLevel: "warn",
   });
+  const address = server.httpServer.address();
+  const boundPort = typeof address === "object" && address ? address.port : null;
+  if (boundPort && boundPort !== port) {
+    port = boundPort;
+    baseUrl = `http://127.0.0.1:${port}/?profile=1&variant=${profileVariant}`;
+  }
+  return server;
 }
 async function waitForServer(): Promise<void> {
   for (let attempt = 0; attempt < 120; attempt++) {

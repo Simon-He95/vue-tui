@@ -32,7 +32,10 @@ for (const runtime of ["cli", "browser"] as const) {
         AGENT_CONSOLE_PROFILE_MODE: "1",
         AGENT_CONSOLE_PROFILE_VARIANT: variant,
         VUE_TUI_PROFILE_OUTPUT_DIR: output,
-        VUE_TUI_AGENT_CONSOLE_PORT: String(45178 + round * 3 + variants.indexOf(variant as any)),
+        // 0 = OS-assigned ephemeral port: the old fixed 45178+ range sits
+        // inside the Linux ephemeral range and could collide with outbound
+        // TCP source ports on CI (ubuntu), failing with "Port is already in use".
+        VUE_TUI_AGENT_CONSOLE_PORT: "0",
       };
       execFileSync("pnpm", ["run", `profile:agent-console:${runtime}`], {
         cwd: root,
@@ -65,7 +68,7 @@ for (const variant of variants) {
     AGENT_CONSOLE_PROFILE_MODE: "1",
     AGENT_CONSOLE_PROFILE_VARIANT: variant,
     VUE_TUI_PROFILE_OUTPUT_DIR: output,
-    VUE_TUI_AGENT_CONSOLE_PORT: String(45300 + variants.indexOf(variant)),
+    VUE_TUI_AGENT_CONSOLE_PORT: "0",
   };
   if (!smoke) {
     execFileSync("pnpm", ["run", "profile:agent-console:cli"], {
