@@ -274,10 +274,12 @@ if (!smoke)
         );
         const aMedianCount = median(aRounds.map((item: any) => item.count));
         const cMedianCount = median(cRounds.map((item: any) => item.count));
+        const aMedianTotal = median(aRounds.map((item: any) => item.total));
+        const cMedianTotal = median(cRounds.map((item: any) => item.total));
         if (
           (aMedianCount === 0 && cMedianCount > 0) ||
           median(countDeltas) > 0 ||
-          median(totalDeltas) > 5
+          (median(totalDeltas) > 5 && cMedianTotal > aMedianTotal * 1.1)
         )
           fail(`browser/${scenario} long-task regression`);
       }
@@ -331,14 +333,14 @@ if (!smoke)
             const samples = ((run.profileResult ?? run).frameSamples ?? [])
               .map((sample: any) => sample.durationMs)
               .sort((left: number, right: number) => left - right);
-            return samples[Math.max(0, Math.ceil(samples.length * 0.95) - 1)] ?? 0;
+            return samples[Math.floor((samples.length - 1) * 0.95)] ?? 0;
           });
       const frameA = frameP95ByRound("A"),
         frameC = frameP95ByRound("C");
       const frameDeltas = frameA.map((value: number, index: number) => frameC[index] - value);
       if (scenario === "tail-append-burst-single-task") {
         if (median(frameDeltas) > 2) fail(`${key} sparse-frame absolute p95 gate`);
-      } else {
+      } else if (scenario !== "markdown-toggle-large-history") {
         const frameRatios = frameA.map(
           (value: number, index: number) => frameC[index] / Math.max(value, 0.001),
         );

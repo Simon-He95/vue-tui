@@ -339,6 +339,7 @@ export const tAgentTerminalGraphicProps = {
   suspendRenderWhileScrolling: { type: Boolean, default: true },
   scrolling: { type: Boolean, default: false },
   scrollVersion: { type: Number, default: 0 },
+  /** Advanced Kitty-only opt-in for moving an unchanged image via a reusable placement sequence. */
   placementMoveWithoutClear: { type: Boolean, default: false },
   preserveRawWhileRendering: { type: Boolean, default: false },
   suspended: { type: Boolean, default: false },

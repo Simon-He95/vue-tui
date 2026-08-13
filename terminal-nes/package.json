@@ -3,15 +3,15 @@
   "version": "0.1.2",
   "description": "🎮 Real NES emulator in your terminal — jsnes core, pixel-perfect 256×224 frames via kitty/iTerm2 graphics, keyboard → NES controller, share-to-X with screenshot.",
   "keywords": [
-    "nes",
+    "cli",
     "emulator",
+    "iterm2",
+    "kitty-graphics",
+    "nes",
     "retro",
     "terminal-game",
     "tui",
-    "kitty-graphics",
-    "iterm2",
-    "vue-tui",
-    "cli"
+    "vue-tui"
   ],
   "homepage": "https://github.com/Simon-He95/vue-tui/tree/main/terminal-nes",
   "license": "MIT",

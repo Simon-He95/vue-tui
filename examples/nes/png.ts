@@ -98,7 +98,9 @@ export function resizeNearest(
   dstH: number,
 ): void {
   if (dst.byteLength !== dstW * dstH * 4) {
-    throw new Error(`resizeNearest buffer mismatch: expected ${dstW * dstH * 4}, got ${dst.byteLength}`);
+    throw new Error(
+      `resizeNearest buffer mismatch: expected ${dstW * dstH * 4}, got ${dst.byteLength}`,
+    );
   }
   if (srcW === dstW && srcH === dstH) {
     dst.set(src);

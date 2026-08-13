@@ -1,4 +1,5 @@
 import type { PropType } from "vue";
+import type { TerminalRenderPlane } from "../../core/render-plane.js";
 import type { Style } from "../../core/types.js";
 import type {
   Rect,
@@ -52,6 +53,7 @@ import {
   clearMarkdownImageGraphics,
   collectVisibleMarkdownImageGraphicIds,
   paintMarkdownVisualRow,
+  queueClippedVisibleMarkdownImageGraphics,
 } from "../markdown/render.js";
 import { markdownThemeSignature, type TuiMarkdownThemeOverrides } from "../markdown/theme.js";
 import type {
@@ -67,9 +69,10 @@ import { useRenderNode } from "../composables/use-render-node.js";
 import { useTerminalNode } from "../composables/use-terminal-node.js";
 import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
-import { EventZIndexContextKey } from "../context.js";
+import { EventZIndexContextKey, RenderPlaneContextKey } from "../context.js";
 import { intersectRect, normalizeCellRect, translateRect } from "../utils/rect.js";
 import { sliceByCellsRange, withTextWidthProvider } from "../utils/text.js";
+import type { TVirtualRowsRowScrollMode } from "./TVirtualRows.js";
 import {
   applyWheelScroll,
   createWheelScrollState,
@@ -94,9 +97,14 @@ function markdownStyleSignature(style?: Style): string {
   ].join("\u0001");
 }
 
+const markdownRowSignatureCache = new WeakMap<TuiMarkdownVisualRow, string>();
+const markdownRowGraphicSignatureCache = new WeakMap<TuiMarkdownVisualRow, string>();
+
 function markdownRowSignature(row: TuiMarkdownVisualRow | undefined): string {
   if (!row) return "";
-  return [
+  const cached = markdownRowSignatureCache.get(row);
+  if (cached != null) return cached;
+  const signature = [
     row.key,
     row.plainText,
     row.segments
@@ -106,6 +114,8 @@ function markdownRowSignature(row: TuiMarkdownVisualRow | undefined): string {
       )
       .join("\u0002"),
   ].join("\u0003");
+  markdownRowSignatureCache.set(row, signature);
+  return signature;
 }
 
 function getWheelScrollInput(e: { deltaY?: number; deltaMode?: number }): {
@@ -130,13 +140,17 @@ function getWheelScrollInput(e: { deltaY?: number; deltaMode?: number }): {
 
 function rowGraphicSignature(row: TuiMarkdownVisualRow | undefined): string {
   if (!row) return "";
-  return row.segments
-    .map((segment) =>
-      segment.graphic
-        ? `${segment.graphic.kind}\u0001${segment.graphic.src}\u0001${segment.graphic.base64 ?? ""}`
-        : "",
+  const cached = markdownRowGraphicSignatureCache.get(row);
+  if (cached != null) return cached;
+  const signature = row.segments
+    .filter((segment) => segment.graphic)
+    .map(
+      (segment) =>
+        `${segment.graphic!.kind}\u0001${segment.graphic!.src}\u0001${segment.graphic!.base64 ?? ""}`,
     )
     .join("\u0002");
+  markdownRowGraphicSignatureCache.set(row, signature);
+  return signature;
 }
 
 export const TVirtualMarkdown = defineComponent({
@@ -189,6 +203,10 @@ export const TVirtualMarkdown = defineComponent({
       type: Array as PropType<readonly Rect[]>,
       default: undefined,
     },
+    rowScrollMode: {
+      type: String as PropType<TVirtualRowsRowScrollMode>,
+      default: "off",
+    },
   },
   emits: {
     "update:scrollTop": (_value: number) => true,
@@ -202,10 +220,20 @@ export const TVirtualMarkdown = defineComponent({
   },
   setup(props, { emit }) {
     const instance = getCurrentInstance();
-    const { terminal, defaultStyle, events, scheduler, selection, widthProvider } = useTerminal();
+    const {
+      terminal,
+      defaultStyle,
+      events,
+      scheduler,
+      selection,
+      widthProvider,
+      render,
+      rendererCapabilities,
+    } = useTerminal();
     const layout = useLayout();
     const { visible, rootProps } = useVisibility();
     const parentEventZ = inject(EventZIndexContextKey, computed(() => 0) as any);
+    const plane = inject(RenderPlaneContextKey, ref<TerminalRenderPlane>("default"));
     const eventZ = computed(() => (parentEventZ.value ?? 0) + (props.zIndex ?? 0));
     const internalScrollTop = ref(0);
     const documentVersion = ref(0);
@@ -216,6 +244,8 @@ export const TVirtualMarkdown = defineComponent({
     let rebuildVersion = 0;
     let layoutCache: TuiMarkdownLayoutCache | undefined;
     let alive = true;
+    let dirtyRowsHint: readonly number[] | undefined;
+    let renderNodeId: string | null = null;
     const parser = shallowRef(
       markRaw(
         createTuiMarkdownParser({
@@ -313,6 +343,24 @@ export const TVirtualMarkdown = defineComponent({
         prevVisibleRows.some((row, index) => row !== nextVisibleRows[index]) ||
         prevVisibleGraphics.some((row, index) => row !== nextVisibleGraphics[index]);
       if (!builtOnce || prevScrollTop !== nextScrollTop || visibleChanged) {
+        if (
+          visibleChanged &&
+          prevScrollTop === nextScrollTop &&
+          prevVisibleGraphics.every((signature) => !signature) &&
+          nextVisibleGraphics.every((signature) => !signature)
+        ) {
+          const rect = normalizedRect();
+          const changedRows: number[] = [];
+          const count = Math.max(prevVisibleRows.length, nextVisibleRows.length);
+          for (let index = 0; index < count; index++) {
+            if (prevVisibleRows[index] !== nextVisibleRows[index]) {
+              changedRows.push(rect.y + index);
+            }
+          }
+          markRowsDirty(changedRows);
+        } else {
+          markRowsDirty(viewportRows());
+        }
         documentVersion.value++;
         selection.refresh();
       }
@@ -406,6 +454,77 @@ export const TVirtualMarkdown = defineComponent({
       return out;
     }
 
+    function viewportRows(): number[] {
+      const rect = normalizedRect();
+      const result: number[] = [];
+      for (let y = rect.y; y < rect.y + rect.h; y++) result.push(y);
+      return result;
+    }
+
+    function exposedRowsForDelta(y: number, height: number, delta: number): number[] {
+      const result: number[] = [];
+      if (delta > 0) {
+        for (let offset = height - delta; offset < height; offset++) result.push(y + offset);
+      } else {
+        for (let offset = 0; offset < -delta; offset++) result.push(y + offset);
+      }
+      return result;
+    }
+
+    function markRowsDirty(nextRows: readonly number[]): void {
+      const rows = new Set(dirtyRowsHint);
+      for (const y of nextRows) rows.add(y);
+      dirtyRowsHint = Array.from(rows).sort((a, b) => a - b);
+      if (renderNodeId) render.markDirtyRows(renderNodeId, dirtyRowsHint);
+    }
+
+    function visibleGraphicsAt(scrollTop: number): boolean {
+      const rect = normalizedRect();
+      const { x: clipX, y: clipY } = clipOffsets();
+      return (
+        collectVisibleMarkdownImageGraphicIds(rows.value, {
+          x: rect.x,
+          y: rect.y,
+          w: rect.w,
+          h: rect.h,
+          rowOffset: scrollTop + clipY,
+          clipStart: clipX,
+        }).size > 0
+      );
+    }
+
+    function isClipped(): boolean {
+      const rect = normalizedRect();
+      const full = normalizedFullRect();
+      return rect.x !== full.x || rect.y !== full.y || rect.w !== full.w || rect.h !== full.h;
+    }
+
+    function markScrollDamage(prevTop: number, nextTop: number): void {
+      const rect = normalizedRect();
+      const delta = nextTop - prevTop;
+      if (rect.h <= 0 || !delta) return;
+
+      const size = terminal.size();
+      const canShiftRows =
+        props.rowScrollMode === "unsafe-full-row" &&
+        rendererCapabilities.value.scrollOperations &&
+        rect.x === 0 &&
+        rect.w >= size.cols &&
+        rect.y >= 0 &&
+        rect.y + rect.h <= size.rows &&
+        !isClipped() &&
+        Math.abs(delta) < rect.h &&
+        !dirtyRowsHint?.length &&
+        !visibleGraphicsAt(prevTop);
+
+      if (canShiftRows) {
+        render.unsafeScrollPlaneRows(plane.value, rect.y, rect.y + rect.h, delta);
+        markRowsDirty(exposedRowsForDelta(rect.y, rect.h, delta));
+      } else {
+        markRowsDirty(viewportRows());
+      }
+    }
+
     function hasControlledScrollTop(): boolean {
       return Object.prototype.hasOwnProperty.call(instance?.vnode.props ?? {}, "scrollTop");
     }
@@ -416,6 +535,7 @@ export const TVirtualMarkdown = defineComponent({
       const changed = internalScrollTop.value !== clamped;
 
       if (changed) {
+        markScrollDamage(internalScrollTop.value, clamped);
         internalScrollTop.value = clamped;
       }
 
@@ -435,13 +555,17 @@ export const TVirtualMarkdown = defineComponent({
     function setScrollTop(
       next: number,
       emitChange = true,
-      refreshOptions?: { remapSelectionFocus?: boolean; emitClampEvenIfUnchanged?: boolean },
+      refreshOptions?: {
+        remapSelectionFocus?: boolean;
+        emitClampEvenIfUnchanged?: boolean;
+      },
     ): void {
       const desired = Math.floor(Number(next) || 0);
       const clamped = clamp(desired, 0, maxScrollTop());
       const changed = internalScrollTop.value !== clamped;
 
       if (changed) {
+        markScrollDamage(internalScrollTop.value, clamped);
         internalScrollTop.value = clamped;
       }
 
@@ -767,9 +891,10 @@ export const TVirtualMarkdown = defineComponent({
       clearMarkdownImageGraphics(terminal, fullRect.value);
     });
 
-    useRenderNode(() => ({
+    const renderNode = useRenderNode(() => ({
       zIndex: props.zIndex,
       rect: visible.value ? normalizedRect() : { x: 0, y: 0, w: 0, h: 0 },
+      dirtyRowsHint,
       deps: [
         visible.value,
         absRect.value,
@@ -782,6 +907,7 @@ export const TVirtualMarkdown = defineComponent({
         props.imageOcclusionRects,
       ],
       paint: (dirtyRows) => {
+        dirtyRowsHint = undefined;
         withTextWidthProvider(widthProvider, () => {
           if (!visible.value) return;
           const r = normalizedRect();
@@ -793,6 +919,19 @@ export const TVirtualMarkdown = defineComponent({
           ) => {
             return props.imageOcclusionRects?.some((item) => intersectRect(rect, item)) === true;
           };
+          const prequeuedGraphicIds = queueClippedVisibleMarkdownImageGraphics(
+            terminal,
+            rows.value,
+            {
+              x: r.x,
+              y: r.y,
+              w: r.w,
+              h: r.h,
+              rowOffset: internalScrollTop.value + clipY,
+              clipStart: clipX,
+              isGraphicCovered,
+            },
+          );
           const keepGraphicIds = collectVisibleMarkdownImageGraphicIds(rows.value, {
             x: r.x,
             y: r.y,
@@ -813,6 +952,7 @@ export const TVirtualMarkdown = defineComponent({
               baseStyle,
               clear: true,
               keepGraphicIds,
+              prequeuedGraphicIds,
               isGraphicCovered,
             });
           };
@@ -824,6 +964,10 @@ export const TVirtualMarkdown = defineComponent({
         });
       },
     }));
+
+    watchEffect(() => {
+      renderNodeId = renderNode.id.value;
+    });
 
     return () => h("span", rootProps);
   },

@@ -93,8 +93,7 @@ export function shareToX(options: {
   }
 
   const scoreText = score != null ? `score ${score}` : "";
-  const timeText =
-    playMs != null && playMs > 0 ? `${(playMs / 1000).toFixed(1)}s of play` : "";
+  const timeText = playMs != null && playMs > 0 ? `${(playMs / 1000).toFixed(1)}s of play` : "";
   const bits = [scoreText, timeText].filter(Boolean).join(" · ");
   const caption = [
     `🕹️ Playing ${rom} in my terminal — ${bits || "one life at a time"}`,

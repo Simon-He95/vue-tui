@@ -46,6 +46,21 @@ const content = [
 
 The component renders in terminal cells and emits scroll/focus/keyboard events like other terminal components.
 
+For a full-width markdown viewport that exclusively owns its render-plane rows, opt into row-shift scrolling to repaint only newly exposed rows:
+
+```vue
+<TVirtualMarkdown
+  :x="0"
+  :y="0"
+  :w="terminalWidth"
+  :h="28"
+  :content="content"
+  row-scroll-mode="unsafe-full-row"
+/>
+```
+
+Keep the default `rowScrollMode="off"` when another component shares those rows on the same plane. The component also falls back to viewport repaint while terminal images are visible so raw graphics placements cannot drift away from text.
+
 ## Streaming Markdown
 
 For simple streams, pass `content` with `streaming=true`. Rapid updates are coalesced into scheduled markdown rebuilds.

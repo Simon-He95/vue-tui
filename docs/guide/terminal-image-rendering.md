@@ -219,17 +219,20 @@ npx tsx scripts/check-math-graphics.ts
 
 ## TAgentTerminalGraphic 关键 Props
 
-| Prop                                                       | 类型                            | 默认            | 说明                                                             |
-| ---------------------------------------------------------- | ------------------------------- | --------------- | ---------------------------------------------------------------- |
-| `x` / `y` / `w` / `h`                                      | `number`                        | —（x/y/w 必填） | 图片占用的 cell rect；`h` 省略时用 renderer 返回的 `rows` 推导   |
-| `kind`                                                     | `"image"` / `"math"`            | `"image"`       | 图形类型                                                         |
-| `content`                                                  | `string`                        | —（必填）       | 传给 renderer 的内容（图片数据 / TeX）                           |
-| `renderer`                                                 | `TAgentTerminalGraphicRenderer` | `undefined`     | 返回可信 escape 序列或降级文本                                   |
-| `fallback`                                                 | `string`                        | `undefined`     | 无协议 / renderer 返回空 / 抛错时显示；`kind="image"` 默认空文本 |
-| `deferRenderUntilVisible`                                  | `boolean`                       | `true`          | 滚动/隐藏时不渲染                                                |
-| `suspendRenderWhileScrolling` / `suspendRawWhileScrolling` | `boolean`                       | `true`          | 滚动期间暂停渲染/暂停 raw 重绘                                   |
-| `zIndex`                                                   | `number`                        | `0`             | Kitty placement z-index                                          |
-| `trace`                                                    | `(event) => void`               | `undefined`     | 渲染过程 trace 事件（调试用）                                    |
+| Prop                                                       | 类型                            | 默认            | 说明                                                              |
+| ---------------------------------------------------------- | ------------------------------- | --------------- | ----------------------------------------------------------------- |
+| `x` / `y` / `w` / `h`                                      | `number`                        | —（x/y/w 必填） | 图片占用的 cell rect；`h` 省略时用 renderer 返回的 `rows` 推导    |
+| `kind`                                                     | `"image"` / `"math"`            | `"image"`       | 图形类型                                                          |
+| `content`                                                  | `string`                        | —（必填）       | 传给 renderer 的内容（图片数据 / TeX）                            |
+| `renderer`                                                 | `TAgentTerminalGraphicRenderer` | `undefined`     | 返回可信 escape 序列或降级文本                                    |
+| `fallback`                                                 | `string`                        | `undefined`     | 无协议 / renderer 返回空 / 抛错时显示；`kind="image"` 默认空文本  |
+| `deferRenderUntilVisible`                                  | `boolean`                       | `true`          | 滚动/隐藏时不渲染                                                 |
+| `suspendRenderWhileScrolling` / `suspendRawWhileScrolling` | `boolean`                       | `true`          | 滚动期间暂停渲染/暂停 raw 重绘                                    |
+| `placementMoveWithoutClear`                                | `boolean`                       | `false`         | 高级 Kitty-only opt-in；仅用于同一图片和可复用 placement sequence |
+| `zIndex`                                                   | `number`                        | `0`             | Kitty placement z-index                                           |
+| `trace`                                                    | `(event) => void`               | `undefined`     | 渲染过程 trace 事件（调试用）                                     |
+
+Markdown 图片和 `TMermaidImage` 会在 Kitty 协议下自动使用 placement-only 移动，调用这些组件时不需要传 `placementMoveWithoutClear`。直接使用 `TAgentTerminalGraphic` 时该 prop 默认仍是 `false`；只有自定义 renderer 在内容未变化时保持相同 Kitty image id，并提供可复用的 placement/resize sequence，才应显式开启。`TVideo`、GIF 帧和 `T3DViewport` 等内容持续变化的场景不应为了这次优化打开它。
 
 ## 常见问题
 

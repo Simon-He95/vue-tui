@@ -495,6 +495,8 @@ export const componentPublicPropDescriptions: Record<string, Record<string, stri
     scrollTop: "Controlled top visual-row offset within the markdown viewport.",
     final: "Parses the markdown as a complete document when enabled.",
     streaming: "Coalesces rapid content updates into frame-scheduled markdown rebuilds.",
+    rowScrollMode:
+      'Enables exposed-row scrolling for an unclipped full-width viewport that exclusively owns its render-plane rows when set to "unsafe-full-row".',
     selectable:
       "Controls whether native terminal text selection may start inside the markdown viewport.",
     customHtmlTags: "Additional HTML tag names accepted by the markdown parser.",

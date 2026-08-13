@@ -1,5 +1,5 @@
 {
-  "packageVersion": "1.1.4",
+  "packageVersion": "1.1.5",
   "entrypoints": {
     "@simon_he/vue-tui": {
       "maturity": "public",
@@ -1395,7 +1395,8 @@
           "name": "placementMoveWithoutClear",
           "type": "boolean",
           "required": false,
-          "defaultValue": "false"
+          "defaultValue": "false",
+          "description": "Advanced Kitty-only opt-in for moving an unchanged image via a reusable placement sequence."
         },
         {
           "name": "preserveRawWhileRendering",
@@ -11019,6 +11020,14 @@
           "required": false,
           "defaultValue": "undefined",
           "description": "Terminal rectangles that markdown image layout treats as unavailable for graphics placement.",
+          "descriptionSource": "component-default"
+        },
+        {
+          "name": "rowScrollMode",
+          "type": "TVirtualRowsRowScrollMode",
+          "required": false,
+          "defaultValue": "\"off\"",
+          "description": "Enables exposed-row scrolling for an unclipped full-width viewport that exclusively owns its render-plane rows when set to \"unsafe-full-row\".",
           "descriptionSource": "component-default"
         }
       ],

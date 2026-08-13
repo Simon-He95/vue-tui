@@ -1,0 +1,81 @@
+{
+  "tag": "vue-tui-markdown-graphics-comparison-v1",
+  "generatedAt": "2026-08-13",
+  "baselineGitSha": "bd678c6d2f905ca67de6b9a8e4d72ab95cd6399d",
+  "candidate": "this PR working tree",
+  "environment": {
+    "host": "macOS 14.5 / Darwin 23.5.0 arm64",
+    "node": "v24.16.0",
+    "pnpm": "10.34.5",
+    "package": "@simon_he/vue-tui@1.1.5",
+    "note": "Non-release local sample. Timing values are only for same-machine before/after comparison."
+  },
+  "command": "pnpm run bench:markdown-graphics",
+  "baseline": {
+    "markdownImageHotPaint": {
+      "payloadBase64Bytes": 1048576,
+      "iterations": 100,
+      "samples": 5,
+      "medianMs": 732.373,
+      "minMs": 673.298,
+      "maxMs": 854.047
+    },
+    "kittyImageMove": {
+      "payloadBase64Bytes": 262144,
+      "moves": 100,
+      "samples": 5,
+      "medianMs": 810.515,
+      "minMs": 774.643,
+      "maxMs": 945.272,
+      "medianStdoutBytes": 13362925,
+      "minStdoutBytes": 13362838,
+      "maxStdoutBytes": 13363055,
+      "imageTransmissions": 50,
+      "placements": 50,
+      "deletes": 99
+    },
+    "virtualMarkdownRowScroll": {
+      "viewportRows": 6,
+      "commits": 1,
+      "dirtyRows": [0, 1, 2, 3, 4, 5],
+      "dirtyRowCount": 6
+    }
+  },
+  "candidateResult": {
+    "markdownImageHotPaint": {
+      "payloadBase64Bytes": 1048576,
+      "iterations": 100,
+      "samples": 5,
+      "medianMs": 1.5,
+      "minMs": 1.273,
+      "maxMs": 3.301
+    },
+    "kittyImageMove": {
+      "payloadBase64Bytes": 262144,
+      "moves": 100,
+      "samples": 5,
+      "medianMs": 126.773,
+      "minMs": 107.491,
+      "maxMs": 135.714,
+      "medianStdoutBytes": 465884,
+      "minStdoutBytes": 465884,
+      "maxStdoutBytes": 465907,
+      "imageTransmissions": 1,
+      "placements": 99,
+      "deletes": 0
+    },
+    "virtualMarkdownRowScroll": {
+      "viewportRows": 6,
+      "commits": 1,
+      "dirtyRows": [5],
+      "dirtyRowCount": 1
+    }
+  },
+  "comparison": {
+    "markdownImageHotPaintSpeedup": 488.2,
+    "kittyImageMoveSpeedup": 6.4,
+    "kittyStdoutBytesReductionPercent": 96.5,
+    "kittyImageTransmissionsReductionPercent": 98.0,
+    "virtualMarkdownDirtyRowsReductionPercent": 83.3
+  }
+}

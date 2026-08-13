@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createStdoutRenderer } from "../src/cli.js";
-import { TMarkdownText } from "../src/markdown.js";
+import { TMarkdownText, TVirtualMarkdown } from "../src/markdown.js";
 import { sanitizeMarkdownImageSource } from "../src/vue/markdown/image.js";
 import { h, mountTerminal, nextTick, ref } from "./ui-regressions-support.js";
 
@@ -953,6 +953,145 @@ describe("markdown image fallback and sizing", () => {
           expect(clearIndex).toBeGreaterThanOrEqual(0);
           expect(drawIndex).toBeGreaterThanOrEqual(0);
           expect(clearIndex).toBeLessThan(drawIndex);
+          expect(stdout).not.toContain("a=T");
+        } finally {
+          renderer.dispose();
+          mounted.unmount();
+        }
+      },
+    );
+  });
+
+  it("keeps repeated markdown image moves on the Kitty placement-only path", async () => {
+    await withEnv(
+      {
+        KITTY_WINDOW_ID: "vue-tui-test",
+        TERM: "xterm-kitty",
+        TERM_PROGRAM: "kitty",
+        CI: undefined,
+        TMUX: undefined,
+        VUE_TUI_GRAPHICS_FORCE: "1",
+      },
+      async () => {
+        const imageY = ref(0);
+        const mounted = await mountTerminal(
+          () =>
+            h(TMarkdownText, {
+              x: 0,
+              y: imageY.value,
+              w: 40,
+              h: 4,
+              content: `![cat fallback](${TINY_PNG_DATA_URL})`,
+              imageMinWidth: 20,
+              imageMaxWidth: 20,
+              imageMinHeight: 2,
+              imageMaxHeight: 2,
+            }),
+          40,
+          10,
+        );
+
+        let stdout = "";
+        const renderer = createStdoutRenderer(mounted.terminal, {
+          output: {
+            isTTY: true,
+            write(chunk: string) {
+              stdout += chunk;
+            },
+          },
+          clear: false,
+          hideCursor: false,
+          altScreen: false,
+          terminalGraphics: { protocol: "kitty", force: true },
+        });
+
+        try {
+          await nextTick();
+          mounted.scheduler()?.flushNow();
+          (renderer as any).render(undefined, true);
+          expect(stdout).toContain("a=T");
+
+          for (const y of [1, 2, 3]) {
+            stdout = "";
+            imageY.value = y;
+            await nextTick();
+            mounted.scheduler()?.flushNow();
+            (renderer as any).render(undefined, true);
+
+            expect(stdout).toContain("a=p");
+            expect(stdout).not.toContain("a=T");
+          }
+        } finally {
+          renderer.dispose();
+          mounted.unmount();
+        }
+      },
+    );
+  });
+
+  it("re-places a markdown image with a source crop when its top scrolls out of view", async () => {
+    await withEnv(
+      {
+        KITTY_WINDOW_ID: "vue-tui-test",
+        TERM: "xterm-kitty",
+        TERM_PROGRAM: "kitty",
+        CI: undefined,
+        TMUX: undefined,
+        VUE_TUI_GRAPHICS_FORCE: "1",
+      },
+      async () => {
+        const scrollTop = ref(0);
+        const mounted = await mountTerminal(
+          () =>
+            h(TVirtualMarkdown, {
+              x: 0,
+              y: 0,
+              w: 40,
+              h: 3,
+              scrollTop: scrollTop.value,
+              content: `![cat fallback](${WIDE_PNG_DATA_URL})\n\nafter\n\ntail`,
+              imageMinWidth: 20,
+              imageMaxWidth: 20,
+              imageMinHeight: 4,
+              imageMaxHeight: 4,
+            }),
+          40,
+          8,
+        );
+
+        let stdout = "";
+        const renderer = createStdoutRenderer(mounted.terminal, {
+          output: {
+            isTTY: true,
+            write(chunk: string) {
+              stdout += chunk;
+            },
+          },
+          clear: false,
+          hideCursor: false,
+          altScreen: false,
+          terminalGraphics: { protocol: "kitty", force: true },
+        });
+
+        try {
+          await nextTick();
+          mounted.scheduler()?.flushNow();
+          (renderer as any).render(undefined, true);
+          expect(stdout).toContain("a=T");
+          expect(stdout).toContain("r=3");
+          expect(stdout).toContain("y=0");
+          expect(stdout).toContain("h=9");
+
+          stdout = "";
+          scrollTop.value = 1;
+          await nextTick();
+          mounted.scheduler()?.flushNow();
+          (renderer as any).render(undefined, true);
+
+          expect(stdout).toContain("a=p");
+          expect(stdout).toContain("r=3");
+          expect(stdout).toContain("y=3");
+          expect(stdout).toContain("h=9");
           expect(stdout).not.toContain("a=T");
         } finally {
           renderer.dispose();
