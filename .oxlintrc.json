@@ -14,7 +14,8 @@
     "examples/**",
     "docs/**",
     "scripts/**",
-    "test/**"
+    "test/**",
+    "terminal-nes/src/vendor/**"
   ],
   "plugins": ["typescript", "unicorn", "oxc", "vue"],
   "categories": {
