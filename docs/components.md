@@ -2133,7 +2133,7 @@ Virtual Markdown renderer。它复用 `TMarkdownText` 的 markdown parsing / pai
 >
 > Markdown link 会写入 `Style.href` metadata。DOM renderer 默认不把 `Style.href` 渲染为原生 `<a>`。启用 `links: true` 或 `links: { activation: 'native' }` 后，safe absolute 和 relative/hash/search href 会渲染为原生 `<a>`，浏览器保留默认导航行为；`onLinkClick` 返回 `false` 时阻止导航。启用 `links: { activation: 'event', onActivate }` 后，点击始终 `preventDefault()`，由 `onActivate` 处理跳转、打开或路由。`links: { activation: 'none' }` 不渲染原生 anchor，只保留文本。CLI/stdout renderer 只会为 safe absolute href 发出 OSC8 hyperlink。
 >
-> `TVirtualMarkdown` 当前仍是 **viewport-level repaint**，不是 row-local dirty diff；streaming append 也不会自动 follow tail，默认保持 absolute `scrollTop` / absolute visual-row index 语义。
+> `TVirtualMarkdown` 会对稳定 keyed blocks 的可见行做 row-local dirty diff。滚动默认仍 repaint viewport；当组件未裁剪、占满并独占 terminal rows，且当前 renderer 支持 scroll operations 时，可以显式设置 `rowScrollMode="unsafe-full-row"`，让小幅滚动 shift plane 并只 repaint 新暴露行。可见 terminal graphics 会自动回退 viewport repaint。streaming append 不会自动 follow tail，仍保持 absolute `scrollTop` / absolute visual-row index 语义。
 >
 > `@simon_he/vue-tui/markdown` 公开 `createMarkdownBlockSource()`、`createTuiMarkdownParser()`、`buildMarkdownBlocks()`、`buildMarkdownVisualRows()` 与 `layoutMarkdownBlocks()`，用于需要直接消费 block/visual row 或流式 transcript block source 的宿主渲染器。
 

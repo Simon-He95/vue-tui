@@ -614,6 +614,18 @@ export function createStdoutRenderer(
   const activeGraphics = new Map<string, ActiveTerminalGraphic>();
   const pendingGraphicSignatures = new Map<string, string>();
   const activeGraphicSignatures = new Map<string, string>();
+  const validatedGraphicFrames = new Map<string, ReturnType<typeof validateTerminalGraphicFrame>>();
+  const graphicSequenceHashes = new Map<
+    string,
+    Readonly<{
+      sequence: string;
+      resizeSequence: string;
+      clearSequence: string;
+      sequenceHash: string;
+      resizeSequenceHash: string;
+      clearSequenceHash: string;
+    }>
+  >();
   const retainedGraphics = new Map<string, RetainedTerminalGraphic>();
   const knownKittyImageIds = new Set<number>();
   const terminalResizeDirtyGraphics = new Set<string>();
@@ -663,6 +675,24 @@ export function createStdoutRenderer(
       allowTextOverlay?: boolean;
     }>,
   ): string {
+    const cached = graphicSequenceHashes.get(payload.id);
+    const resizeSequence = payload.resizeSequence ?? "";
+    const clearSequence = payload.clearSequence ?? "";
+    const hashes =
+      cached &&
+      cached.sequence === payload.sequence &&
+      cached.resizeSequence === resizeSequence &&
+      cached.clearSequence === clearSequence
+        ? cached
+        : {
+            sequence: payload.sequence,
+            resizeSequence,
+            clearSequence,
+            sequenceHash: hashTerminalGraphicsString(payload.sequence),
+            resizeSequenceHash: hashTerminalGraphicsString(resizeSequence),
+            clearSequenceHash: hashTerminalGraphicsString(clearSequence),
+          };
+    if (hashes !== cached) graphicSequenceHashes.set(payload.id, hashes);
     return [
       payload.id,
       payload.protocol,
@@ -670,9 +700,9 @@ export function createStdoutRenderer(
       payload.y,
       payload.w ?? "",
       payload.h ?? "",
-      hashTerminalGraphicsString(payload.sequence),
-      hashTerminalGraphicsString(payload.resizeSequence ?? ""),
-      hashTerminalGraphicsString(payload.clearSequence ?? ""),
+      hashes.sequenceHash,
+      hashes.resizeSequenceHash,
+      hashes.clearSequenceHash,
       payload.allowTextOverlay ? "1" : "0",
     ].join(":");
   }
@@ -754,6 +784,10 @@ export function createStdoutRenderer(
     }
     return null;
   }
+  function sameKittyImage(a: string | undefined, b: string | undefined): boolean {
+    const aId = kittyImageId(a);
+    return aId != null && aId === kittyImageId(b);
+  }
   function canReplaceKittyPlacementWithoutClear(
     previous: ActiveTerminalGraphic,
     payload: QueuedTerminalGraphicsPayload,
@@ -788,7 +822,11 @@ export function createStdoutRenderer(
 
     const active = activeGraphics.get(id);
     if (!active) {
-      if (!options.retainOnClear) retainedGraphics.delete(id);
+      if (!options.retainOnClear) {
+        retainedGraphics.delete(id);
+        validatedGraphicFrames.delete(id);
+        graphicSequenceHashes.delete(id);
+      }
       return removedPendingDraw;
     }
 
@@ -855,6 +893,8 @@ export function createStdoutRenderer(
     pendingGraphicSignatures.clear();
     activeGraphicSignatures.clear();
     retainedGraphics.clear();
+    validatedGraphicFrames.clear();
+    graphicSequenceHashes.clear();
     knownKittyImageIds.clear();
     terminalResizeDirtyGraphics.clear();
 
@@ -1005,15 +1045,27 @@ export function createStdoutRenderer(
       if (!canUseTerminalGraphicsProtocol(normalized.protocol, graphicsCapabilities)) return false;
 
       if (op === "draw") {
-        const frame = validateTerminalGraphicFrame({
-          id: normalized.id,
-          protocol: normalized.protocol,
-          sequence: normalized.sequence,
-          fallbackText: normalized.fallbackText,
-          width: normalized.w ?? 1,
-          height: normalized.h ?? 1,
-        });
+        const cachedFrame = validatedGraphicFrames.get(normalized.id);
+        const width = normalized.w ?? 1;
+        const height = normalized.h ?? 1;
+        const frame =
+          cachedFrame &&
+          cachedFrame.protocol === normalized.protocol &&
+          cachedFrame.sequence === normalized.sequence &&
+          cachedFrame.width === width &&
+          cachedFrame.height === height &&
+          cachedFrame.fallbackText === (normalized.fallbackText ?? "")
+            ? cachedFrame
+            : validateTerminalGraphicFrame({
+                id: normalized.id,
+                protocol: normalized.protocol,
+                sequence: normalized.sequence,
+                fallbackText: normalized.fallbackText,
+                width,
+                height,
+              });
         if (!frame) return false;
+        if (frame !== cachedFrame) validatedGraphicFrames.set(frame.id, frame);
         const imageId = kittyImageId(frame.sequence) ?? kittyImageId(normalized.resizeSequence);
         if (imageId != null) knownKittyImageIds.add(imageId);
         if (isDebugEnabled()) {
@@ -1105,7 +1157,9 @@ export function createStdoutRenderer(
         const active = activeGraphics.get(frame.id);
         const activeCanReplacePlacement =
           active &&
-          active.sequence === frame.sequence &&
+          (active.sequence === frame.sequence ||
+            (normalized.placementMoveWithoutClear &&
+              sameKittyImage(active.sequence, frame.sequence))) &&
           resizeSequence &&
           canReplaceKittyPlacementWithoutClear(active, {
             ...normalized,
@@ -1156,7 +1210,9 @@ export function createStdoutRenderer(
         const retained = retainedGraphics.get(frame.id);
         const retainedCanReplacePlacement =
           retained &&
-          retained.active.sequence === frame.sequence &&
+          (retained.active.sequence === frame.sequence ||
+            (normalized.placementMoveWithoutClear &&
+              sameKittyImage(retained.active.sequence, frame.sequence))) &&
           resizeSequence &&
           canReplaceKittyPlacementWithoutClear(retained.active, {
             ...normalized,
@@ -1189,7 +1245,7 @@ export function createStdoutRenderer(
             clearSequence,
             fallbackText: frame.fallbackText,
             resizeRedraw: true,
-            placementMoveWithoutClear: false,
+            placementMoveWithoutClear: Boolean(normalized.placementMoveWithoutClear),
             terminalResizeRedraw: forceTerminalResizeRedraw,
           });
           pendingGraphicSignatures.set(frame.id, signature);
@@ -4199,6 +4255,7 @@ export function createStdoutRenderer(
       const nextActiveGraphics = new Map(activeGraphics);
       const nextActiveGraphicSignatures = new Map(activeGraphicSignatures);
       const nextPendingGraphicSignatures = new Map(pendingGraphicSignatures);
+      const clearedGraphicCacheIds = new Set<string>();
       let terminalGraphicsDraws = 0;
       let terminalGraphicsClears = 0;
       let terminalGraphicsBytes = 0;
@@ -4274,6 +4331,7 @@ export function createStdoutRenderer(
         wroteClear = appendActiveGraphicProtocolClear(active, visibleRect) || wroteClear;
         if (wroteClear) terminalGraphicsClears++;
         retainedGraphics.delete(id);
+        clearedGraphicCacheIds.add(id);
         terminalResizeDirtyGraphics.delete(id);
         nextActiveGraphics.delete(id);
         nextActiveGraphicSignatures.delete(id);
@@ -4318,6 +4376,7 @@ export function createStdoutRenderer(
             retainTerminalGraphic(payload.id, active, nextActiveGraphicSignatures.get(payload.id));
           } else {
             retainedGraphics.delete(payload.id);
+            clearedGraphicCacheIds.add(payload.id);
           }
           terminalResizeDirtyGraphics.delete(payload.id);
           nextActiveGraphics.delete(payload.id);
@@ -4455,6 +4514,11 @@ export function createStdoutRenderer(
         pendingGraphicSignatures.clear();
         for (const [id, signature] of nextPendingGraphicSignatures) {
           pendingGraphicSignatures.set(id, signature);
+        }
+        for (const id of clearedGraphicCacheIds) {
+          if (nextActiveGraphics.has(id) || retainedGraphics.has(id)) continue;
+          validatedGraphicFrames.delete(id);
+          graphicSequenceHashes.delete(id);
         }
       };
       terminalGraphicsMetrics = {
@@ -5250,6 +5314,8 @@ export function createStdoutRenderer(
     pendingGraphicClears.clear();
     pendingGraphicSignatures.clear();
     retainedGraphics.clear();
+    validatedGraphicFrames.clear();
+    graphicSequenceHashes.clear();
     knownKittyImageIds.clear();
     terminalResizeDirtyGraphics.clear();
     try {

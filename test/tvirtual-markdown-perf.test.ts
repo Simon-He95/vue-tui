@@ -64,6 +64,129 @@ describe("TVirtualMarkdown performance", () => {
     mounted.unmount();
   });
 
+  it("shifts full-row text markdown and repaints only the exposed row when opted in", async () => {
+    const content = Array.from({ length: 100 }, (_, index) => `row-${index}`).join("\n\n");
+    const { TVirtualMarkdown } = await import("../src/markdown.js");
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualMarkdown, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 6,
+          content,
+          autoFocus: true,
+          rowScrollMode: "unsafe-full-row",
+        }),
+      24,
+      10,
+    );
+
+    await nextTick();
+    await nextTick();
+    const before = mounted.terminal
+      .snapshot()
+      .lines.slice(0, 6)
+      .map((line) => line.trimEnd());
+    const commits: Array<readonly number[] | null> = [];
+    const off = mounted.terminal.on("commit", ({ dirtyRows }) => commits.push(dirtyRows));
+
+    dispatchWheel(mounted.container()!);
+    await nextTick();
+    await nextTick();
+
+    off();
+    const after = mounted.terminal
+      .snapshot()
+      .lines.slice(0, 6)
+      .map((line) => line.trimEnd());
+    expect(after.slice(0, 5)).toEqual(before.slice(1));
+    expect(commits.some((rows) => rows?.join(",") === "5")).toBe(true);
+    expect(commits.every((rows) => rows?.join(",") !== "0,1,2,3,4,5")).toBe(true);
+    mounted.unmount();
+  });
+
+  it("falls back to viewport repaint when row-shift scrolling contains an image", async () => {
+    const png =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
+    const content = `![image](${png})\n\nafter\n\ntail`;
+    const { TVirtualMarkdown } = await import("../src/markdown.js");
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualMarkdown, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 4,
+          content,
+          autoFocus: true,
+          rowScrollMode: "unsafe-full-row",
+          imageMinHeight: 2,
+          imageMaxHeight: 2,
+        }),
+      24,
+      8,
+    );
+
+    await nextTick();
+    await nextTick();
+    const commits: Array<readonly number[] | null> = [];
+    const off = mounted.terminal.on("commit", ({ dirtyRows }) => commits.push(dirtyRows));
+
+    dispatchWheel(mounted.container()!);
+    await nextTick();
+    await nextTick();
+
+    off();
+    expect(commits.some((rows) => rows?.join(",") === "0,1,2,3")).toBe(true);
+    mounted.unmount();
+  });
+
+  it("repaints only a changed visible row for stable keyed markdown blocks", async () => {
+    const blocks = ref<readonly TuiMarkdownBlock[]>(
+      Array.from({ length: 6 }, (_, index) => ({
+        type: "inline" as const,
+        key: `row-${index}`,
+        segments: [{ text: `row-${index}` }],
+      })),
+    );
+    const { TVirtualMarkdown } = await import("../src/markdown.js");
+    const mounted = await mountTerminal(
+      () =>
+        h(TVirtualMarkdown, {
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 6,
+          blocks: blocks.value,
+        }),
+      24,
+      10,
+    );
+
+    await nextTick();
+    await nextTick();
+    const commits: Array<readonly number[] | null> = [];
+    const off = mounted.terminal.on("commit", ({ dirtyRows }) => commits.push(dirtyRows));
+    blocks.value = blocks.value.map((block, index) =>
+      index === 2
+        ? {
+            type: "inline",
+            key: "row-2",
+            segments: [{ text: "row-2 changed" }],
+          }
+        : block,
+    );
+    await nextTick();
+    await nextTick();
+
+    off();
+    expect(mounted.terminal.snapshot().lines[2]?.trimEnd()).toBe("row-2 changed");
+    expect(commits).toHaveLength(1);
+    expect(commits[0]?.join(",")).toBe("2");
+    mounted.unmount();
+  });
+
   it("coalesces multiple streaming updates for TVirtualMarkdown into one rebuild per frame", async () => {
     const content = ref("- row-0");
     const { TVirtualMarkdown } = await import("../src/markdown.js");
@@ -129,7 +252,7 @@ describe("TVirtualMarkdown performance", () => {
 
     off();
     expect(commits).toHaveLength(1);
-    expect(commits[0]?.join(",")).toBe("0,1,2,3");
+    expect(commits[0]?.join(",")).toBe("1,2,3");
     mounted.unmount();
   });
 

@@ -16,12 +16,13 @@ description: Benchmark scope, budgets, sample results, and comparison boundaries
 - DOM renderer cache hit、span reuse、segment reuse
 - `TVirtualList` wheel burst
 - `TLogView` append、retention、wrap、ANSI、OSC8 links、search、exact visual index
+- Markdown 图片热绘制、Kitty placement 移动的 stdout bytes、`TVirtualMarkdown` 单行滚动脏行数
 
 当前 benchmark 不覆盖：
 
 - 真实 terminal emulator input-to-paint latency
 - 长时间 streaming 后的 GC heap 曲线
-- stdout bytes per frame
+- 常规滚动、输入和 append 场景的 stdout bytes per frame（Markdown Kitty 移动已有专项数据）
 - 与 `@opentui/solid` 的同机器、同 terminal、同场景横向结果
 
 这些缺口必须在 release notes 中明确说明，不能用现有 baseline 推导出 raw throughput 或竞品性能结论。
@@ -32,11 +33,14 @@ description: Benchmark scope, budgets, sample results, and comparison boundaries
 pnpm run bench:dom-renderer
 pnpm run bench:scroll-mailbox
 pnpm run bench:phase2
+pnpm run bench:markdown-graphics
 pnpm run bench:baseline
 pnpm run bench:baseline:timing
 ```
 
 `bench:baseline` 是 release gate，默认只检查行为预算。`bench:baseline:timing` 会额外检查 timing budget，适合本地 release review 或 nightly，不作为默认 CI blocker。
+
+`bench:markdown-graphics` 是 Markdown 图形专项 benchmark。它测量 1 MiB 图片的重复热绘制、256 KiB Kitty 图片的 100 次移动，以及 `TVirtualMarkdown` 单行滚动的脏行数。耗时用于同机 before/after 比较；stdout bytes、图片传输次数和脏行数是可重复的行为指标，当前不属于 release gate。
 
 ## Environment
 
@@ -103,6 +107,22 @@ Timing values below are examples from the non-release local run above. Treat the
 | `TLogView` retained search wrapped lines  | `matchCount = 2000`, `getLineCalls = 20000`, `maxFrameMs = 0.432`                   |
 | `TLogView` exact index retention append   | `measuredLineCount = 1000`, `visualRowCount = 4000`, `maxFrameMs = 0.513`           |
 | `TLogView Lab` smoke                      | `lineCount = 600`, `visibleLinks = 14`, `matchCount = 67`, `maxFrameMs = 16.196`    |
+
+## Markdown Graphics Optimization Sample
+
+这是 2026-08-13 在同一台机器上，用 `bench:markdown-graphics` 分别运行 `origin/main` (`bd678c6d2f905ca67de6b9a8e4d72ab95cd6399d`) 和本 PR 工作树得到的非 release 样本。耗时是 5 次样本的中位数；不能跨机器解释为性能保证。
+
+| Scenario                                         | `origin/main` |      This PR |                                Change |
+| ------------------------------------------------ | ------------: | -----------: | ------------------------------------: |
+| 1 MiB image hot paint, 100 iterations            |  `732.373 ms` |   `1.500 ms` |                       `488.2x` faster |
+| 256 KiB Kitty image move, 100 moves              |  `810.515 ms` | `126.773 ms` |                         `6.4x` faster |
+| Kitty move stdout bytes                          |  `13,362,925` |    `465,884` |                         `96.5%` fewer |
+| Kitty image transmissions                        |          `50` |          `1` |                         `98.0%` fewer |
+| Kitty placement operations                       |          `50` |         `99` | placement-only after initial transmit |
+| Kitty delete operations                          |          `99` |          `0` |             no clear/retransmit cycle |
+| `TVirtualMarkdown` dirty rows for one-row scroll |           `6` |          `1` |                         `83.3%` fewer |
+
+Environment: macOS 14.5 / Darwin 23.5.0 arm64, Node v24.16.0, pnpm 10.34.5. Raw values and comparison metadata are recorded in [the JSON artifact](./benchmarks/results/2026-08-13-markdown-graphics-darwin-arm64-node24.16.0.json) and [the result summary](./benchmarks/results/2026-08-13-markdown-graphics-darwin-arm64-node24.16.0.md).
 
 ## DOM Renderer Cache Sample
 
