@@ -1395,7 +1395,8 @@
           "name": "placementMoveWithoutClear",
           "type": "boolean",
           "required": false,
-          "defaultValue": "false"
+          "defaultValue": "false",
+          "description": "Advanced Kitty-only opt-in for moving an unchanged image via a reusable placement sequence."
         },
         {
           "name": "preserveRawWhileRendering",
