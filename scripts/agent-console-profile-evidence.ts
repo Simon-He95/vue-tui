@@ -7,7 +7,7 @@ const byScenario = (runs: any[], scenario: string) =>
     .sort((left, right) => left.round - right.round);
 const percentile95 = (values: number[]) => {
   const sorted = [...values].sort((left, right) => left - right);
-  return sorted[Math.max(0, Math.ceil(sorted.length * 0.95) - 1)] ?? 0;
+  return sorted[Math.floor((sorted.length - 1) * 0.95)] ?? 0;
 };
 const paired = (before: number[], after: number[]) => {
   const ratios = before.map((value, index) => after[index]! / Math.max(value, 0.001));
