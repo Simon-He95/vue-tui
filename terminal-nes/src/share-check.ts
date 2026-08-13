@@ -36,7 +36,9 @@ const checks = {
   captionHasRepo: res.caption.includes(VUE_TUI_URL),
   captionHasHashtags: res.caption.includes("#vueTui") && res.caption.includes("#retroGaming"),
   captionHasPostfix: res.caption.includes("postfix-ok"),
-  leaderboardRecorded: getLeaderboard().some((e) => e.player === "smoke-test-player" && e.score === 1234),
+  leaderboardRecorded: getLeaderboard().some(
+    (e) => e.player === "smoke-test-player" && e.score === 1234,
+  ),
   rankComputed: typeof res.rank === "number" && res.rank! >= 1,
 };
 const ok = Object.values(checks).every(Boolean);

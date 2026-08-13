@@ -18,7 +18,11 @@ import {
   installTerminalCleanup,
   type TerminalCleanupHandle,
 } from "../src/cli.js";
-import { createContraVideoGame, FRAME_MS, getContraVideoLayout } from "./contra-graphics/ContraVideoGame.js";
+import {
+  createContraVideoGame,
+  FRAME_MS,
+  getContraVideoLayout,
+} from "./contra-graphics/ContraVideoGame.js";
 import { CANVAS_H, CANVAS_W, renderScene } from "./contra-graphics/scene.js";
 import { encodeRgbaPng } from "./contra-graphics/art.js";
 

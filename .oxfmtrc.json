@@ -6,7 +6,9 @@
     "dist-terminal/**",
     "docs/.vitepress/cache/**",
     "test-results/**",
-    "examples/basic/dist-terminal*/**"
+    "examples/basic/dist-terminal*/**",
+    "examples/nes/vendor/**",
+    "terminal-nes/src/vendor/**"
   ],
   "options": {
     "printWidth": 120,
