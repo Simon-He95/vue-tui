@@ -12,6 +12,7 @@
 - [TBadge](#tbadge)
 - [TBox](#tbox)
 - [TBreadcrumb](#tbreadcrumb)
+- [TBrowser](#tbrowser)
 - [TCandlestickChart](#tcandlestickchart)
 - [TCheckbox](#tcheckbox)
 - [TCode](#tcode)
@@ -405,6 +406,45 @@ Import: `@simon_he/vue-tui/vue`
 | 名称                | Payload                               | 说明 |
 | ------------------- | ------------------------------------- | ---- |
 | <code>select</code> | <code>TBreadcrumbSelectPayload</code> | —    |
+
+## TBrowser
+
+源码：`src/vue/components/TBrowser.ts`
+
+API maturity: **Experimental**
+
+Import: `@simon_he/vue-tui/experimental/browser`
+
+### Props
+
+| 名称                        | 类型                                | 默认值                                                        | 必填 | 说明 |
+| --------------------------- | ----------------------------------- | ------------------------------------------------------------- | ---- | ---- |
+| <code>x</code>              | <code>number</code>                 | —                                                             | 是   | —    |
+| <code>y</code>              | <code>number</code>                 | —                                                             | 是   | —    |
+| <code>w</code>              | <code>number</code>                 | —                                                             | 是   | —    |
+| <code>h</code>              | <code>number</code>                 | —                                                             | 是   | —    |
+| <code>zIndex</code>         | <code>number</code>                 | <code>0</code>                                                | 否   | —    |
+| <code>url</code>            | <code>string</code>                 | —                                                             | 是   | —    |
+| <code>sessionFactory</code> | <code>TBrowserSessionFactory</code> | —                                                             | 是   | —    |
+| <code>autoFocus</code>      | <code>boolean</code>                | <code>false</code>                                            | 否   | —    |
+| <code>maxFps</code>         | <code>number</code>                 | <code>60</code>                                               | 否   | —    |
+| <code>pixelWidth</code>     | <code>number</code>                 | <code>undefined</code>                                        | 否   | —    |
+| <code>pixelHeight</code>    | <code>number</code>                 | <code>undefined</code>                                        | 否   | —    |
+| <code>fallback</code>       | <code>string</code>                 | <code>&quot;[browser requires terminal graphics]&quot;</code> | 否   | —    |
+| <code>style</code>          | <code>Style</code>                  | <code>undefined</code>                                        | 否   | —    |
+| <code>clear</code>          | <code>boolean</code>                | <code>true</code>                                             | 否   | —    |
+
+### Events
+
+| 名称                        | Payload                       | 说明 |
+| --------------------------- | ----------------------------- | ---- |
+| <code>ready</code>          | <code>TBrowserSession</code>  | —    |
+| <code>frame</code>          | <code>TVideoFrameEvent</code> | —    |
+| <code>navigate</code>       | <code>string</code>           | —    |
+| <code>titleChange</code>    | <code>string</code>           | —    |
+| <code>requestAddress</code> | —                             | —    |
+| <code>close</code>          | —                             | —    |
+| <code>error</code>          | <code>unknown</code>          | —    |
 
 ## TCandlestickChart
 

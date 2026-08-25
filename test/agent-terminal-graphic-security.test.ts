@@ -281,7 +281,8 @@ describe("terminal graphics sequence validation", () => {
     expect(normalizeTerminalGraphicSize(4, 2)).toEqual({ width: 4, height: 2 });
     expect(normalizeTerminalGraphicSize(0, 2)).toBeNull();
     expect(normalizeTerminalGraphicSize(Number.NaN, 2)).toBeNull();
-    expect(normalizeTerminalGraphicSize(200, 200)).toBeNull();
+    expect(normalizeTerminalGraphicSize(200, 200)).toEqual({ width: 200, height: 200 });
+    expect(normalizeTerminalGraphicSize(1_001, 100)).toBeNull();
 
     expect(
       validateTerminalGraphicFrame({
@@ -386,12 +387,12 @@ describe("terminal graphics sequence validation", () => {
     expect(isSafeTerminalGraphicsSequence(`${ESC}_Ga=T,f=100,p=-1;QUJD${ST}`, "kitty")).toBe(false);
     expect(isSafeTerminalGraphicsSequence(`${ESC}_Ga=T,f=100,c=0;QUJD${ST}`, "kitty")).toBe(false);
     expect(isSafeTerminalGraphicsSequence(`${ESC}_Ga=T,f=100,r=-1;QUJD${ST}`, "kitty")).toBe(false);
-    expect(isSafeTerminalGraphicsSequence(`${ESC}_Ga=T,f=100,c=10001;QUJD${ST}`, "kitty")).toBe(
+    expect(isSafeTerminalGraphicsSequence(`${ESC}_Ga=T,f=100,c=100001;QUJD${ST}`, "kitty")).toBe(
       false,
     );
-    expect(isSafeTerminalGraphicsSequence(`${ESC}_Ga=T,f=100,c=101,r=100;QUJD${ST}`, "kitty")).toBe(
-      false,
-    );
+    expect(
+      isSafeTerminalGraphicsSequence(`${ESC}_Ga=T,f=100,c=1001,r=100;QUJD${ST}`, "kitty"),
+    ).toBe(false);
     expect(
       isSafeTerminalGraphicsSequence(`${ESC}_Ga=T,f=100,i=4294967296;QUJD${ST}`, "kitty"),
     ).toBe(false);
@@ -461,10 +462,10 @@ describe("terminal graphics sequence validation", () => {
     expect(isSafeTerminalGraphicsSequence(sequence, "kitty")).toBe(true);
 
     const oversized = createKittyGraphicsSequence("QUJD", {
-      columns: 101,
+      columns: 1001,
       rows: 100,
     });
-    expect(oversized).not.toContain("c=101");
+    expect(oversized).not.toContain("c=1001");
     expect(oversized).not.toContain("r=100");
     expect(isSafeTerminalGraphicsSequence(oversized, "kitty")).toBe(true);
   });
@@ -672,8 +673,8 @@ describe("terminal graphics sequence validation", () => {
           id: "huge-clear-size",
           x: 0,
           y: 0,
-          w: 200,
-          h: 200,
+          w: 1_001,
+          h: 100,
           protocol: "kitty",
           sequence: createKittyDeleteGraphicsSequence({ currentCell: true }),
           op: "clear",

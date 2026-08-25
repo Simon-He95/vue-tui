@@ -1,5 +1,5 @@
 {
-  "packageVersion": "1.1.5",
+  "packageVersion": "1.1.6",
   "entrypoints": {
     "@simon_he/vue-tui": {
       "maturity": "public",
@@ -673,6 +673,19 @@
         "BunWebGPU3DRendererOptions",
         "BunWebGPUTextureData",
         "TerminalBadge3DRendererOptions"
+      ]
+    },
+    "@simon_he/vue-tui/experimental/browser": {
+      "maturity": "experimental",
+      "runtime": "browser-safe",
+      "valueExports": ["TBrowser"],
+      "typeExports": [
+        "TBrowserInputEvent",
+        "TBrowserModifiers",
+        "TBrowserProps",
+        "TBrowserSession",
+        "TBrowserSessionContext",
+        "TBrowserSessionFactory"
       ]
     },
     "@simon_he/vue-tui/experimental/video/node": {
@@ -2199,6 +2212,118 @@
         {
           "name": "select",
           "payload": "TBreadcrumbSelectPayload"
+        }
+      ]
+    },
+    "TBrowser": {
+      "entrypoint": "@simon_he/vue-tui/experimental/browser",
+      "maturity": "experimental",
+      "props": [
+        {
+          "name": "x",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "w",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "h",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "zIndex",
+          "type": "number",
+          "required": false,
+          "defaultValue": "0"
+        },
+        {
+          "name": "url",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "sessionFactory",
+          "type": "TBrowserSessionFactory",
+          "required": true
+        },
+        {
+          "name": "autoFocus",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "maxFps",
+          "type": "number",
+          "required": false,
+          "defaultValue": "60"
+        },
+        {
+          "name": "pixelWidth",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "pixelHeight",
+          "type": "number",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "fallback",
+          "type": "string",
+          "required": false,
+          "defaultValue": "\"[browser requires terminal graphics]\""
+        },
+        {
+          "name": "style",
+          "type": "Style",
+          "required": false,
+          "defaultValue": "undefined"
+        },
+        {
+          "name": "clear",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true"
+        }
+      ],
+      "events": [
+        {
+          "name": "ready",
+          "payload": "TBrowserSession"
+        },
+        {
+          "name": "frame",
+          "payload": "TVideoFrameEvent"
+        },
+        {
+          "name": "navigate",
+          "payload": "string"
+        },
+        {
+          "name": "titleChange",
+          "payload": "string"
+        },
+        {
+          "name": "requestAddress"
+        },
+        {
+          "name": "close"
+        },
+        {
+          "name": "error",
+          "payload": "unknown"
         }
       ]
     },

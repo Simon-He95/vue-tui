@@ -39,6 +39,10 @@ const expectedEntrypoints: Record<string, { maturity: Maturity; runtime: Runtime
   "@simon_he/vue-tui/markdown": { maturity: "public", runtime: "browser-safe" },
   "@simon_he/vue-tui/mermaid": { maturity: "public", runtime: "browser-safe" },
   "@simon_he/vue-tui/experimental": { maturity: "experimental", runtime: "browser-safe" },
+  "@simon_he/vue-tui/experimental/browser": {
+    maturity: "experimental",
+    runtime: "browser-safe",
+  },
   "@simon_he/vue-tui/experimental/video/node": {
     maturity: "experimental",
     runtime: "node-only",

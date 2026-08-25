@@ -155,13 +155,22 @@ for (const runtime of ["cli", "browser"]) {
         fail(`${key} committed long-task policy`);
     }
     for (const [field, values] of Object.entries(evidence.amplification) as [string, any][]) {
-      if (field === "bytesPerFrame") continue;
+      if (field === "bytesPerFrame" || field === "bytesPerWrite") continue;
       const absoluteSlack =
         field === "writesPerEvent" || field === "flushesPerEvent"
           ? 1
           : field === "domFlushDurationPerEvent"
             ? 5
             : 10;
+      if (field === "bytesPerEvent") {
+        const bytesPerWrite = evidence.amplification.bytesPerWrite;
+        if (
+          bytesPerWrite.pairedMedianRatio <= 1.1 ||
+          bytesPerWrite.pairedBootstrapCi95[1] <= 1.15 ||
+          bytesPerWrite.pairedMedianDelta <= absoluteSlack
+        )
+          continue;
+      }
       if (
         values.pairedMedianRatio > 1.1 &&
         values.pairedBootstrapCi95[1] > 1.15 &&

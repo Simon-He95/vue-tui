@@ -109,7 +109,7 @@ const C1_APC_RE = new RegExp("\\u009F[\\s\\S]*?\\u009C", "g");
 
 export const MAX_TERMINAL_GRAPHICS_SEQUENCE_CHARS = 16 * 1024 * 1024;
 export const MAX_TERMINAL_GRAPHICS_FALLBACK_CHARS = 16_384;
-export const MAX_TERMINAL_GRAPHIC_CELLS = 10_000;
+export const MAX_TERMINAL_GRAPHIC_CELLS = 100_000;
 
 type TerminalGraphicsRegistry = Readonly<{
   outputs: WeakMap<Terminal, TerminalGraphicsOutput>;

@@ -102,6 +102,11 @@ import {
   type TVideoFrameSource,
 } from "@simon_he/vue-tui/experimental";
 import {
+  TBrowser,
+  type TBrowserInputEvent,
+  type TBrowserSessionFactory,
+} from "@simon_he/vue-tui/experimental/browser";
+import {
   createFfmpegVideoFrameSource,
   createYtDlpVideoFrameSource,
   type FfmpegVideoFrameSourceOptions,

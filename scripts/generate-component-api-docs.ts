@@ -1102,6 +1102,7 @@ async function main(): Promise<void> {
   const vueIndex = path.join(packageRoot, "src/vue/index.ts");
   const markdownIndex = path.join(packageRoot, "src/markdown.ts");
   const experimentalIndex = path.join(packageRoot, "src/experimental.ts");
+  const experimentalBrowserIndex = path.join(packageRoot, "src/experimental/browser.ts");
   const agentIndex = path.join(packageRoot, "src/agent.ts");
 
   const rootComponentExports = await listRootComponentExports(rootIndex);
@@ -1120,6 +1121,11 @@ async function main(): Promise<void> {
       experimentalIndex,
       "experimental",
       "@simon_he/vue-tui/experimental",
+    )),
+    ...(await listExportedComponents(
+      experimentalBrowserIndex,
+      "experimental",
+      "@simon_he/vue-tui/experimental/browser",
     )),
   ];
   const seenComponentNames = new Set(baseComponents.map((component) => component.name));

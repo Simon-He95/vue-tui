@@ -3949,7 +3949,7 @@ describe("TAgentTerminalGraphic", () => {
     const writes: string[] = [];
     const output: CliOutput = {
       isTTY: true,
-      columns: 120,
+      columns: 1020,
       rows: 120,
       write(chunk) {
         writes.push(chunk);
@@ -3958,7 +3958,7 @@ describe("TAgentTerminalGraphic", () => {
     const toPngBase64 = vi.fn(async () => ({
       base64: "QUJD",
       fallback: "png fallback",
-      cols: 101,
+      cols: 1001,
       rows: 100,
     }));
     const renderer = createPngTerminalGraphicRenderer({
@@ -3971,7 +3971,7 @@ describe("TAgentTerminalGraphic", () => {
           h(TAgentTerminalGraphic, {
             x: 0,
             y: 0,
-            w: 101,
+            w: 1001,
             h: 100,
             content: "image.png",
             fallback: "fallback",
@@ -3980,7 +3980,7 @@ describe("TAgentTerminalGraphic", () => {
       },
     });
 
-    const app = createTerminalApp({ cols: 120, rows: 120, component: App });
+    const app = createTerminalApp({ cols: 1020, rows: 120, component: App });
     const stdout = withEnv(
       { KITTY_WINDOW_ID: "1", TERM_PROGRAM: "kitty", CI: undefined, TMUX: undefined },
       () =>

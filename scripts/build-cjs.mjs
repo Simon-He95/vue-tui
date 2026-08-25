@@ -76,6 +76,7 @@ const cjsBrowserResult = await build({
     vue: "src/vue.ts",
     markdown: "src/markdown.ts",
     experimental: "src/experimental.ts",
+    "experimental/browser": "src/experimental/browser.ts",
     agent: "src/agent.ts",
     mermaid: "src/mermaid.ts",
   },
