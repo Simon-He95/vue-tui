@@ -157,6 +157,102 @@ describe("TBrowser", () => {
     graphics.unregister();
   });
 
+  it("restarts the browser session when an explicit pixel size changes", async () => {
+    const pixelWidth = ref(96);
+    const closed = vi.fn();
+    const sourceContexts: Parameters<TBrowserSessionFactory>[0][] = [];
+    const sessionFactory: TBrowserSessionFactory = async (context) => {
+      sourceContexts.push(context);
+      return {
+        frames: {
+          async *[Symbol.asyncIterator]() {
+            await waitForAbort(context.signal);
+          },
+        },
+        dispatch: () => {},
+        close: closed,
+      };
+    };
+    const App = defineComponent({
+      setup: () => () =>
+        h(TBrowser, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          url: "https://example.com",
+          sessionFactory,
+          pixelWidth: pixelWidth.value,
+          pixelHeight: 64,
+        }),
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    const graphics = registerKittyOutput(app);
+
+    app.mount();
+    await settle(app);
+    pixelWidth.value = 192;
+    await settle(app);
+
+    expect(sourceContexts.map((context) => context.pixelWidth)).toEqual([96, 192]);
+    expect(closed).toHaveBeenCalledTimes(1);
+
+    app.dispose();
+    await settle(app);
+    expect(closed).toHaveBeenCalledTimes(2);
+    graphics.unregister();
+  });
+
+  it("closes a session when initial navigation fails", async () => {
+    const url = ref("https://example.com");
+    const closed = vi.fn();
+    const navigate = vi.fn().mockRejectedValue(new Error("navigation failed"));
+    const errors: unknown[] = [];
+    let releaseFactory!: () => void;
+    const factoryGate = new Promise<void>((resolve) => (releaseFactory = resolve));
+    const sessionFactory: TBrowserSessionFactory = async (context) => {
+      await factoryGate;
+      return {
+        frames: {
+          async *[Symbol.asyncIterator]() {
+            await waitForAbort(context.signal);
+          },
+        },
+        dispatch: () => {},
+        navigate,
+        close: closed,
+      };
+    };
+    const App = defineComponent({
+      setup: () => () =>
+        h(TBrowser, {
+          x: 0,
+          y: 0,
+          w: 12,
+          h: 4,
+          url: url.value,
+          sessionFactory,
+          onError: (error: unknown) => errors.push(error),
+        }),
+    });
+    const app = createTerminalApp({ cols: 20, rows: 8, component: App });
+    const graphics = registerKittyOutput(app);
+
+    app.mount();
+    await nextTick();
+    url.value = "https://example.org";
+    await nextTick();
+    releaseFactory();
+    await settle(app);
+
+    expect(navigate).toHaveBeenCalledWith("https://example.org");
+    expect(closed).toHaveBeenCalledTimes(1);
+    expect(errors).toHaveLength(1);
+
+    app.dispose();
+    graphics.unregister();
+  });
+
   it("renders across more than 10,000 terminal cells", async () => {
     const sessionFactory: TBrowserSessionFactory = async (context) => ({
       frames: {
@@ -255,9 +351,11 @@ describe("TBrowser", () => {
     app.events.dispatch({ type: "wheel", cellX: 4, cellY: 2, deltaY: 1 });
     await settle(app);
     app.events.dispatch({ type: "keydown", key: "a", code: "KeyA" });
+    app.events.dispatch({ type: "keyup", key: "a", code: "KeyA" });
     app.events.dispatch({ type: "paste", text: "hello" });
     app.events.dispatch({ type: "keydown", key: "l", code: "KeyL", ctrlKey: true });
     app.events.dispatch({ type: "keydown", key: "r", code: "KeyR", ctrlKey: true });
+    app.events.dispatch({ type: "keyup", key: "r", code: "KeyR", ctrlKey: true });
     app.events.dispatch({ type: "keydown", key: "t", code: "KeyT", ctrlKey: true });
     app.events.dispatch({ type: "keydown", key: "w", code: "KeyW", ctrlKey: true });
     app.events.dispatch({ type: "keydown", key: "ArrowLeft", code: "ArrowLeft", altKey: true });
@@ -285,6 +383,13 @@ describe("TBrowser", () => {
       },
       {
         type: "keydown",
+        key: "a",
+        code: "KeyA",
+        repeat: false,
+        modifiers: { ctrl: false, shift: false, alt: false, meta: false },
+      },
+      {
+        type: "keyup",
         key: "a",
         code: "KeyA",
         repeat: false,
@@ -413,6 +518,54 @@ describe("TBrowser", () => {
     await settle(app);
 
     expect(inputs.map((event) => event.type)).toEqual(["wheel", "pointerdown"]);
+
+    app.dispose();
+    graphics.unregister();
+  });
+
+  it("does not move new continuous input ahead of a queued discrete interaction", async () => {
+    const order: string[] = [];
+    let releasePointerDown!: () => void;
+    const pointerDownGate = new Promise<void>((resolve) => (releasePointerDown = resolve));
+    const sessionFactory: TBrowserSessionFactory = async (context) => ({
+      frames: {
+        async *[Symbol.asyncIterator]() {
+          await waitForAbort(context.signal);
+        },
+      },
+      dispatch: async (event) => {
+        order.push(event.type);
+        if (event.type === "pointerdown") await pointerDownGate;
+      },
+      close: () => {},
+    });
+    const App = defineComponent({
+      setup: () => () =>
+        h(TBrowser, {
+          x: 0,
+          y: 0,
+          w: 10,
+          h: 4,
+          url: "https://example.com",
+          sessionFactory,
+          autoFocus: true,
+        }),
+    });
+    const app = createTerminalApp({ cols: 12, rows: 6, component: App });
+    const graphics = registerKittyOutput(app);
+
+    app.mount();
+    await settle(app);
+    app.events.dispatch({ type: "pointerdown", cellX: 2, cellY: 2, button: 0 });
+    await Promise.resolve();
+    app.events.dispatch({ type: "wheel", cellX: 2, cellY: 2, deltaY: 1 });
+    app.events.dispatch({ type: "pointerup", cellX: 2, cellY: 2, button: 0 });
+    app.events.dispatch({ type: "wheel", cellX: 2, cellY: 2, deltaY: 2 });
+
+    releasePointerDown();
+    await settle(app);
+
+    expect(order).toEqual(["pointerdown", "pointerup", "wheel"]);
 
     app.dispose();
     graphics.unregister();

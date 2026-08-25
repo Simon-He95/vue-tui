@@ -390,9 +390,9 @@ describe("terminal graphics sequence validation", () => {
     expect(isSafeTerminalGraphicsSequence(`${ESC}_Ga=T,f=100,c=100001;QUJD${ST}`, "kitty")).toBe(
       false,
     );
-    expect(isSafeTerminalGraphicsSequence(`${ESC}_Ga=T,f=100,c=1001,r=100;QUJD${ST}`, "kitty")).toBe(
-      false,
-    );
+    expect(
+      isSafeTerminalGraphicsSequence(`${ESC}_Ga=T,f=100,c=1001,r=100;QUJD${ST}`, "kitty"),
+    ).toBe(false);
     expect(
       isSafeTerminalGraphicsSequence(`${ESC}_Ga=T,f=100,i=4294967296;QUJD${ST}`, "kitty"),
     ).toBe(false);

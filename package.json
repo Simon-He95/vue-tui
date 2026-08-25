@@ -457,6 +457,7 @@
   "packageManager": "pnpm@10.34.5",
   "pnpm": {
     "overrides": {
+      "nanoid": "^3.3.18",
       "postcss": "^8.5.26"
     }
   }

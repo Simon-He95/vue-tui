@@ -1,4 +1,10 @@
-import { chromium, type Browser, type CDPSession, type Page } from "@playwright/test";
+import {
+  chromium,
+  type Browser,
+  type BrowserContext,
+  type CDPSession,
+  type Page,
+} from "@playwright/test";
 import { computed, defineComponent, h, ref, shallowRef } from "vue";
 import {
   createStdinDriver,
@@ -18,6 +24,7 @@ import { useLayout } from "../src/vue.js";
 const DEMO_URL = "demo://interactions";
 let exitDemo = () => {};
 let closeDemoPage = async (): Promise<boolean> => false;
+let closeDemoBrowser = async (): Promise<void> => {};
 const INTERACTION_DEMO_HTML = `<!doctype html>
 <html>
 <head>
@@ -190,17 +197,45 @@ const createPlaywrightSession: TBrowserSessionFactory = async (context) => {
   }
 
   let browser: Browser | null = await chromium.launch({ channel: "chrome", headless: true });
-  const browserContext = await browser.newContext({
-    viewport: { width: context.pixelWidth, height: context.pixelHeight },
-    deviceScaleFactor: 1,
-  });
-  let activePage = await browserContext.newPage();
+  let closed = false;
+  let closePromise: Promise<void> | null = null;
   let screencast: CDPSession | null = null;
   let screencastPage: Page | null = null;
   let pendingFrame: Uint8Array | null = null;
   let wakeFrame: (() => void) | null = null;
   let lastFrameAt = 0;
   const wiredPages = new WeakSet<Page>();
+  const close = (): Promise<void> => {
+    closePromise ??= (async () => {
+      if (closed) return;
+      closed = true;
+      wakeFrame?.();
+      wakeFrame = null;
+      const current = browser;
+      browser = null;
+      await current?.close();
+    })();
+    return closePromise;
+  };
+  closeDemoBrowser = close;
+  context.signal.addEventListener("abort", () => void close(), { once: true });
+  if (context.signal.aborted) {
+    await close();
+    throw new Error("Browser session aborted");
+  }
+
+  let browserContext: BrowserContext;
+  let activePage: Page;
+  try {
+    browserContext = await browser.newContext({
+      viewport: { width: context.pixelWidth, height: context.pixelHeight },
+      deviceScaleFactor: 1,
+    });
+    activePage = await browserContext.newPage();
+  } catch (error) {
+    await close();
+    throw error;
+  }
 
   function queueFrame(png: Uint8Array): void {
     pendingFrame = png;
@@ -252,6 +287,7 @@ const createPlaywrightSession: TBrowserSessionFactory = async (context) => {
   }
 
   function activate(page: Page): void {
+    if (closed) return;
     activePage = page;
     context.onNavigate(displayUrl(page.url()));
     void startScreencast(page);
@@ -291,22 +327,15 @@ const createPlaywrightSession: TBrowserSessionFactory = async (context) => {
   wire(activePage);
   browserContext.on("page", (page) => {
     wire(page);
-    activate(page);
+    if (page !== activePage) activate(page);
   });
-  await navigate(activePage, context.url);
-  await startScreencast(activePage);
-
-  let closed = false;
-  const close = async () => {
-    if (closed) return;
-    closed = true;
-    wakeFrame?.();
-    wakeFrame = null;
-    const current = browser;
-    browser = null;
-    await current?.close();
-  };
-  context.signal.addEventListener("abort", () => void close(), { once: true });
+  try {
+    await navigate(activePage, context.url);
+    await startScreencast(activePage);
+  } catch (error) {
+    await close();
+    throw error;
+  }
 
   return {
     frames: {
@@ -339,7 +368,7 @@ const createPlaywrightSession: TBrowserSessionFactory = async (context) => {
     newPage: async () => {
       const page = await browserContext.newPage();
       wire(page);
-      activate(page);
+      if (page !== activePage) activate(page);
     },
     closePage: async () => {
       if (browserContext.pages().length <= 1) return false;
@@ -536,7 +565,7 @@ const cleanupHandle = installTerminalCleanup(cleanup, { signalPolicy: "exit" });
 exitDemo = () => {
   cleanupHandle.uninstall();
   cleanup();
-  process.exit(0);
+  void closeDemoBrowser().finally(() => process.exit(0));
 };
 driver = createStdinDriver({
   dispatch: (event) => {

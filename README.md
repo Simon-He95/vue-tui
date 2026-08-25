@@ -66,6 +66,7 @@ Development, release validation, and documentation builds are run on Node.js 20 
 | `@simon_he/vue-tui/markdown`                | Public       | `TMarkdownText`, `TVirtualMarkdown`, markdown parser and layout helpers, streaming markdown block sources                               |
 | `@simon_he/vue-tui/mermaid`                 | Public       | Optional `beautiful-mermaid` bridge: adaptive `TMermaid`（图片 → ANSI → 源码）、`TMermaidText`（ANSI）、`TMermaidImage`（图形协议图片） |
 | `@simon_he/vue-tui/experimental`            | Experimental | `T3DViewport`, `TVideo`, charts, `TVirtualList`, `TTranscriptView`, `TLogView`, TLog companions, and append-only log tooling            |
+| `@simon_he/vue-tui/experimental/browser`    | Experimental | Interactive `TBrowser` component and renderer-agnostic browser session contract                                                         |
 | `@simon_he/vue-tui/experimental/video/node` | Experimental | Node-only lazy FFmpeg frame source plus optional yt-dlp resolver for supported video pages                                              |
 | `@simon_he/vue-tui/experimental/3d/bun`     | Experimental | Bun-only raw WGSL/WebGPU Pull renderers, including the vue-tui terminal badge scene                                                     |
 | `@simon_he/vue-tui/agent`                   | Experimental | Agent/console transcript, tool-call header, log, markdown, virtual list, render plane, and overlay component aggregation                |

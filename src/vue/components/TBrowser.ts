@@ -57,6 +57,15 @@ function eventText(event: TerminalInputEvent): string {
   return String(event.text ?? event.data ?? "");
 }
 
+function isBrowserShortcut(event: TerminalKeyboardEvent): boolean {
+  const key = event.key.toLowerCase();
+  return (
+    ((event.ctrlKey || event.metaKey) && ["l", "r", "t", "w"].includes(key)) ||
+    (Boolean(event.altKey) && (event.key === "ArrowLeft" || event.key === "ArrowRight")) ||
+    (Boolean(event.ctrlKey) && (key === "c" || key === "q"))
+  );
+}
+
 export const TBrowser = defineComponent({
   name: "TBrowser",
   props: tBrowserProps,
@@ -81,10 +90,11 @@ export const TBrowser = defineComponent({
     let requestedUrl = props.url;
     let sessionQueue = Promise.resolve();
     let continuousInputScheduled = false;
+    let continuousInputGeneration = 0;
     const pendingContinuousInput: TBrowserInputEvent[] = [];
     const initialUrl = props.url;
-    const sourcePixelWidth = Math.max(2, Math.floor(props.pixelWidth ?? props.w * 8));
-    const sourcePixelHeight = Math.max(2, Math.floor(props.pixelHeight ?? props.h * 16));
+    const initialPixelWidth = Math.max(2, Math.floor(props.pixelWidth ?? props.w * 8));
+    const initialPixelHeight = Math.max(2, Math.floor(props.pixelHeight ?? props.h * 16));
 
     const rawRect = computed(() =>
       translateRect(
@@ -121,11 +131,13 @@ export const TBrowser = defineComponent({
         return;
       }
 
-      pendingContinuousInput.length = 0;
+      clearContinuousInput();
+      sessionQueue = Promise.resolve();
       activeSession = session;
-      if (requestedUrl !== context.src && session.navigate) await session.navigate(requestedUrl);
-      emit("ready", session);
       try {
+        if (requestedUrl !== context.src && session.navigate) await session.navigate(requestedUrl);
+        if (context.signal.aborted || !alive) return;
+        emit("ready", session);
         for await (const frame of session.frames) {
           if (context.signal.aborted || !alive) return;
           yield frame;
@@ -133,7 +145,7 @@ export const TBrowser = defineComponent({
       } finally {
         if (activeSession === session) {
           activeSession = null;
-          pendingContinuousInput.length = 0;
+          clearContinuousInput();
         }
         await session.close();
       }
@@ -143,18 +155,28 @@ export const TBrowser = defineComponent({
       if (alive) emit("error", error);
     }
 
+    function clearContinuousInput(): void {
+      pendingContinuousInput.length = 0;
+      continuousInputGeneration++;
+      continuousInputScheduled = false;
+    }
+
     function scheduleContinuousInput(session: TBrowserSession): void {
       if (continuousInputScheduled || pendingContinuousInput.length === 0) return;
+      const event = pendingContinuousInput.shift()!;
+      const generation = continuousInputGeneration;
       continuousInputScheduled = true;
       const pending = sessionQueue.then(() => {
-        const event = pendingContinuousInput.shift();
-        if (!event || activeSession !== session) return;
+        if (generation !== continuousInputGeneration || activeSession !== session) return;
         return session.dispatch(event);
       });
-      sessionQueue = pending.catch(reportError);
+      sessionQueue = pending.catch((error) => {
+        if (activeSession === session) reportError(error);
+      });
       const finish = () => {
+        if (generation !== continuousInputGeneration) return;
         continuousInputScheduled = false;
-        if (activeSession) scheduleContinuousInput(activeSession);
+        if (activeSession === session) scheduleContinuousInput(session);
       };
       void pending.then(finish, finish);
     }
@@ -181,32 +203,47 @@ export const TBrowser = defineComponent({
         queueContinuousInput(session, event);
         return;
       }
-      pendingContinuousInput.length = 0;
+      clearContinuousInput();
       const pending = sessionQueue.then(() => {
         if (activeSession !== session) return;
         return session.dispatch(event);
       });
-      sessionQueue = pending.catch(reportError);
+      sessionQueue = pending.catch((error) => {
+        if (activeSession === session) reportError(error);
+      });
     }
 
-    function invoke(action: (() => void | Promise<void>) | undefined): void {
-      if (!action) return;
-      pendingContinuousInput.length = 0;
-      const pending = sessionQueue.then(action);
-      sessionQueue = pending.catch(reportError);
+    function invoke(action: (session: TBrowserSession) => void | Promise<void> | undefined): void {
+      const session = activeSession;
+      if (!session) return;
+      clearContinuousInput();
+      const pending = sessionQueue.then(() => {
+        if (activeSession !== session) return;
+        return action(session);
+      });
+      sessionQueue = pending.catch((error) => {
+        if (activeSession === session) reportError(error);
+      });
     }
 
     function closeCurrentPage(): void {
-      pendingContinuousInput.length = 0;
-      const action = activeSession?.closePage;
-      if (!action) {
+      const session = activeSession;
+      if (!session?.closePage) {
         emit("close");
         return;
       }
-      const pending = sessionQueue.then(action).then((closed) => {
-        if (closed === false) emit("close");
+      clearContinuousInput();
+      const pending = sessionQueue
+        .then(() => {
+          if (activeSession !== session) return;
+          return session.closePage?.();
+        })
+        .then((closed) => {
+          if (closed === false && activeSession === session) emit("close");
+        });
+      sessionQueue = pending.catch((error) => {
+        if (activeSession === session) reportError(error);
       });
-      sessionQueue = pending.catch(reportError);
     }
 
     function point(event: TerminalPointerEvent): Readonly<{ x: number; y: number }> {
@@ -271,11 +308,11 @@ export const TBrowser = defineComponent({
             return;
           }
           if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "r") {
-            invoke(activeSession?.reload);
+            invoke((session) => session.reload?.());
             return;
           }
           if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "t") {
-            invoke(activeSession?.newPage);
+            invoke((session) => session.newPage?.());
             emit("requestAddress");
             return;
           }
@@ -284,11 +321,11 @@ export const TBrowser = defineComponent({
             return;
           }
           if (event.altKey && event.key === "ArrowLeft") {
-            invoke(activeSession?.back);
+            invoke((session) => session.back?.());
             return;
           }
           if (event.altKey && event.key === "ArrowRight") {
-            invoke(activeSession?.forward);
+            invoke((session) => session.forward?.());
             return;
           }
           if (event.ctrlKey && ["c", "q"].includes(event.key.toLowerCase())) {
@@ -305,6 +342,7 @@ export const TBrowser = defineComponent({
         },
         keyup: (event) => {
           capture(event);
+          if (isBrowserShortcut(event)) return;
           dispatch({
             type: "keyup",
             key: event.key,
@@ -345,14 +383,14 @@ export const TBrowser = defineComponent({
       () => props.url,
       (url) => {
         requestedUrl = url;
-        if (activeSession?.navigate) invoke(() => activeSession?.navigate?.(url));
+        if (activeSession?.navigate) invoke((session) => session.navigate?.(url));
       },
     );
 
     onBeforeUnmount(() => {
       alive = false;
       activeSession = null;
-      pendingContinuousInput.length = 0;
+      clearContinuousInput();
     });
 
     return () =>
@@ -365,8 +403,8 @@ export const TBrowser = defineComponent({
         src: initialUrl,
         frameSource,
         maxFps: props.maxFps,
-        pixelWidth: sourcePixelWidth,
-        pixelHeight: sourcePixelHeight,
+        pixelWidth: props.pixelWidth ?? initialPixelWidth,
+        pixelHeight: props.pixelHeight ?? initialPixelHeight,
         fallback: props.fallback,
         style: props.style,
         clear: props.clear,

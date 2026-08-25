@@ -4,12 +4,12 @@
 
 ## 标签
 
-| 标签         | 适用范围                                                                                                                                                                             | 兼容性承诺                                                                                            |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| Public       | root、`/core`、`/renderer/dom`、`/cli`、`/markdown`、`/mermaid` 中已文档化的导出                                                                                                     | RC 阶段只为 release blocker 做必要破坏性调整；1.0 stable 后 1.x patch/minor 不做 breaking change      |
-| Advanced     | `/vue`、`/runtime`、`/observability` 中面向集成者的扩展导出                                                                                                                          | Soft-stable；1.x 内破坏性调整必须先 deprecate 至少跨一个 minor，或在文档中明确不受 Public SemVer 保护 |
-| Experimental | `@simon_he/vue-tui/experimental`、`@simon_he/vue-tui/experimental/video/node`、`@simon_he/vue-tui/experimental/3d/bun`、`@simon_he/vue-tui/agent`、`@simon_he/vue-tui/agent/mermaid` | 不进入 1.x stable 兼容性承诺；可以调整 props、types、事件和行为，但必须写 release note                |
-| Internal     | 未从 package entrypoint 导出的模块、helper、scheduler primitive                                                                                                                      | 不承诺兼容；应用代码不应 deep import                                                                  |
+| 标签         | 适用范围                                                                                                                                                                                                                       | 兼容性承诺                                                                                            |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| Public       | root、`/core`、`/renderer/dom`、`/cli`、`/markdown`、`/mermaid` 中已文档化的导出                                                                                                                                               | RC 阶段只为 release blocker 做必要破坏性调整；1.0 stable 后 1.x patch/minor 不做 breaking change      |
+| Advanced     | `/vue`、`/runtime`、`/observability` 中面向集成者的扩展导出                                                                                                                                                                    | Soft-stable；1.x 内破坏性调整必须先 deprecate 至少跨一个 minor，或在文档中明确不受 Public SemVer 保护 |
+| Experimental | `@simon_he/vue-tui/experimental`、`@simon_he/vue-tui/experimental/browser`、`@simon_he/vue-tui/experimental/video/node`、`@simon_he/vue-tui/experimental/3d/bun`、`@simon_he/vue-tui/agent`、`@simon_he/vue-tui/agent/mermaid` | 不进入 1.x stable 兼容性承诺；可以调整 props、types、事件和行为，但必须写 release note                |
+| Internal     | 未从 package entrypoint 导出的模块、helper、scheduler primitive                                                                                                                                                                | 不承诺兼容；应用代码不应 deep import                                                                  |
 
 生成的 [组件 API](/generated/components-api) 会给每个组件标出 `API maturity` 和 import entrypoint。稳定基础组件从 root entrypoint 引入，扩展 Vue 组件从 `/vue` 引入；Experimental 组件从 `/experimental` 或 `/agent` 引入。
 
@@ -27,6 +27,7 @@
 | `@simon_he/vue-tui/markdown`                | Public       | markdown parser / block source / markdown components                            | 文档化 API patch/minor 不做破坏性改动                       |
 | `@simon_he/vue-tui/mermaid`                 | Public       | optional `beautiful-mermaid` bridge、renderer helper 和 wrapper component       | optional peer bridge；文档化 API patch/minor 不做破坏性改动 |
 | `@simon_he/vue-tui/experimental`            | Experimental | `T3DViewport`、`TVideo`、`TVirtualList`、`TLogView`、TLog companions 和 plugins | 可调整，但必须有 release note                               |
+| `@simon_he/vue-tui/experimental/browser`    | Experimental | 交互式 `TBrowser` 组件与 renderer-agnostic browser session contract             | 可调整，但必须有 release note                               |
 | `@simon_he/vue-tui/experimental/video/node` | Experimental | Node-only FFmpeg frame source 与 yt-dlp resolver；依赖在播放时动态加载          | 可调整；不得被 browser-safe entrypoints re-export           |
 | `@simon_he/vue-tui/experimental/3d/bun`     | Experimental | Bun-only raw WGSL/WebGPU Pull renderer 与方向 E 终端徽章 scene                  | 可调整；不得被 browser-safe entrypoints re-export           |
 | `@simon_he/vue-tui/agent`                   | Experimental | agent/console 场景聚合入口，导出 transcript、tool-call、log、markdown 常用组件  | 可调整，但必须有 release note                               |
