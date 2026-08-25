@@ -167,9 +167,6 @@ export const AgentConsoleSurface = defineComponent({
     },
   },
   setup(props) {
-    const profileMode =
-      (globalThis as any).__AGENT_CONSOLE_PROFILE_MODE__ === true ||
-      (globalThis as any).process?.env?.AGENT_CONSOLE_PROFILE_MODE === "1";
     const terminalContext = useTerminal();
     const transcript = createAgentTranscriptStore();
     const logView = ref<TLogViewHandle | null>(null);
@@ -906,7 +903,6 @@ export const AgentConsoleSurface = defineComponent({
         placeholder: "Message the agent while streaming...",
         style: styles.input,
         autoFocus: true,
-        cursorBlink: !profileMode,
         cursorShape: "bar",
         "onUpdate:modelValue": (value: string) => {
           input.value = value;

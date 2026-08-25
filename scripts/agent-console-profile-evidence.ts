@@ -61,6 +61,8 @@ export function agentConsoleScenarioEvidence(
       if (runtime === "cli") {
         if (field === "writesPerEvent") return (run.stdout?.writes ?? 0) / eventDivisor(run);
         if (field === "bytesPerEvent") return (run.stdout?.bytes ?? 0) / eventDivisor(run);
+        if (field === "bytesPerWrite")
+          return (run.stdout?.bytes ?? 0) / Math.max(1, run.stdout?.writes ?? 0);
         if (field === "cursorMovesPerEvent")
           return (run.stdout?.cursorMoves ?? 0) / eventDivisor(run);
         return run.stdout?.bytesPerFrame ?? 0;
@@ -78,7 +80,7 @@ export function agentConsoleScenarioEvidence(
     });
   const amplificationFields =
     runtime === "cli"
-      ? ["writesPerEvent", "bytesPerEvent", "cursorMovesPerEvent", "bytesPerFrame"]
+      ? ["writesPerEvent", "bytesPerEvent", "bytesPerWrite", "cursorMovesPerEvent", "bytesPerFrame"]
       : ["flushesPerEvent", "renderedRowsPerEvent", "domFlushDurationPerEvent"];
   const result: Record<string, any> = {
     frameP95: paired(frameValues(before), frameValues(after)),

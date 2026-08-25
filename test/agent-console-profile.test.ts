@@ -7,6 +7,7 @@ import {
   measurementInputHashes,
   verificationInputHashes,
 } from "../scripts/agent-console-profile-environment.js";
+import { agentConsoleScenarioEvidence } from "../scripts/agent-console-profile-evidence.js";
 import {
   assertPairedPolicy,
   median,
@@ -94,6 +95,16 @@ describe("Agent Console profile harness", () => {
       { round: 1, scenario: "x", elapsedMs: 100 },
     ];
     expect(pairedRatiosByRound(from, to, "x")).toEqual([0.5, 0.5]);
+  });
+
+  it("separates stdout write count from bytes per write", () => {
+    const before = [{ round: 0, scenario: "x", stdout: { writes: 1, bytes: 100 } }];
+    const after = [{ round: 0, scenario: "x", stdout: { writes: 2, bytes: 200 } }];
+    const amplification = agentConsoleScenarioEvidence(before, after, "cli", "x").amplification;
+
+    expect(amplification.writesPerEvent.pairedMedianRatio).toBe(2);
+    expect(amplification.bytesPerEvent.pairedMedianRatio).toBe(2);
+    expect(amplification.bytesPerWrite.pairedMedianRatio).toBe(1);
   });
 
   it("rejects paired regressions hidden by an unpaired ratio", () => {
