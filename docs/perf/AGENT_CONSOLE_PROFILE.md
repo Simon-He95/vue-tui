@@ -18,8 +18,8 @@ Replay copying was a real application hotspot. Lazy Markdown publication removed
 
 | Workload                  | A median | B median | C median |       C vs A |
 | ------------------------- | -------: | -------: | -------: | -----------: |
-| CLI framed burst          | 3,195 ms | 1,882 ms |   639 ms | 80.0% faster |
-| Browser framed burst      | 2,672 ms | 1,798 ms | 1,715 ms | 35.8% faster |
+| CLI framed burst          | 2,293 ms | 1,132 ms |   454 ms | 80.2% faster |
+| Browser framed burst      | 1,999 ms | 1,149 ms |   862 ms | 56.9% faster |
 | CLI single-task burst     | 2,517 ms | 1,324 ms |   147 ms | 94.2% faster |
 | Browser single-task burst | 2,080 ms | 1,043 ms |   118 ms | 94.3% faster |
 
