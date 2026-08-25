@@ -1,6 +1,6 @@
 {
   "name": "@simon_he/vue-tui",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "Vue 3 terminal UI components and renderers for browser DOM, CLI stdout, logs, markdown transcripts, and agent consoles",
   "keywords": [
     "agent-console",
@@ -84,6 +84,9 @@
       ],
       "experimental": [
         "./dist/experimental.d.ts"
+      ],
+      "experimental/browser": [
+        "./dist/experimental/browser.d.ts"
       ],
       "experimental/video/node": [
         "./dist/experimental/video/node.d.ts"
@@ -190,6 +193,16 @@
         "default": "./dist/experimental.cjs"
       }
     },
+    "./experimental/browser": {
+      "import": {
+        "types": "./dist/experimental/browser.d.ts",
+        "default": "./dist/experimental/browser.js"
+      },
+      "require": {
+        "types": "./dist/experimental/browser.d.cts",
+        "default": "./dist/experimental/browser.cjs"
+      }
+    },
     "./experimental/video/node": {
       "import": {
         "types": "./dist/experimental/video/node.d.ts",
@@ -288,6 +301,7 @@
     "run:contra-text:terminal": "tsx examples/contra-terminal.ts",
     "example:contra-text:smoke": "VT_SMOKE=1 tsx examples/contra-terminal.ts",
     "run:nes:terminal": "tsx examples/nes-terminal.ts",
+    "run:browser:terminal": "tsx examples/browser-component-demo.ts",
     "example:nes:smoke": "VT_SMOKE=1 tsx examples/nes-terminal.ts",
     "check:nes:rom": "tsx examples/nes/check-rom.ts",
     "check:nes:input": "tsx examples/nes/input-flip-check.ts",

@@ -16,6 +16,7 @@ const distVue = resolve("dist/vue.js");
 const distCli = resolve("dist/cli.js");
 const distMarkdown = resolve("dist/markdown.js");
 const distExperimental = resolve("dist/experimental.js");
+const distExperimentalBrowser = resolve("dist/experimental/browser.js");
 const distExperimentalVideoNode = resolve("dist/experimental/video/node.js");
 const distExperimental3DBun = resolve("dist/experimental/3d/bun.js");
 const distAgent = resolve("dist/agent.js");
@@ -29,6 +30,7 @@ const distObservabilityCjs = resolve("dist/observability.cjs");
 const distVueCjs = resolve("dist/vue.cjs");
 const distMarkdownCjs = resolve("dist/markdown.cjs");
 const distExperimentalCjs = resolve("dist/experimental.cjs");
+const distExperimentalBrowserCjs = resolve("dist/experimental/browser.cjs");
 const distExperimentalVideoNodeCjs = resolve("dist/experimental/video/node.cjs");
 const distExperimental3DBunCjs = resolve("dist/experimental/3d/bun.cjs");
 const distAgentCjs = resolve("dist/agent.cjs");
@@ -43,6 +45,7 @@ const distVueCjsTypes = resolve("dist/vue.d.cts");
 const distCliCjsTypes = resolve("dist/cli.d.cts");
 const distMarkdownCjsTypes = resolve("dist/markdown.d.cts");
 const distExperimentalCjsTypes = resolve("dist/experimental.d.cts");
+const distExperimentalBrowserCjsTypes = resolve("dist/experimental/browser.d.cts");
 const distExperimentalVideoNodeCjsTypes = resolve("dist/experimental/video/node.d.cts");
 const distExperimental3DBunCjsTypes = resolve("dist/experimental/3d/bun.d.cts");
 const distAgentCjsTypes = resolve("dist/agent.d.cts");
@@ -57,6 +60,7 @@ const distVueTypes = resolve("dist/vue.d.ts");
 const distCliTypes = resolve("dist/cli.d.ts");
 const distMarkdownTypes = resolve("dist/markdown.d.ts");
 const distExperimentalTypes = resolve("dist/experimental.d.ts");
+const distExperimentalBrowserTypes = resolve("dist/experimental/browser.d.ts");
 const distExperimentalVideoNodeTypes = resolve("dist/experimental/video/node.d.ts");
 const distExperimental3DBunTypes = resolve("dist/experimental/3d/bun.d.ts");
 const distAgentTypes = resolve("dist/agent.d.ts");
@@ -824,10 +828,11 @@ describe("package exports", () => {
           import * as vue from "./src/vue.ts";
           import * as markdown from "./src/markdown.ts";
           import * as experimental from "./src/experimental.ts";
+          import * as experimentalBrowser from "./src/experimental/browser.ts";
           import * as agent from "./src/agent.ts";
           import * as agentMermaid from "./src/agent/mermaid.ts";
           import * as mermaid from "./src/mermaid.ts";
-          console.log(root, core, runtime, rendererDom, observability, vue, markdown, experimental, agent, agentMermaid, mermaid);
+          console.log(root, core, runtime, rendererDom, observability, vue, markdown, experimental, experimentalBrowser, agent, agentMermaid, mermaid);
         `,
         resolveDir: process.cwd(),
         sourcefile: "vue-tui-browser-smoke.ts",
@@ -851,6 +856,7 @@ describe("package exports", () => {
       expect(existsSync(distIndex)).toBe(true);
       expect(existsSync(distMarkdown)).toBe(true);
       expect(existsSync(distExperimental)).toBe(true);
+      expect(existsSync(distExperimentalBrowser)).toBe(true);
       expect(existsSync(distAgent)).toBe(true);
       expect(existsSync(distAgentMermaid)).toBe(true);
       expect(existsSync(distMermaid)).toBe(true);
@@ -867,10 +873,11 @@ describe("package exports", () => {
             import * as vue from "./dist/vue.js";
             import * as markdown from "./dist/markdown.js";
             import * as experimental from "./dist/experimental.js";
+            import * as experimentalBrowser from "./dist/experimental/browser.js";
             import * as agent from "./dist/agent.js";
             import * as agentMermaid from "./dist/agent/mermaid.js";
             import * as mermaid from "./dist/mermaid.js";
-            console.log(root, core, runtime, rendererDom, observability, vue, markdown, experimental, agent, agentMermaid, mermaid);
+            console.log(root, core, runtime, rendererDom, observability, vue, markdown, experimental, experimentalBrowser, agent, agentMermaid, mermaid);
           `,
           resolveDir: process.cwd(),
           sourcefile: "vue-tui-dist-browser-smoke.ts",
@@ -889,6 +896,31 @@ describe("package exports", () => {
     },
   );
 
+  it.skipIf(!requireDistExports)(
+    "tree-shakes TBrowser out of other experimental imports",
+    async () => {
+      const { build } = await import("esbuild");
+      const result = await build({
+        stdin: {
+          contents: `import { TVideo } from "./dist/experimental.js"; console.log(TVideo);`,
+          resolveDir: process.cwd(),
+          sourcefile: "vue-tui-tree-shaking-smoke.ts",
+        },
+        bundle: true,
+        write: false,
+        platform: "browser",
+        format: "esm",
+        treeShaking: true,
+        external: ["vue"],
+      });
+      const output = result.outputFiles
+        .map((file) => new TextDecoder().decode(file.contents))
+        .join("\n");
+
+      expect(output).not.toContain("TBrowser");
+    },
+  );
+
   it.skipIf(!requireDistExports)("does not emit Node-only code into browser dist entries", () => {
     for (const file of [
       distIndex,
@@ -899,6 +931,7 @@ describe("package exports", () => {
       distVue,
       distMarkdown,
       distExperimental,
+      distExperimentalBrowser,
       distAgent,
       distAgentMermaid,
       distMermaid,
@@ -910,6 +943,7 @@ describe("package exports", () => {
       distVueCjs,
       distMarkdownCjs,
       distExperimentalCjs,
+      distExperimentalBrowserCjs,
       distAgentCjs,
       distAgentMermaidCjs,
       distMermaidCjs,
@@ -921,6 +955,7 @@ describe("package exports", () => {
       distVueCjsTypes,
       distMarkdownCjsTypes,
       distExperimentalCjsTypes,
+      distExperimentalBrowserCjsTypes,
       distAgentCjsTypes,
       distAgentMermaidCjsTypes,
       distMermaidCjsTypes,
@@ -932,6 +967,7 @@ describe("package exports", () => {
       distVueTypes,
       distMarkdownTypes,
       distExperimentalTypes,
+      distExperimentalBrowserTypes,
       distAgentTypes,
       distAgentMermaidTypes,
       distMermaidTypes,
@@ -951,6 +987,7 @@ describe("package exports", () => {
     expect(existsSync(distCli)).toBe(true);
     expect(existsSync(distMarkdown)).toBe(true);
     expect(existsSync(distExperimental)).toBe(true);
+    expect(existsSync(distExperimentalBrowser)).toBe(true);
     expect(existsSync(distExperimentalVideoNode)).toBe(true);
     expect(existsSync(distExperimental3DBun)).toBe(true);
     expect(existsSync(distAgent)).toBe(true);
@@ -965,6 +1002,7 @@ describe("package exports", () => {
     expect(existsSync(distCliCjsTypes)).toBe(true);
     expect(existsSync(distMarkdownCjsTypes)).toBe(true);
     expect(existsSync(distExperimentalCjsTypes)).toBe(true);
+    expect(existsSync(distExperimentalBrowserCjsTypes)).toBe(true);
     expect(existsSync(distExperimentalVideoNodeCjsTypes)).toBe(true);
     expect(existsSync(distExperimental3DBunCjsTypes)).toBe(true);
     expect(existsSync(distAgentCjsTypes)).toBe(true);
@@ -979,6 +1017,7 @@ describe("package exports", () => {
     expect(existsSync(distCliTypes)).toBe(true);
     expect(existsSync(distMarkdownTypes)).toBe(true);
     expect(existsSync(distExperimentalTypes)).toBe(true);
+    expect(existsSync(distExperimentalBrowserTypes)).toBe(true);
     expect(existsSync(distExperimentalVideoNodeTypes)).toBe(true);
     expect(existsSync(distExperimental3DBunTypes)).toBe(true);
     expect(existsSync(distAgentTypes)).toBe(true);
@@ -1001,6 +1040,9 @@ describe("package exports", () => {
     const cli = await import(/* @vite-ignore */ pathToFileURL(distCli).href);
     const markdown = await import(/* @vite-ignore */ pathToFileURL(distMarkdown).href);
     const experimental = await import(/* @vite-ignore */ pathToFileURL(distExperimental).href);
+    const experimentalBrowser = await import(
+      /* @vite-ignore */ pathToFileURL(distExperimentalBrowser).href
+    );
     const experimentalVideoNode = await import(
       /* @vite-ignore */ pathToFileURL(distExperimentalVideoNode).href
     );
@@ -1017,6 +1059,7 @@ describe("package exports", () => {
     const cliCjs = require("../dist/cli.cjs");
     const markdownCjs = require("../dist/markdown.cjs");
     const experimentalCjs = require("../dist/experimental.cjs");
+    const experimentalBrowserCjs = require("../dist/experimental/browser.cjs");
     const experimentalVideoNodeCjs = require("../dist/experimental/video/node.cjs");
     const agentCjs = require("../dist/agent.cjs");
     const agentMermaidCjs = require("../dist/agent/mermaid.cjs");
@@ -1028,6 +1071,8 @@ describe("package exports", () => {
     expect("TVideo" in root).toBe(false);
     expect("TVideo" in vue).toBe(false);
     expect("TVideo" in agent).toBe(false);
+    expect("TBrowser" in experimental).toBe(false);
+    expect(experimentalBrowser.TBrowser).toBeTruthy();
     expect("createDefaultTInputHostAdapter" in root).toBe(false);
     expect("defaultTInputHostPlugin" in root).toBe(false);
     expect(root.TerminalProvider).toBeTruthy();
@@ -1066,6 +1111,8 @@ describe("package exports", () => {
     expect("createStdoutRenderer" in rootCjs).toBe(false);
     expect("createDefaultTInputHostAdapter" in rootCjs).toBe(false);
     expect("defaultTInputHostPlugin" in rootCjs).toBe(false);
+    expect("TBrowser" in experimentalCjs).toBe(false);
+    expect(experimentalBrowserCjs.TBrowser).toBeTruthy();
     expect(rootCjs.TerminalProvider).toBeTruthy();
     expect("createRuntime" in rootCjs).toBe(false);
     expect("createFramePerfStore" in rootCjs).toBe(false);

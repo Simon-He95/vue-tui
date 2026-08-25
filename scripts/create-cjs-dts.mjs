@@ -11,6 +11,7 @@ const entries = [
   "cli",
   "markdown",
   "experimental",
+  "experimental/browser",
   "experimental/video/node",
   "experimental/3d/bun",
   "agent",

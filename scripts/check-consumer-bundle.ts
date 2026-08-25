@@ -10,12 +10,14 @@ const fixtures = {
   core: `import { createTerminal } from "@simon_he/vue-tui/core"; export const terminal = createTerminal({ cols: 80, rows: 24 });`,
   text: `import { textCellWidth, wrapByCells } from "@simon_he/vue-tui/vue"; export { textCellWidth, wrapByCells };`,
   components: `import { TerminalProvider, TText } from "@simon_he/vue-tui/vue"; export { TerminalProvider, TText };`,
+  experimentalVideo: `import { TVideo } from "@simon_he/vue-tui/experimental"; export { TVideo };`,
 };
 const forbidden = [
   "cellCacheHitWidth1",
   "registeredBucketSizeP95Width1",
   "graphemeSegmentationRequiredCalls",
   "instrumentationEnabled",
+  "TBrowser",
 ];
 function run(command: string, args: string[], cwd = process.cwd()): string {
   return execFileSync(command, args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
