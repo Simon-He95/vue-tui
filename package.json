@@ -404,7 +404,7 @@
     "bumpp": "^8.2.1",
     "bun-webgpu": "0.1.7",
     "esbuild": "^0.20.2",
-    "happy-dom": "^17.6.3",
+    "happy-dom": "^20.0.0",
     "katex": "^0.16.47",
     "lint-staged": "^13.3.0",
     "mathjax-full": "^3.2.2",
