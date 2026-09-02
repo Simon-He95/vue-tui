@@ -405,7 +405,7 @@
     "bun-webgpu": "0.1.7",
     "esbuild": "^0.20.2",
     "happy-dom": "^17.6.3",
-    "katex": "^0.16.47",
+    "katex": "^0.18.0",
     "lint-staged": "^13.3.0",
     "mathjax-full": "^3.2.2",
     "oxfmt": "^0.47.0",
