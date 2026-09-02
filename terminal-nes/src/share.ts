@@ -8,7 +8,7 @@
  * The screenshot is written to <cwd>/.nes-shares/ and the caption is copied
  * to the clipboard when `pbcopy`/`xclip`/`xsel` is available.
  */
-import { spawn, spawnSync } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
@@ -186,15 +186,15 @@ export function copyPngToClipboard(pngPath: string): boolean {
 export function openBrowserToX(caption: string): boolean {
   const intentUrl =
     "https://x.com/intent/tweet?text=" + encodeURIComponent(normalizeCaption(caption));
+  const onComplete = (error: Error | null) => {
+    // Opening a browser is best-effort; errors are intentionally ignored.
+    void error;
+  };
   try {
-    const cmd =
-      platform() === "darwin"
-        ? ["open", intentUrl]
-        : platform() === "win32"
-          ? ["cmd", "/c", "start", "", intentUrl]
-          : ["xdg-open", intentUrl];
-    const child = spawn(cmd[0]!, cmd.slice(1), { stdio: "ignore", detached: true });
-    child.unref();
+    if (platform() === "darwin") execFile("open", [intentUrl], { windowsHide: true }, onComplete);
+    else if (platform() === "win32")
+      execFile("explorer.exe", [intentUrl], { windowsHide: true }, onComplete);
+    else execFile("xdg-open", [intentUrl], { windowsHide: true }, onComplete);
     return true;
   } catch {
     return false;
