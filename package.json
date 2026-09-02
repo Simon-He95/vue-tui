@@ -408,7 +408,7 @@
     "katex": "^0.16.47",
     "lint-staged": "^13.3.0",
     "mathjax-full": "^3.2.2",
-    "oxfmt": "^0.47.0",
+    "oxfmt": "^0.66.0",
     "oxlint": "^1.77.0",
     "picocolors": "^1.1.1",
     "pinia": "^3.0.4",
