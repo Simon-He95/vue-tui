@@ -83,12 +83,16 @@ jobs:
 
       - run: pnpm run check:agent-console-profile-baseline
 
-      - run: pnpm run profile:agent-console:smoke
+      - name: Run Agent Console profile smoke
+        id: profile_smoke
+        run: pnpm run profile:agent-console:smoke
 
-      - run: pnpm run profile:agent-console:abc:smoke
+      - name: Run Agent Console ABC profile smoke
+        id: profile_abc_smoke
+        run: pnpm run profile:agent-console:abc:smoke
 
       - name: Upload Agent Console profile smoke artifacts
-        if: ${{ always() }}
+        if: ${{ always() && steps.profile_smoke.outcome == 'success' && steps.profile_abc_smoke.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: agent-console-profile-smoke
