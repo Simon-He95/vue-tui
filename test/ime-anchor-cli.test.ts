@@ -159,4 +159,51 @@ describe("IME anchor (CLI/headless)", () => {
 
     app.dispose();
   });
+
+  it("drops the anchor when the owning input unmounts", async () => {
+    const value = ref("abc");
+    const visible = ref(true);
+
+    const App = defineComponent({
+      name: "ImeAnchorUnmountApp",
+      setup() {
+        return () =>
+          h("div", null, [
+            visible.value
+              ? h(TInput as any, {
+                  x: 0,
+                  y: 0,
+                  w: 10,
+                  modelValue: value.value,
+                  "onUpdate:modelValue": (v: string) => (value.value = v),
+                  autoFocus: true,
+                  cursorToEndOnFirstFocus: true,
+                  cursorBlink: false,
+                })
+              : h("div", null, ""),
+          ]);
+      },
+    });
+
+    const app = createTerminalApp({ cols: 40, rows: 8, component: App as any });
+    app.mount();
+    await nextTick();
+    await nextTick();
+    app.scheduler.flush();
+
+    const anchor = app.getImeAnchor();
+    expect(anchor).not.toBe(null);
+    expect(anchor!.cellY).toBe(0);
+
+    // Remount the first input away: its anchor must not outlive the component, or a
+    // host would keep parking the terminal cursor on a cell no input owns.
+    visible.value = false;
+    await nextTick();
+    await nextTick();
+    app.scheduler.flush();
+
+    expect(app.getImeAnchor()).toBe(null);
+
+    app.dispose();
+  });
 });

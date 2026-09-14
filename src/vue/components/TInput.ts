@@ -2472,6 +2472,10 @@ export const TInput = defineComponent({
 
     onBeforeUnmount(() => {
       stopBlink();
+      // The anchor must not outlive the input. The focus manager drops a removed node
+      // without dispatching blur, so a host would otherwise keep parking the terminal
+      // cursor (and a native IME its preedit/candidates) on a cell no input owns.
+      if (imeAnchor?.value?.ownerId === imeOwnerId) imeAnchor.value = null;
     });
 
     return () => h("span", rootProps);
