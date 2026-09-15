@@ -2863,13 +2863,14 @@ export function createStdoutRenderer(
    * Write data in chunks to avoid overwhelming terminal buffers.
    * This is especially important for ghostty which can hang on large writes.
    *
-   * `pin` is appended after every chunk but the last. A host may observe the
-   * terminal between two writes (macOS asks for the IME rect when the marked text
-   * changes), and a chunk boundary would otherwise expose the cell of the last
-   * painted row instead of the frame's IME cursor, while the preedit — rendered
-   * only when the frame's synchronized output ends — stays on that cursor.
+   * A chunked write must not interpose anything of its own: the frame's bytes form
+   * one stream of cursor moves and cell writes, so an extra cursor move in the
+   * middle of a span (the IME pin #141 appended after every chunk) painted the
+   * rest of that span at the pin's cell — the input caret — and scrambled the
+   * screen. The frame's own anchor move at its end is the only cursor move the
+   * renderer owns.
    */
-  function writeChunked(data: string, pin?: string | null): void {
+  function writeChunked(data: string): void {
     if (Buffer.byteLength(data, "utf8") <= chunkSize) {
       out.write(data);
       return;
@@ -2884,8 +2885,7 @@ export function createStdoutRenderer(
     try {
       for (let start = 0; start < data.length; ) {
         const end = safeChunkEnd(data, start, chunkSize);
-        const chunk = data.slice(start, end);
-        out.write(end >= data.length || !pin ? chunk : `${chunk}${pin}`);
+        out.write(data.slice(start, end));
         start = end;
       }
 
@@ -4544,22 +4544,17 @@ export function createStdoutRenderer(
     // Include cursor position in the same frame if getImeAnchor is provided
     // This eliminates the need for a separate setCursor() call after render
     let emittedCursorPos: { x: number; y: number } | null = null;
-    // The sequence that parks the terminal cursor on the frame's IME anchor. It is
-    // reused to pin the cursor at every chunked-write boundary below.
-    let frameCursorPin: string | null = null;
     if (getImeAnchor) {
       const anchor = getImeAnchor();
       if (anchor) {
         const { x, y } = clampCellToViewport(anchor, size);
-        // ANSI cursor position is 1-based. Bottom-anchored buffers use local
-        // row coordinates, so map the IME anchor to its absolute screen row.
-        const cursorSequence = `\u001B[${y + 1 + rowOffset};${x + 1}H`;
-        frameCursorPin = cursorSequence;
         if (hasFrameOutput || x !== lastCursorX || y !== lastCursorY) {
           hasFrameOutput = true;
           emittedCursorPos = { x, y };
           closeActiveHrefBeforeCursorMove();
-          frameParts.push(cursorSequence);
+          // ANSI cursor position is 1-based. Bottom-anchored buffers use local
+          // row coordinates, so map the IME anchor to its absolute screen row.
+          frameParts.push(`\u001B[${y + 1 + rowOffset};${x + 1}H`);
         }
       }
     }
@@ -4682,7 +4677,7 @@ export function createStdoutRenderer(
             ` Using chunked write (chunkSize=${chunkSize}, threshold=${chunkThresholdBytes}, emaMs=${writeEmaMs.toFixed(2)})`,
           );
         }
-        writeChunked(frame, frameCursorPin);
+        writeChunked(frame);
       } else if (writeMode === "sync" && canUseSyncStdout) {
         if (isDebugEnabled()) getDebugLog().render(` Using writeSync`);
         try {
