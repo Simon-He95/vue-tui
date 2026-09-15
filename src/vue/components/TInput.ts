@@ -224,6 +224,10 @@ export const TInput = defineComponent({
     collectMentions: { type: Boolean, default: false },
     mentions: { type: Array as PropType<readonly string[]>, default: () => [] },
     collapseMultiline: { type: Boolean, default: false },
+    /**
+     * Collapses pasted text into one multiline chip when its line count exceeds this value.
+     */
+    collapseMultilineLines: { type: Number, default: 3 },
     multilineTexts: {
       type: Array as PropType<readonly string[]>,
       default: () => [],
@@ -1429,10 +1433,10 @@ export const TInput = defineComponent({
         }
       }
 
-      // 2. 多行文本检测 — 仅当行数 >3 或字符数 >200 时折叠，否则直接粘贴
+      // 2. 多行文本检测 — 仅当行数超过 collapseMultilineLines 时折叠，否则直接粘贴
       if (props.collapseMultiline) {
         const lineCount = (text.match(/\n/g) || []).length + 1;
-        if (lineCount > 3 || text.length > 200) {
+        if (lineCount > props.collapseMultilineLines) {
           insertMultilineToken(text);
           return;
         }

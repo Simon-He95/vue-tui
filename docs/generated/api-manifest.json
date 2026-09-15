@@ -1,5 +1,5 @@
 {
-  "packageVersion": "1.1.6",
+  "packageVersion": "1.1.9",
   "entrypoints": {
     "@simon_he/vue-tui": {
       "maturity": "public",
@@ -4787,6 +4787,14 @@
           "defaultValue": "false",
           "description": "Collapses multiline pasted text into chips.",
           "descriptionSource": "component-default"
+        },
+        {
+          "name": "collapseMultilineLines",
+          "type": "number",
+          "required": false,
+          "defaultValue": "3",
+          "description": "Collapses pasted text into one multiline chip when its line count exceeds this value.",
+          "descriptionSource": "jsdoc"
         },
         {
           "name": "multilineTexts",
