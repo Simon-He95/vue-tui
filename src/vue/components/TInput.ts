@@ -899,6 +899,36 @@ export const TInput = defineComponent({
       }
     }
 
+    function deleteRangeIfAny(
+      value: string,
+      start: number,
+      end: number,
+    ): {
+      value: string;
+      cursor: number;
+      deleted: boolean;
+    } {
+      const from = clamp(Math.min(start, end), 0, value.length);
+      const to = clamp(Math.max(start, end), 0, value.length);
+      if (to <= from) return { value, cursor: cursor.value, deleted: false };
+      const tokenStart = countMultilineTokens(value, from);
+      const tokenEnd = countMultilineTokens(value, to);
+      if (tokenEnd > tokenStart) {
+        const current = props.multilineTexts ?? [];
+        const nextMultiline = [...current.slice(0, tokenStart), ...current.slice(tokenEnd)];
+        emit("update:multilineTexts", nextMultiline);
+      }
+      const mentionStart = countMentionTokens(value, from);
+      const mentionEnd = countMentionTokens(value, to);
+      if (mentionEnd > mentionStart) {
+        const current = pendingMentions.value ?? props.mentions ?? [];
+        const nextMentions = [...current.slice(0, mentionStart), ...current.slice(mentionEnd)];
+        emitMentions(nextMentions);
+      }
+      const next = value.slice(0, from) + value.slice(to);
+      return { value: next, cursor: from, deleted: true };
+    }
+
     function deleteSelectionIfAny(value: string): {
       value: string;
       cursor: number;
@@ -906,22 +936,22 @@ export const TInput = defineComponent({
     } {
       const sel = selection.value;
       if (!sel) return { value, cursor: cursor.value, deleted: false };
-      const tokenStart = countMultilineTokens(value, sel.start);
-      const tokenEnd = countMultilineTokens(value, sel.end);
-      if (tokenEnd > tokenStart) {
-        const current = props.multilineTexts ?? [];
-        const nextMultiline = [...current.slice(0, tokenStart), ...current.slice(tokenEnd)];
-        emit("update:multilineTexts", nextMultiline);
-      }
-      const mentionStart = countMentionTokens(value, sel.start);
-      const mentionEnd = countMentionTokens(value, sel.end);
-      if (mentionEnd > mentionStart) {
-        const current = pendingMentions.value ?? props.mentions ?? [];
-        const nextMentions = [...current.slice(0, mentionStart), ...current.slice(mentionEnd)];
-        emitMentions(nextMentions);
-      }
-      const next = value.slice(0, sel.start) + value.slice(sel.end);
-      return { value: next, cursor: sel.start, deleted: true };
+      return deleteRangeIfAny(value, sel.start, sel.end);
+    }
+
+    function deleteToLineBoundary(
+      value: string,
+      direction: "start" | "end",
+    ): {
+      value: string;
+      cursor: number;
+      deleted: boolean;
+    } {
+      const sel = selection.value;
+      if (sel) return deleteRangeIfAny(value, sel.start, sel.end);
+      const { line, lines } = indexToLineCellCol(value, cursor.value);
+      const target = direction === "start" ? lines[line]!.start : lines[line]!.end;
+      return deleteRangeIfAny(value, cursor.value, target);
     }
 
     function insertText(rawText: string): void {
@@ -1767,12 +1797,23 @@ export const TInput = defineComponent({
         return;
       }
 
-      // In Node/CLI terminals (especially macOS Terminal.app), Cmd is often not forwarded.
-      // Keep Ctrl bindings as the reliable path and also support Meta when available
-      // (DOM renderers or terminals that emit Meta via keyboard protocols).
-      const clearWithDeleteOrBackspace = Boolean(
-        !e.altKey && ((e.ctrlKey && !e.metaKey) || (e.metaKey && !e.ctrlKey)),
-      );
+      // Modifier semantics for the delete keys:
+      // - Meta (Cmd on macOS) + Backspace/Delete deletes between the caret and the start /
+      //   end of the current line, matching the macOS text editing shortcuts.
+      // - Ctrl variants keep clearing the whole value: terminals that do not forward Cmd
+      //   rely on the Ctrl binding, and Ctrl+U stays the readline "kill line" shortcut.
+      const clearWithDeleteOrBackspace = Boolean(!e.altKey && e.ctrlKey && !e.metaKey);
+
+      if (e.metaKey && !e.ctrlKey && !e.altKey && (e.key === "Backspace" || e.key === "Delete")) {
+        e.preventDefault();
+        e.stopPropagation();
+        const next = deleteToLineBoundary(value, e.key === "Backspace" ? "start" : "end");
+        if (next.deleted) {
+          pushUndoSnapshot(next.value);
+          applyEdit(next.value, next.cursor);
+        }
+        return;
+      }
 
       if (e.key === "Delete" && clearWithDeleteOrBackspace) {
         e.preventDefault();
