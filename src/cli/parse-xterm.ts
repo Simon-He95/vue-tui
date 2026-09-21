@@ -62,6 +62,7 @@ function parseCsi(sequence: string): ParseResult {
       if (cp === 13) return { handled: true, event: keyEvent("Enter", "Enter", mods2) };
       if (cp === 9) return { handled: true, event: keyEvent("Tab", "Tab", mods2) };
       if (cp === 27) return { handled: true, event: keyEvent("Escape", "Escape", mods2) };
+      if (cp === 127) return { handled: true, event: keyEvent("Backspace", "Backspace", mods2) };
       if (cp >= 0x20) {
         try {
           return {

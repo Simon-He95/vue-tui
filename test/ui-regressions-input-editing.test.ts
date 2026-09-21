@@ -547,7 +547,7 @@ describe("ui regressions input editing", () => {
     mounted.unmount();
   });
 
-  it("TInput supports Ctrl+U to clear content", async () => {
+  it("TInput deletes to the line start on Ctrl+U (readline unix-line-discard)", async () => {
     const value = ref("");
     const mounted = await mountTerminal(() =>
       h(TInput, {
@@ -570,11 +570,107 @@ describe("ui regressions input editing", () => {
       ["l", "KeyL"],
       ["l", "KeyL"],
       ["o", "KeyO"],
+      [" ", "Space"],
+      ["w", "KeyW"],
+      ["o", "KeyO"],
+      ["r", "KeyR"],
+      ["l", "KeyL"],
+      ["d", "KeyD"],
     ] as const) {
       container.dispatchEvent(new KeyboardEvent("keydown", { key: k, code, bubbles: true }));
       await nextTick();
     }
-    expect(value.value).toBe("hello");
+    expect(value.value).toBe("hello world");
+
+    for (let i = 0; i < 6; i++) {
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "ArrowLeft", code: "ArrowLeft", bubbles: true }),
+      );
+      await nextTick();
+    }
+
+    // Terminals that do not forward Cmd commonly map Cmd+Backspace to ^U, so it must
+    // stay caret-relative like readline's unix-line-discard: only the text before the
+    // caret disappears and the tail after it survives.
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "u",
+        code: "KeyU",
+        ctrlKey: true,
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+    expect(value.value).toBe(" world");
+
+    // A second press with the caret already at the line start is a no-op.
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "u",
+        code: "KeyU",
+        ctrlKey: true,
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+    expect(value.value).toBe(" world");
+
+    mounted.unmount();
+  });
+
+  it("TInput keeps Ctrl+U inside the current line of a multiline value", async () => {
+    const value = ref("");
+    const mounted = await mountTerminal(() =>
+      h(TInput, {
+        x: 0,
+        y: 0,
+        w: 20,
+        h: 4,
+        modelValue: value.value,
+        "onUpdate:modelValue": (v: string) => (value.value = v),
+        cursorBlink: false,
+      }),
+    );
+
+    const container = mounted.container()!;
+    container.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }));
+    await nextTick();
+
+    for (const [k, code] of [
+      ["a", "KeyA"],
+      ["b", "KeyB"],
+    ] as const) {
+      container.dispatchEvent(new KeyboardEvent("keydown", { key: k, code, bubbles: true }));
+      await nextTick();
+    }
+
+    // Shift+Enter inserts a newline instead of submitting.
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        code: "Enter",
+        shiftKey: true,
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+
+    for (const [k, code] of [
+      ["c", "KeyC"],
+      ["d", "KeyD"],
+      ["e", "KeyE"],
+      ["f", "KeyF"],
+    ] as const) {
+      container.dispatchEvent(new KeyboardEvent("keydown", { key: k, code, bubbles: true }));
+      await nextTick();
+    }
+    expect(value.value).toBe("ab\ncdef");
+
+    // Caret after "cde" (index 6), inside the second line.
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowLeft", code: "ArrowLeft", bubbles: true }),
+    );
+    await nextTick();
 
     container.dispatchEvent(
       new KeyboardEvent("keydown", {
@@ -585,7 +681,83 @@ describe("ui regressions input editing", () => {
       }),
     );
     await nextTick();
-    expect(value.value).toBe("");
+
+    // Only the current line is affected; the newline and first line survive.
+    expect(value.value).toBe("ab\nf");
+
+    mounted.unmount();
+  });
+
+  it("TInput deletes the selection on Ctrl+U", async () => {
+    const value = ref("");
+    const mounted = await mountTerminal(() =>
+      h(TInput, {
+        x: 0,
+        y: 0,
+        w: 20,
+        modelValue: value.value,
+        "onUpdate:modelValue": (v: string) => (value.value = v),
+        cursorBlink: false,
+      }),
+    );
+
+    const container = mounted.container()!;
+    container.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }));
+    await nextTick();
+
+    for (const [k, code] of [
+      ["h", "KeyH"],
+      ["e", "KeyE"],
+      ["l", "KeyL"],
+      ["l", "KeyL"],
+      ["o", "KeyO"],
+      [" ", "Space"],
+      ["w", "KeyW"],
+      ["o", "KeyO"],
+      ["r", "KeyR"],
+      ["l", "KeyL"],
+      ["d", "KeyD"],
+    ] as const) {
+      container.dispatchEvent(new KeyboardEvent("keydown", { key: k, code, bubbles: true }));
+      await nextTick();
+    }
+    expect(value.value).toBe("hello world");
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "ArrowLeft",
+        code: "ArrowLeft",
+        metaKey: true,
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+
+    // Select "hello" with Shift+ArrowRight presses.
+    for (let i = 0; i < 5; i++) {
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowRight",
+          code: "ArrowRight",
+          shiftKey: true,
+          bubbles: true,
+        }),
+      );
+      await nextTick();
+    }
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "u",
+        code: "KeyU",
+        ctrlKey: true,
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+
+    // Only the selected range is removed, matching plain Backspace semantics.
+    expect(value.value).toBe(" world");
 
     mounted.unmount();
   });

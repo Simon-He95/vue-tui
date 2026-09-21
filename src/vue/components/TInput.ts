@@ -1804,8 +1804,12 @@ export const TInput = defineComponent({
       // Modifier semantics for the delete keys:
       // - Meta (Cmd on macOS) + Backspace/Delete deletes between the caret and the start /
       //   end of the current line, matching the macOS text editing shortcuts.
-      // - Ctrl variants keep clearing the whole value: terminals that do not forward Cmd
-      //   rely on the Ctrl binding, and Ctrl+U stays the readline "kill line" shortcut.
+      // - Ctrl+U deletes between the caret and the start of the current line, matching
+      //   readline's "unix-line-discard". Terminals that do not forward Cmd commonly map
+      //   Cmd+Backspace (the macOS "delete" key) to ^U, so it must stay caret-relative
+      //   instead of clearing the whole value — the tail after the caret has to survive.
+      // - The remaining Ctrl variants keep clearing the whole value as a deliberate
+      //   fallback shortcut for terminals that do not forward Cmd.
       const clearWithDeleteOrBackspace = Boolean(!e.altKey && e.ctrlKey && !e.metaKey);
 
       if (e.metaKey && !e.ctrlKey && !e.altKey && (e.key === "Backspace" || e.key === "Delete")) {
@@ -1836,7 +1840,11 @@ export const TInput = defineComponent({
       if ((e.key === "u" || e.key === "U") && e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
         e.stopPropagation();
-        clearAll();
+        const next = deleteToLineBoundary(value, "start");
+        if (next.deleted) {
+          pushUndoSnapshot(next.value);
+          applyEdit(next.value, next.cursor);
+        }
         return;
       }
 

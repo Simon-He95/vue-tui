@@ -1006,6 +1006,29 @@ describe("cli input", () => {
     expect(events).toEqual([{ type: "keydown", key: "Enter", code: "Enter", shiftKey: true }]);
   });
 
+  it("parses modifyOtherKeys=1 style modified Backspace (CSI 27;9;127~) as Meta+Backspace", () => {
+    const events: any[] = [];
+    const stdin = new FakeStdin() as any;
+    const stdout = new FakeStdout() as any;
+
+    const driver = createStdinDriver({
+      stdin,
+      stdout,
+      dispatch: (e) => {
+        events.push(e);
+      },
+      enableMouse: false,
+    });
+
+    // Terminals using xterm modifyOtherKeys encode Cmd(Meta)+Backspace this way.
+    // Previously this decoded to a stray DEL character as `key`, which no widget
+    // could handle; it must decode to Backspace like the CSI u form does.
+    stdin.emit("data", "\u001B[27;9;127~");
+    driver.dispose();
+
+    expect(events).toEqual([{ type: "keydown", key: "Backspace", code: "Backspace", metaKey: true }]);
+  });
+
   it("parses ESC CR as Alt+Enter (Ghostty Shift+Enter encoding)", () => {
     const events: any[] = [];
     const stdin = new FakeStdin() as any;

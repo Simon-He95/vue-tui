@@ -10,6 +10,8 @@
 
 ### Fixed
 
+- `TInput` Ctrl+U (the `^U` encoding many terminals use for Cmd+Backspace) now deletes from the caret to the start of the current line instead of clearing the whole value, matching readline's `unix-line-discard` and the macOS Cmd+Delete shortcut.
+- xterm modifyOtherKeys `CSI 27;<mods>;127~` (the Cmd(Meta)+Backspace encoding used by terminals without Kitty protocol) now decodes to Backspace instead of a stray DEL character, so it reaches input widgets with its modifiers intact.
 - Kitty terminal resize redraws now retransmit changed image data while reusing placement-only sequences for unchanged pixels.
 - Moving or resizing terminal graphics no longer erases text or borders outside the graphic-owned rectangle.
 
