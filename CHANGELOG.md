@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- `TInput` word-wise deletion: Alt(Option)+Backspace deletes the word before the caret, and Alt+Delete or Alt+D (the `ESC d` "delete word right" encoding VS Code uses for ⌥⌦/Ctrl+Delete) deletes the word after it. Word boundaries stop at newlines, and selection/mention/multiline bookkeeping is shared with the existing delete paths.
+
 ### Experimental
 
 - Added the browser-safe `TVideo` component and the Node-only `@simon_he/vue-tui/experimental/video/node` entrypoint for dynamically loaded FFmpeg and yt-dlp frame sources.
@@ -12,6 +16,7 @@
 
 - `TInput` Ctrl+U (the `^U` encoding many terminals use for Cmd+Backspace) now deletes from the caret to the start of the current line instead of clearing the whole value, matching readline's `unix-line-discard` and the macOS Cmd+Delete shortcut.
 - xterm modifyOtherKeys `CSI 27;<mods>;127~` (the Cmd(Meta)+Backspace encoding used by terminals without Kitty protocol) now decodes to Backspace instead of a stray DEL character, so it reaches input widgets with its modifiers intact.
+- Legacy `ESC DEL` (Option+Backspace on Apple Terminal and other non-Kitty terminals) now parses to Alt+Backspace instead of being silently dropped.
 - Kitty terminal resize redraws now retransmit changed image data while reusing placement-only sequences for unchanged pixels.
 - Moving or resizing terminal graphics no longer erases text or borders outside the graphic-owned rectangle.
 

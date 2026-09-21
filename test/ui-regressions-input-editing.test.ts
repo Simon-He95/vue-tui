@@ -762,6 +762,326 @@ describe("ui regressions input editing", () => {
     mounted.unmount();
   });
 
+  it("TInput deletes the word before the caret on Alt(Option)+Backspace", async () => {
+    const value = ref("");
+    const mounted = await mountTerminal(() =>
+      h(TInput, {
+        x: 0,
+        y: 0,
+        w: 20,
+        modelValue: value.value,
+        "onUpdate:modelValue": (v: string) => (value.value = v),
+        cursorBlink: false,
+      }),
+    );
+
+    const container = mounted.container()!;
+    container.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }));
+    await nextTick();
+
+    for (const [k, code] of [
+      ["h", "KeyH"],
+      ["e", "KeyE"],
+      ["l", "KeyL"],
+      ["l", "KeyL"],
+      ["o", "KeyO"],
+      [" ", "Space"],
+      ["w", "KeyW"],
+      ["o", "KeyO"],
+      ["r", "KeyR"],
+      ["l", "KeyL"],
+      ["d", "KeyD"],
+    ] as const) {
+      container.dispatchEvent(new KeyboardEvent("keydown", { key: k, code, bubbles: true }));
+      await nextTick();
+    }
+    expect(value.value).toBe("hello world");
+
+    // Caret at the end: only "world" disappears, the space before it stays.
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Backspace",
+        code: "Backspace",
+        altKey: true,
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+    expect(value.value).toBe("hello ");
+
+    // A second press removes the remaining word and its trailing space.
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Backspace",
+        code: "Backspace",
+        altKey: true,
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+    expect(value.value).toBe("");
+
+    mounted.unmount();
+  });
+
+  it("TInput keeps Alt+Backspace inside the current line of a multiline value", async () => {
+    const value = ref("");
+    const mounted = await mountTerminal(() =>
+      h(TInput, {
+        x: 0,
+        y: 0,
+        w: 20,
+        h: 4,
+        modelValue: value.value,
+        "onUpdate:modelValue": (v: string) => (value.value = v),
+        cursorBlink: false,
+      }),
+    );
+
+    const container = mounted.container()!;
+    container.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }));
+    await nextTick();
+
+    for (const [k, code] of [
+      ["a", "KeyA"],
+      ["b", "KeyB"],
+    ] as const) {
+      container.dispatchEvent(new KeyboardEvent("keydown", { key: k, code, bubbles: true }));
+      await nextTick();
+    }
+
+    // Shift+Enter inserts a newline instead of submitting.
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        code: "Enter",
+        shiftKey: true,
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+
+    for (const [k, code] of [
+      ["c", "KeyC"],
+      ["d", "KeyD"],
+      ["e", "KeyE"],
+      ["f", "KeyF"],
+    ] as const) {
+      container.dispatchEvent(new KeyboardEvent("keydown", { key: k, code, bubbles: true }));
+      await nextTick();
+    }
+    expect(value.value).toBe("ab\ncdef");
+
+    // Caret after "cde" (index 6), inside the second line.
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowLeft", code: "ArrowLeft", bubbles: true }),
+    );
+    await nextTick();
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Backspace",
+        code: "Backspace",
+        altKey: true,
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+
+    // Word boundaries stop at the newline, so the first line survives.
+    expect(value.value).toBe("ab\nf");
+
+    mounted.unmount();
+  });
+
+  it("TInput deletes the selection on Alt(Option)+Backspace", async () => {
+    const value = ref("");
+    const mounted = await mountTerminal(() =>
+      h(TInput, {
+        x: 0,
+        y: 0,
+        w: 20,
+        modelValue: value.value,
+        "onUpdate:modelValue": (v: string) => (value.value = v),
+        cursorBlink: false,
+      }),
+    );
+
+    const container = mounted.container()!;
+    container.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }));
+    await nextTick();
+
+    for (const [k, code] of [
+      ["h", "KeyH"],
+      ["e", "KeyE"],
+      ["l", "KeyL"],
+      ["l", "KeyL"],
+      ["o", "KeyO"],
+      [" ", "Space"],
+      ["w", "KeyW"],
+      ["o", "KeyO"],
+      ["r", "KeyR"],
+      ["l", "KeyL"],
+      ["d", "KeyD"],
+    ] as const) {
+      container.dispatchEvent(new KeyboardEvent("keydown", { key: k, code, bubbles: true }));
+      await nextTick();
+    }
+    expect(value.value).toBe("hello world");
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "ArrowLeft",
+        code: "ArrowLeft",
+        metaKey: true,
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+
+    // Select "hello" with Shift+ArrowRight presses.
+    for (let i = 0; i < 5; i++) {
+      container.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "ArrowRight",
+          code: "ArrowRight",
+          shiftKey: true,
+          bubbles: true,
+        }),
+      );
+      await nextTick();
+    }
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Backspace",
+        code: "Backspace",
+        altKey: true,
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+
+    // Only the selected range is removed, matching plain Backspace semantics.
+    expect(value.value).toBe(" world");
+
+    mounted.unmount();
+  });
+
+  it("TInput deletes the word after the caret on Alt+D (VS Code delete-word-right)", async () => {
+    const value = ref("");
+    const mounted = await mountTerminal(() =>
+      h(TInput, {
+        x: 0,
+        y: 0,
+        w: 20,
+        modelValue: value.value,
+        "onUpdate:modelValue": (v: string) => (value.value = v),
+        cursorBlink: false,
+      }),
+    );
+
+    const container = mounted.container()!;
+    container.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }));
+    await nextTick();
+
+    for (const [k, code] of [
+      ["h", "KeyH"],
+      ["e", "KeyE"],
+      ["l", "KeyL"],
+      ["l", "KeyL"],
+      ["o", "KeyO"],
+      [" ", "Space"],
+      ["w", "KeyW"],
+      ["o", "KeyO"],
+      ["r", "KeyR"],
+      ["l", "KeyL"],
+      ["d", "KeyD"],
+    ] as const) {
+      container.dispatchEvent(new KeyboardEvent("keydown", { key: k, code, bubbles: true }));
+      await nextTick();
+    }
+    expect(value.value).toBe("hello world");
+
+    // Caret at the line start.
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Home", code: "Home", bubbles: true }),
+    );
+    await nextTick();
+
+    // VS Code maps ⌥⌦ (and Ctrl+Delete on Windows/Linux) to ESC d, which the
+    // stdin driver dispatches as Alt+"d".
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "d",
+        code: "KeyD",
+        altKey: true,
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+
+    // "hello" is gone; the space before "world" stays.
+    expect(value.value).toBe(" world");
+
+    mounted.unmount();
+  });
+
+  it("TInput deletes the word after the caret on Alt(Option)+Delete", async () => {
+    const value = ref("");
+    const mounted = await mountTerminal(() =>
+      h(TInput, {
+        x: 0,
+        y: 0,
+        w: 20,
+        modelValue: value.value,
+        "onUpdate:modelValue": (v: string) => (value.value = v),
+        cursorBlink: false,
+      }),
+    );
+
+    const container = mounted.container()!;
+    container.dispatchEvent(new MouseEvent("mousedown", { clientX: 0, clientY: 0, bubbles: true }));
+    await nextTick();
+
+    for (const [k, code] of [
+      ["h", "KeyH"],
+      ["e", "KeyE"],
+      ["l", "KeyL"],
+      ["l", "KeyL"],
+      ["o", "KeyO"],
+      [" ", "Space"],
+      ["w", "KeyW"],
+      ["o", "KeyO"],
+      ["r", "KeyR"],
+      ["l", "KeyL"],
+      ["d", "KeyD"],
+    ] as const) {
+      container.dispatchEvent(new KeyboardEvent("keydown", { key: k, code, bubbles: true }));
+      await nextTick();
+    }
+    expect(value.value).toBe("hello world");
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Home", code: "Home", bubbles: true }),
+    );
+    await nextTick();
+
+    container.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Delete",
+        code: "Delete",
+        altKey: true,
+        bubbles: true,
+      }),
+    );
+    await nextTick();
+
+    expect(value.value).toBe(" world");
+
+    mounted.unmount();
+  });
+
   it("TInput supports Ctrl+Backspace to clear content", async () => {
     const value = ref("");
     const mounted = await mountTerminal(() =>

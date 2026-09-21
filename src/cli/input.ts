@@ -565,6 +565,13 @@ export function createStdinDriver(
           dispatchEvent(keyEvent("Tab", "Tab", { altKey: true }), "alt");
           return;
         }
+        // ESC DEL (\x1B\x7F): Option+Backspace on terminals without the Kitty
+        // protocol (Apple Terminal, xterm). Dispatch as Alt+Backspace instead
+        // of silently dropping the sequence.
+        if (code === 0x7f) {
+          dispatchEvent(keyEvent("Backspace", "Backspace", { altKey: true }), "alt");
+          return;
+        }
       }
       if (sequence === "\u001B") {
         dispatchEvent(keyEvent("Escape", "Escape"), "escape");

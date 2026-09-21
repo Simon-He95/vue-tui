@@ -1050,6 +1050,28 @@ describe("cli input", () => {
     expect(events).toEqual([{ type: "keydown", key: "Enter", code: "Enter", altKey: true }]);
   });
 
+  it("parses ESC DEL as Alt+Backspace (legacy Option+Backspace encoding)", () => {
+    const events: any[] = [];
+    const stdin = new FakeStdin() as any;
+    const stdout = new FakeStdout() as any;
+
+    const driver = createStdinDriver({
+      stdin,
+      stdout,
+      dispatch: (e) => {
+        events.push(e);
+      },
+      enableMouse: false,
+    });
+
+    // Terminals without the Kitty protocol (Apple Terminal, xterm) send ESC DEL
+    // for Option+Backspace. The sequence used to be dropped silently.
+    stdin.emit("data", "\u001B\u007F");
+    driver.dispose();
+
+    expect(events).toEqual([{ type: "keydown", key: "Backspace", code: "Backspace", altKey: true }]);
+  });
+
   it("treats CRLF as a single Enter keydown", () => {
     const events: any[] = [];
     const stdin = new FakeStdin() as any;

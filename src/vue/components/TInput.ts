@@ -1855,6 +1855,51 @@ export const TInput = defineComponent({
         return;
       }
 
+      // Alt(Option)+Backspace deletes the word before the caret (macOS standard).
+      // Kitty-family terminals send CSI 127;3u; legacy ones send ESC DEL — both
+      // arrive here as Alt+Backspace.
+      if (e.key === "Backspace" && e.altKey && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        const { value: afterDelete, cursor: nextCursor, deleted } = deleteSelectionIfAny(value);
+        if (deleted) {
+          pushUndoSnapshot(afterDelete);
+          applyEdit(afterDelete, nextCursor);
+          return;
+        }
+        const next = deleteRangeIfAny(value, findWordLeft(value, cursor.value), cursor.value);
+        if (next.deleted) {
+          pushUndoSnapshot(next.value);
+          applyEdit(next.value, next.cursor);
+        }
+        return;
+      }
+
+      // Alt(Option)+Delete and Alt+D delete the word after the caret. VS Code maps
+      // ⌥⌦ (and Ctrl+Delete on Windows/Linux) to ESC d ("delete word right"), which
+      // arrives here as Alt+"d"; ⌥⌦ in Kitty-family terminals arrives as Alt+Delete.
+      if (
+        (e.key === "Delete" || e.key === "d" || e.key === "D") &&
+        e.altKey &&
+        !e.ctrlKey &&
+        !e.metaKey
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        const { value: afterDelete, cursor: nextCursor, deleted } = deleteSelectionIfAny(value);
+        if (deleted) {
+          pushUndoSnapshot(afterDelete);
+          applyEdit(afterDelete, nextCursor);
+          return;
+        }
+        const next = deleteRangeIfAny(value, cursor.value, findWordRight(value, cursor.value));
+        if (next.deleted) {
+          pushUndoSnapshot(next.value);
+          applyEdit(next.value, next.cursor);
+        }
+        return;
+      }
+
       if (e.key === "Backspace") {
         const mentions = props.mentions ?? [];
         if (!value && cursor.value <= 0 && mentions.length > 0) {
