@@ -28,7 +28,7 @@ import {
   transcriptToolCallRegionId,
 } from "../transcript/layout.js";
 import { plainTextForTranscriptRow } from "../transcript/plain-text.js";
-import { sliceByCellsRange } from "../utils/text.js";
+import { sliceByCellsRange, sliceByCellsRangeForSelection } from "../utils/text.js";
 import { TView } from "./TView.js";
 import { TVirtualRows } from "./TVirtualRows.js";
 import { useTerminal } from "../composables/use-terminal.js";
@@ -939,7 +939,7 @@ export const TTranscriptView = defineComponent({
         const start = Math.max(x0, segment.x0);
         const end = Math.min(x1, segment.x1);
         if (end <= start || !segment.selectable) continue;
-        text += sliceByCellsRange(segment.text, start - segment.x0, end - segment.x0);
+        text += sliceByCellsRangeForSelection(segment.text, start - segment.x0, end - segment.x0);
       }
       return text;
     }
@@ -975,7 +975,7 @@ export const TTranscriptView = defineComponent({
       if (!visualRow) return "";
       if (visualRow.selectionSegments.length)
         return textForSelectionSegments(visualRow.selectionSegments, ctx.x0, ctx.x1);
-      return sliceByCellsRange(selectionTextForVisualRow(visualRow), ctx.x0, ctx.x1);
+      return sliceByCellsRangeForSelection(selectionTextForVisualRow(visualRow), ctx.x0, ctx.x1);
     }
 
     return () =>

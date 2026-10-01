@@ -396,6 +396,42 @@ export function sliceByCellsRange(
   return out.length ? out.join("") : "";
 }
 
+/**
+ * Slice text by terminal cell range for selection copy.
+ *
+ * A grapheme is kept when its leading cell falls inside `[startCells, endCells)`.
+ * `sliceByCellsRange` clips a line into a fixed cell width, so a wide grapheme
+ * (CJK, emoji) cut by the range is replaced with padding there; reusing it to
+ * build copied text turns a partially covered trailing wide character into a
+ * space, which is why selection copy uses this variant: it keeps that grapheme
+ * whole, matching what the selection highlight paints (the highlight skips
+ * continuation cells, so a wide grapheme is only shown as selected when its
+ * leading cell is inside the range).
+ */
+export function sliceByCellsRangeForSelection(
+  text: string,
+  startCells: number,
+  endCells: number,
+  provider: WidthProvider = currentTextWidthProvider(),
+): string {
+  startCells = Math.max(0, Math.floor(startCells));
+  endCells = Math.max(0, Math.floor(endCells));
+  if (endCells <= startCells) return "";
+  if (!text) return "";
+  if (hasAsciiFastPath(provider) && isAscii(text)) return text.slice(startCells, endCells);
+
+  const out: string[] = [];
+  let cells = 0;
+  forEachGrapheme(text, (g) => {
+    const leadingCell = cells;
+    cells += charCellWidth(g, provider);
+    if (leadingCell >= endCells) return false;
+    if (leadingCell >= startCells) out.push(g);
+    return undefined;
+  });
+  return out.join("");
+}
+
 export function padEndByCells(
   text: string,
   width: number,

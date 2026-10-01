@@ -53,6 +53,7 @@ import {
   padEndByCells,
   sanitizeInlineText,
   sliceByCellsRange,
+  sliceByCellsRangeForSelection,
   spaces,
   textCellWidth,
   wrapByCells,
@@ -3614,7 +3615,7 @@ export const TLogView = defineComponent({
       const rows = estimatedVisualRowCount();
       return terminalSelectionRowSpans(range, cols, rows)
         .map((span) => {
-          const text = sliceByCellsRange(textForVisualRow(span.y), span.x0, span.x1);
+          const text = sliceByCellsRangeForSelection(textForVisualRow(span.y), span.x0, span.x1);
           return span.x1 >= cols ? text.trimEnd() : text;
         })
         .join("\n");

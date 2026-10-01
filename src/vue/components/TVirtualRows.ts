@@ -46,7 +46,7 @@ import {
 import { RenderStackKey } from "../render/context.js";
 import { createFrameMailbox } from "../scheduler/frame-mailbox.js";
 import { intersectRect, normalizeCellRect, translateRect } from "../utils/rect.js";
-import { sliceByCellsRange, spaces } from "../utils/text.js";
+import { sliceByCellsRangeForSelection, spaces } from "../utils/text.js";
 import {
   applyWheelScroll,
   createWheelScrollState,
@@ -619,7 +619,7 @@ export const TVirtualRows = defineComponent({
                   cols,
                 }) ?? "",
               )
-            : sliceByCellsRange(itemText(span.y), span.x0, span.x1);
+            : sliceByCellsRangeForSelection(itemText(span.y), span.x0, span.x1);
           return span.x1 >= cols ? text.trimEnd() : text;
         })
         .join("\n");
