@@ -44,7 +44,12 @@ import {
 } from "../../selection/terminal-selection.js";
 import { intersectRect, normalizeCellRect, translateRect } from "../utils/rect.js";
 import { defaultActiveStyle } from "../utils/style-cache.js";
-import { formatInlineCellLine, padEndByCells, sliceByCellsRange } from "../utils/text.js";
+import {
+  formatInlineCellLine,
+  padEndByCells,
+  sliceByCellsRange,
+  sliceByCellsRangeForSelection,
+} from "../utils/text.js";
 import {
   applyWheelScroll,
   createWheelScrollState,
@@ -594,7 +599,7 @@ export const TVirtualList = defineComponent({
       const cols = Math.max(1, Math.floor(props.w));
       return terminalSelectionRowSpans(range, cols, itemCount.value)
         .map((span) => {
-          const text = sliceByCellsRange(itemText(span.y), span.x0, span.x1);
+          const text = sliceByCellsRangeForSelection(itemText(span.y), span.x0, span.x1);
           return span.x1 >= cols ? text.trimEnd() : text;
         })
         .join("\n");

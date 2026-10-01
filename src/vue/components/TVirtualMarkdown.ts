@@ -71,7 +71,7 @@ import { useTerminal } from "../composables/use-terminal.js";
 import { useVisibility } from "../composables/use-visibility.js";
 import { EventZIndexContextKey, RenderPlaneContextKey } from "../context.js";
 import { intersectRect, normalizeCellRect, translateRect } from "../utils/rect.js";
-import { sliceByCellsRange, withTextWidthProvider } from "../utils/text.js";
+import { sliceByCellsRangeForSelection, withTextWidthProvider } from "../utils/text.js";
 import type { TVirtualRowsRowScrollMode } from "./TVirtualRows.js";
 import {
   applyWheelScroll,
@@ -704,7 +704,11 @@ export const TVirtualMarkdown = defineComponent({
       return withTextWidthProvider(widthProvider, () =>
         terminalSelectionRowSpans(range, cols, rows.value.length)
           .map((span) => {
-            const text = sliceByCellsRange(rows.value[span.y]?.plainText ?? "", span.x0, span.x1);
+            const text = sliceByCellsRangeForSelection(
+              rows.value[span.y]?.plainText ?? "",
+              span.x0,
+              span.x1,
+            );
             return span.x1 >= cols ? text.trimEnd() : text;
           })
           .join("\n"),

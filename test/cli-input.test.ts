@@ -1026,7 +1026,9 @@ describe("cli input", () => {
     stdin.emit("data", "\u001B[27;9;127~");
     driver.dispose();
 
-    expect(events).toEqual([{ type: "keydown", key: "Backspace", code: "Backspace", metaKey: true }]);
+    expect(events).toEqual([
+      { type: "keydown", key: "Backspace", code: "Backspace", metaKey: true },
+    ]);
   });
 
   it("parses ESC CR as Alt+Enter (Ghostty Shift+Enter encoding)", () => {
@@ -1069,7 +1071,9 @@ describe("cli input", () => {
     stdin.emit("data", "\u001B\u007F");
     driver.dispose();
 
-    expect(events).toEqual([{ type: "keydown", key: "Backspace", code: "Backspace", altKey: true }]);
+    expect(events).toEqual([
+      { type: "keydown", key: "Backspace", code: "Backspace", altKey: true },
+    ]);
   });
 
   it("treats CRLF as a single Enter keydown", () => {

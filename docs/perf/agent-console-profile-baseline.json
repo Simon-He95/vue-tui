@@ -1,6 +1,6 @@
 {
   "schemaVersion": 5,
-  "measurementRef": "7fdb02299ed0049eff8ce99a1081da2ba3e0aaca",
+  "measurementRef": "ff5e832fd8d535173e7ef93386398740d26d16c4",
   "measurementInputs": {
     "examples/agent-console/src/AgentConsoleSurface.ts": "af637520b7323160fe433ddbfb4a41d965c62d92654c8014d279ff55291aa129",
     "examples/agent-console/src/App.vue": "0ac4ae6fb1279e8ed98e6a82f6eb0e98feacb85b67a0544ae8005cf70f583d8f",
@@ -17,7 +17,7 @@
     "examples/agent-console/index.html": "8bfed1c6b6b5edb0b90a0056f9743cdb797edec540d55c619ceee23266727f2d",
     "examples/agent-console/package.json": "64f3c2162266dabaf6d8c39c1dc24f0e896d882df457ab35c23dbfbb8397cfa1",
     "examples/agent-console/vite.config.ts": "4ec8b8e26c88a1b77c82414e9b69b95e532a11a2b042503b88c11abb733c1870",
-    "package.json": "6bac3d50f222ee9e4a895ded86b30eaaf0dfb244da60d90eca48991462e2c671",
+    "package.json": "fce49f33990952f32616ac52804627790ed29b6084e82499ae65e04975a68858",
     "pnpm-lock.yaml": "bb50b38975884014226db4763499995e46c45503b3813a5235c3f5e600697a8a",
     "tsdown.config.mjs": "108209eef876132606d3bd525c1891ecd95df5b617553ca396c2b92312c85bfd",
     "scripts/build-cjs.mjs": "098dfa8c9c420ba3d265e4361034248ff5bcffcd29716527bd2cfee0563a74e4",
@@ -29,7 +29,7 @@
     "scripts/profile-agent-console-cli.ts": "f990d7d144b6c8830c09339ebb8145624569eff85dbee9046ad122edbaa01544",
     "scripts/tsconfig.agent-console-profile-dist.json": "43f8b7a5af20c2c15bd025e0e0ee6e6dc35f6bd09a64e07fb6324fdbdfcb10f6"
   },
-  "verificationRef": "7fdb02299ed0049eff8ce99a1081da2ba3e0aaca",
+  "verificationRef": "ff5e832fd8d535173e7ef93386398740d26d16c4",
   "verificationInputs": {
     "scripts/agent-console-cpu-profile.ts": "20330b5fae6506344a36c5d2703f745a7ac3376f996d50ce54653c41e488de1f",
     "scripts/agent-console-profile-environment.ts": "5b2df314bfe1afeab5e7c5af9c457212a366c76e56d4fa9fa584fa016fcc9504",
@@ -19262,7 +19262,7 @@
           }
         }
       },
-      "productionRef": "7fdb02299ed0049eff8ce99a1081da2ba3e0aaca"
+      "productionRef": "ff5e832fd8d535173e7ef93386398740d26d16c4"
     },
     "B": {
       "schemaVersion": 2,
@@ -38480,7 +38480,7 @@
           }
         }
       },
-      "productionRef": "7fdb02299ed0049eff8ce99a1081da2ba3e0aaca"
+      "productionRef": "ff5e832fd8d535173e7ef93386398740d26d16c4"
     },
     "C": {
       "schemaVersion": 2,
@@ -57697,7 +57697,7 @@
           }
         }
       },
-      "productionRef": "7fdb02299ed0049eff8ce99a1081da2ba3e0aaca"
+      "productionRef": "ff5e832fd8d535173e7ef93386398740d26d16c4"
     }
   },
   "comparisons": {
