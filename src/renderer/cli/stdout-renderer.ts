@@ -412,7 +412,6 @@ export function createStdoutRenderer(
   const chunkSize = 8 * 1024;
   const chunkThresholdBytes = 64 * 1024;
   const syncMaxBytes = 128 * 1024;
-  const dirtyFullThreshold = 0.6;
   // Row-internal diff tuning.
   // A few narrow spans are cheaper than repainting a whole dirty row.
   // Too many spans become cursor-move heavy, so fall back to full-row repaint.
@@ -3268,7 +3267,9 @@ export function createStdoutRenderer(
     let rowsToRender = (() => {
       if (allowGraphicsOnlyWithoutBaseline) return [];
       if (forceFullRender || !fpPrevValid) return null;
-      if (!dirtyRows) return null;
+      if (!dirtyRows) {
+        return anchorMode === "bottom" ? null : Array.from({ length: size.rows }, (_, y) => y);
+      }
       if (dirtyRows.length === 0) return [];
       const outRows: number[] = [];
       outRows.length = dirtyRows.length;
@@ -3815,12 +3816,6 @@ export function createStdoutRenderer(
         );
       }
     }
-    const denseDirtyRows = Boolean(
-      rowsToRender && size.rows > 1 && rowsToRender.length >= size.rows * dirtyFullThreshold,
-    );
-    if (denseDirtyRows) {
-      rowsToRender = null;
-    }
     let profiledRowCount = rowsToRender ? rowsToRender.length : size.rows;
     const useScrollRegions =
       !terminalGraphicsBlockScrollRegions &&
@@ -4085,16 +4080,6 @@ export function createStdoutRenderer(
         for (const y of extraDirtyRows) renderedRows.add(y);
         profiledRowCount = renderedRows.size;
         scrollHandled = true;
-      }
-    }
-
-    if (!scrollHandled && denseDirtyRows && scrollRowsCandidate && useScrollRegions) {
-      rowsToRender = scrollRowsCandidate;
-      profiledRowCount = rowsToRender.length;
-      if (isDebugEnabled()) {
-        getDebugLog().render(
-          ` Dense dirty rows fell back to partial render: ${rowsToRender.length} rows`,
-        );
       }
     }
 
@@ -5432,7 +5417,10 @@ export function createStdoutRenderer(
     capabilities: STDOUT_RENDERER_CAPABILITIES,
     graphicsCapabilities,
     render,
-    forceRender: () => render(undefined, true),
+    forceRender: () => {
+      fpPrevValid = false;
+      render(undefined, true);
+    },
     dispose,
     setCursor,
     showCursor,

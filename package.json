@@ -377,6 +377,7 @@
     "bench:scroll-mailbox": "tsx scripts/bench-scroll-mailbox.ts",
     "bench:markdown-graphics": "tsx scripts/bench-markdown-graphics.ts",
     "bench:stdout-column-diff": "tsx scripts/bench-stdout-column-diff.ts",
+    "bench:dirty-row-repaint": "tsx scripts/bench-dirty-row-repaint.ts",
     "unicode:eaw:generate": "tsx scripts/generate-eaw-ranges.ts",
     "unicode:eaw:check": "tsx scripts/generate-eaw-ranges.ts && git diff --exit-code -- src/core/buffer/eaw-ranges-unicode-17.ts",
     "bench:perf-baseline": "tsx scripts/bench-perf-baseline.ts",

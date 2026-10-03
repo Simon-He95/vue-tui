@@ -1806,10 +1806,10 @@ describe("stdout renderer column diff", () => {
       // A raw ESC[K before/inside the styled blank area is suspicious here.
       expect(screenLine(screen, 0)).toBe("Done".padEnd(cols));
       expect(frame).toContain("Done");
-      const styledBlankStart = frame.search(/\x1B\[[0-9;:]*m {8}/);
-      const clearIndex = frame.indexOf("\x1B[K");
-      expect(styledBlankStart).toBeGreaterThanOrEqual(0);
-      expect(clearIndex === -1 || clearIndex > styledBlankStart).toBe(true);
+      // The unchanged styled cells remain on screen; an EOL clear must not erase them.
+      expect(frame).not.toContain("\x1B[K");
+      expect(terminal.getCell(8, 0).style.bg).toBe("green");
+      expect(frame).not.toContain("        ");
       expect(frame).not.toMatch(/\x1B\[[0-9;]*K$/);
 
       renderer.dispose();

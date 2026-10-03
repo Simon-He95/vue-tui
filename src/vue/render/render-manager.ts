@@ -355,7 +355,7 @@ export function createRenderManager(
     for (const node of nodes.values()) addToRowBuckets(node);
   }
 
-  function shouldPromoteToFullPlaneDirty(dirtyRows: number, planeNodes: number): boolean {
+  function shouldScanFullPlane(dirtyRows: number, planeNodes: number): boolean {
     return (
       planeNodes > 1 &&
       dirtyRows >= ROW_BUCKET_DIRTY_RATIO_MIN_ROWS &&
@@ -848,22 +848,8 @@ export function createRenderManager(
           if (!state || (!state.allRowsDirty && state.dirtyRowCount === 0)) continue;
 
           const planeNodes = sortedNodesByPlane.get(plane) ?? [];
-          let isFullPlaneRepaint = state.allRowsDirty;
+          const isFullPlaneRepaint = state.allRowsDirty;
           let rows: number[] = allRows;
-
-          if (
-            !isFullPlaneRepaint &&
-            shouldPromoteToFullPlaneDirty(state.dirtyRowCount, planeNodes.length)
-          ) {
-            isFullPlaneRepaint = true;
-            state.allRowsDirty = true;
-            rowBucketFallbacks.push({
-              plane,
-              reason: "dirty-ratio",
-              dirtyRows: state.dirtyRowCount,
-              planeNodes: planeNodes.length,
-            });
-          }
 
           if (!isFullPlaneRepaint) {
             dirtyRowsScratch.length = 0;
@@ -892,6 +878,16 @@ export function createRenderManager(
           const candidateNodes = isFullPlaneRepaint
             ? planeNodes
             : (() => {
+                if (shouldScanFullPlane(rows.length, planeNodes.length)) {
+                  needsIntersectFilter = true;
+                  rowBucketFallbacks.push({
+                    plane,
+                    reason: "dirty-ratio",
+                    dirtyRows: rows.length,
+                    planeNodes: planeNodes.length,
+                  });
+                  return planeNodes;
+                }
                 const marks = beginCandidateCollection(planeNodes);
                 const buckets = rowBuckets.get(plane);
                 for (const y of rows) {

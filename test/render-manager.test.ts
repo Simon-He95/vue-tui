@@ -956,7 +956,7 @@ describe("render-manager", () => {
     expect(dirtyArgs).toEqual(["0,1"]);
   });
 
-  it("falls back to full plane repaint when dirty rows reach 60% of terminal rows", () => {
+  it("scans the plane without repainting untouched rows at 60% dirty coverage", () => {
     const paints: string[] = [];
     const listeners = new Map<string, Set<(...args: any[]) => void>>();
     const terminal: any = {
@@ -1002,20 +1002,9 @@ describe("render-manager", () => {
         planeNodes: 11,
       },
     ]);
-    expect(paints.sort()).toEqual([
-      "n0",
-      "n1",
-      "n2",
-      "n3",
-      "n4",
-      "n5",
-      "n6",
-      "n7",
-      "n8",
-      "n9",
-      "wide",
-    ]);
-    expect(stats?.paintedNodes).toBe(11);
+    expect(paints.sort()).toEqual(["n0", "n1", "n2", "n3", "n4", "n5", "wide"]);
+    expect(stats?.paintedNodes).toBe(7);
+    expect(stats?.rows).toBe(60);
   });
 
   it("records dirty-ratio fallback when manual dirty rows cover most terminal rows", () => {
@@ -1046,7 +1035,8 @@ describe("render-manager", () => {
     const stats = rm.render();
 
     expect(stats?.scannedNodes).toBe(3);
-    expect(stats?.paintedNodes).toBe(3);
+    expect(stats?.paintedNodes).toBe(1);
+    expect(stats?.rows).toBe(20);
     expect(stats?.rowBucketFallbacks).toEqual([
       {
         plane: "default",

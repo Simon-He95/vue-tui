@@ -891,6 +891,60 @@ describe("stdout renderer", () => {
     });
   });
 
+  it.each(["ghostty", "vscode", "pipe"])(
+    "patches dense sparse-cell changes without rewriting unchanged text on %s",
+    (host) => {
+      withUnsetEnv("GHOSTTY_RESOURCES_DIR", () => {
+        if (host === "ghostty") vi.stubEnv("GHOSTTY_RESOURCES_DIR", "/fixture");
+        if (host === "vscode") vi.stubEnv("TERM_PROGRAM", "vscode");
+        const terminal = createTerminal({ cols: 80, rows: 50 });
+        let out = "";
+        let transcriptOut = "";
+        const renderer = createStdoutRenderer(terminal, {
+          output: {
+            isTTY: host !== "pipe",
+            write(chunk) {
+              out += chunk;
+              transcriptOut += chunk;
+            },
+          },
+          clear: false,
+          hideCursor: false,
+          altScreen: false,
+          useSyncOutput: false,
+        });
+        try {
+          for (let y = 0; y < 50; y++) {
+            terminal.write(`row-${y}-unchanged-history`.padEnd(80, " "), { x: 0, y });
+          }
+          terminal.commit({ sync: true });
+          out = "";
+          for (let y = 0; y < 30; y++) terminal.put(0, y, "!");
+          terminal.commit({ sync: true });
+
+          expect(out).not.toContain("unchanged-history");
+          expect(Buffer.byteLength(out)).toBeLessThan(1_000);
+          expect(applyAnsiToScreen(transcriptOut, 80, 50)).toEqual(terminal.snapshot().lines);
+
+          const unchanged = terminal.snapshot().lines;
+          out = "";
+          terminal.clear();
+          for (let y = 0; y < 50; y++) terminal.write(unchanged[y]!, { x: 0, y });
+          terminal.commit({ sync: true });
+          expect(out).toBe("");
+
+          renderer.forceRender();
+          expect(out).toContain("unchanged-history");
+          expect(applyAnsiToScreen(transcriptOut, 80, 50)).toEqual(terminal.snapshot().lines);
+        } finally {
+          renderer.dispose();
+          terminal.dispose();
+          vi.unstubAllEnvs();
+        }
+      });
+    },
+  );
+
   it("falls back to partial render when dense dirty rows are not scroll-like", () => {
     const prevThreshold = process.env.DIMCODE_TUI_DIRTY_FULL_THRESHOLD;
     const prevScrollRegions = process.env.DIMCODE_TUI_SCROLL_REGIONS;
