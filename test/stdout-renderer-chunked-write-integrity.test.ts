@@ -57,7 +57,7 @@ function renderChunkedFrame(options: FrameOptions = {}): { writes: string[]; fra
       options.anchor === undefined ? { cellX: 7, cellY: 42 } : (options.anchor ?? null),
   });
 
-  renderer.render();
+  renderer.forceRender();
   const frames = framesOf(writes);
   renderer.dispose();
   return { writes: [...writes], frames };

@@ -74,7 +74,7 @@ render 时：
 - partial repaint 使用 dirty rows 查 bucket，并复用 scratch marks/arrays 合并候选节点。
 - plane-global 节点加入候选集合。
 - 候选节点必须按现有 stack/zIndex/order 排序，保证覆盖顺序不变。
-- dirty rows 至少 16 行、达到 terminal rows 的 60%，且 plane 节点规模让 bucket walk 不再明显更便宜时，提升为 full-plane repaint，并在 `rowBucketFallbacks` 记录 `reason: "dirty-ratio"`。
+- dirty rows 至少 16 行、达到 terminal rows 的 60%，且 plane 节点规模让 bucket walk 不再明显更便宜时，回退扫描 plane nodes，仍按 dirty rows 过滤和绘制，并在 `rowBucketFallbacks` 记录 `reason: "dirty-ratio"`。只有显式 full-plane invalidation 才扩大绘制范围。
 - bucket 候选节点超过 plane nodes 的 60% 时回退扫描 plane nodes，并在 `rowBucketFallbacks` 记录 `reason: "candidate-ratio"`。
 - `scannedNodes` 语义改为本轮候选节点数，不再是 plane 节点总数。
 

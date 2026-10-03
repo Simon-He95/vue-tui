@@ -53,6 +53,7 @@ function insert(
   parent: HeadlessElement | HeadlessRoot,
   anchor?: HeadlessNode | null,
 ): void {
+  if (child.parent) remove(child);
   child.parent = parent as any;
   const list = parent.children;
   if (!anchor) {

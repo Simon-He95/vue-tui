@@ -1,0 +1,811 @@
+{
+  "baselineCommit": "fa868ad",
+  "node": "v24.16.0",
+  "cpu": "Apple M1 Pro",
+  "method": "Median of three 300-frame repetitions, 60 warmup frames per repetition. Same 160x50 fixture and buffered byte-counting sink. No terminal emulator or GPU measurement. Timing is evidence, not a regression gate.",
+  "summary": [
+    {
+      "phase": "stdout",
+      "scenario": "29 rows, one changed cell",
+      "beforeMeanMs": 0.5394945533333293,
+      "afterMeanMs": 0.49742474666666986,
+      "timeReductionPercent": 7.7980039662543925,
+      "beforeBytesPerFrame": 251,
+      "afterBytesPerFrame": 251,
+      "beforeWork": null,
+      "afterWork": null
+    },
+    {
+      "phase": "stdout",
+      "scenario": "30 rows, one changed cell",
+      "beforeMeanMs": 0.9076654433333337,
+      "afterMeanMs": 0.5042191533333221,
+      "timeReductionPercent": 44.44878814801907,
+      "beforeBytesPerFrame": 8132,
+      "afterBytesPerFrame": 259,
+      "beforeWork": null,
+      "afterWork": null
+    },
+    {
+      "phase": "stdout",
+      "scenario": "50 rows, one changed cell",
+      "beforeMeanMs": 1.0542510999999937,
+      "afterMeanMs": 0.812492653333336,
+      "timeReductionPercent": 22.931770871916484,
+      "beforeBytesPerFrame": 8132,
+      "afterBytesPerFrame": 419,
+      "beforeWork": null,
+      "afterWork": null
+    },
+    {
+      "phase": "stdout",
+      "scenario": "30 rows, all cells changed",
+      "beforeMeanMs": 0.8538620433333411,
+      "afterMeanMs": 0.6666981433333437,
+      "timeReductionPercent": 21.9196884861329,
+      "beforeBytesPerFrame": 8132,
+      "afterBytesPerFrame": 4892,
+      "beforeWork": null,
+      "afterWork": null
+    },
+    {
+      "phase": "stdout",
+      "scenario": "50 rows, all cells changed",
+      "beforeMeanMs": 0.9756865333333553,
+      "afterMeanMs": 1.0708226399999996,
+      "timeReductionPercent": -9.750683587034798,
+      "beforeBytesPerFrame": 8132,
+      "afterBytesPerFrame": 8132,
+      "beforeWork": null,
+      "afterWork": null
+    },
+    {
+      "phase": "stdout",
+      "scenario": "unchanged full invalidation",
+      "beforeMeanMs": 0.7969220533333737,
+      "afterMeanMs": 0.5767637633333531,
+      "timeReductionPercent": 27.626075734651874,
+      "beforeBytesPerFrame": 8132,
+      "afterBytesPerFrame": 0,
+      "beforeWork": null,
+      "afterWork": null
+    },
+    {
+      "phase": "paint",
+      "scenario": 2,
+      "beforeMeanMs": 1.9546419566666373,
+      "afterMeanMs": 1.5278536066666766,
+      "timeReductionPercent": 21.834604979409495,
+      "beforeBytesPerFrame": null,
+      "afterBytesPerFrame": null,
+      "beforeWork": {
+        "rows": 50,
+        "scannedNodes": 2,
+        "paintedNodes": 2,
+        "candidatePlanes": ["transcript"],
+        "rowBucketFallbacks": [
+          {
+            "plane": "transcript",
+            "reason": "dirty-ratio",
+            "dirtyRows": 30,
+            "planeNodes": 2
+          }
+        ]
+      },
+      "afterWork": {
+        "rows": 30,
+        "scannedNodes": 2,
+        "paintedNodes": 2,
+        "candidatePlanes": ["transcript"],
+        "rowBucketFallbacks": [
+          {
+            "plane": "transcript",
+            "reason": "dirty-ratio",
+            "dirtyRows": 30,
+            "planeNodes": 2
+          }
+        ]
+      }
+    },
+    {
+      "phase": "paint",
+      "scenario": 50,
+      "beforeMeanMs": 1.236727646666665,
+      "afterMeanMs": 0.7828647366667489,
+      "timeReductionPercent": 36.69869524007218,
+      "beforeBytesPerFrame": null,
+      "afterBytesPerFrame": null,
+      "beforeWork": {
+        "rows": 50,
+        "scannedNodes": 50,
+        "paintedNodes": 50,
+        "candidatePlanes": ["transcript"],
+        "rowBucketFallbacks": [
+          {
+            "plane": "transcript",
+            "reason": "dirty-ratio",
+            "dirtyRows": 30,
+            "planeNodes": 50
+          }
+        ]
+      },
+      "afterWork": {
+        "rows": 30,
+        "scannedNodes": 50,
+        "paintedNodes": 30,
+        "candidatePlanes": ["transcript"],
+        "rowBucketFallbacks": [
+          {
+            "plane": "transcript",
+            "reason": "dirty-ratio",
+            "dirtyRows": 30,
+            "planeNodes": 50
+          }
+        ]
+      }
+    },
+    {
+      "phase": "paint",
+      "scenario": 200,
+      "beforeMeanMs": 2.991138076666618,
+      "afterMeanMs": 3.0961402666666555,
+      "timeReductionPercent": -3.510442758197716,
+      "beforeBytesPerFrame": null,
+      "afterBytesPerFrame": null,
+      "beforeWork": {
+        "rows": 30,
+        "scannedNodes": 120,
+        "paintedNodes": 120,
+        "candidatePlanes": ["transcript"]
+      },
+      "afterWork": {
+        "rows": 30,
+        "scannedNodes": 120,
+        "paintedNodes": 120,
+        "candidatePlanes": ["transcript"]
+      }
+    }
+  ],
+  "before": {
+    "node": "v24.16.0",
+    "cpu": "Apple M1 Pro",
+    "cols": 160,
+    "rows": 50,
+    "frames": 300,
+    "warmupFrames": 60,
+    "repetitions": 3,
+    "output": "buffered byte-counting sink; terminal emulator and GPU are excluded",
+    "results": [
+      {
+        "phase": "stdout",
+        "label": "29 rows, one changed cell",
+        "repetition": 0,
+        "meanMs": 0.4679710033333337,
+        "p95Ms": 0.5357079999999996,
+        "bytesPerFrame": 251
+      },
+      {
+        "phase": "stdout",
+        "label": "29 rows, one changed cell",
+        "repetition": 1,
+        "meanMs": 0.5537597166666636,
+        "p95Ms": 0.6339169999999967,
+        "bytesPerFrame": 251
+      },
+      {
+        "phase": "stdout",
+        "label": "29 rows, one changed cell",
+        "repetition": 2,
+        "meanMs": 0.5394945533333293,
+        "p95Ms": 0.5795829999999569,
+        "bytesPerFrame": 251
+      },
+      {
+        "phase": "stdout",
+        "label": "30 rows, one changed cell",
+        "repetition": 0,
+        "meanMs": 0.9076654433333337,
+        "p95Ms": 0.9990000000000236,
+        "bytesPerFrame": 8132
+      },
+      {
+        "phase": "stdout",
+        "label": "30 rows, one changed cell",
+        "repetition": 1,
+        "meanMs": 0.9085639299999949,
+        "p95Ms": 1.014667000000145,
+        "bytesPerFrame": 8132
+      },
+      {
+        "phase": "stdout",
+        "label": "30 rows, one changed cell",
+        "repetition": 2,
+        "meanMs": 0.8952712400000071,
+        "p95Ms": 0.9431660000000193,
+        "bytesPerFrame": 8132
+      },
+      {
+        "phase": "stdout",
+        "label": "50 rows, one changed cell",
+        "repetition": 0,
+        "meanMs": 1.0917452566666908,
+        "p95Ms": 1.156709000000319,
+        "bytesPerFrame": 8132
+      },
+      {
+        "phase": "stdout",
+        "label": "50 rows, one changed cell",
+        "repetition": 1,
+        "meanMs": 1.0542510999999937,
+        "p95Ms": 1.1082910000000084,
+        "bytesPerFrame": 8132
+      },
+      {
+        "phase": "stdout",
+        "label": "50 rows, one changed cell",
+        "repetition": 2,
+        "meanMs": 1.0526371000000123,
+        "p95Ms": 1.1177499999998872,
+        "bytesPerFrame": 8132
+      },
+      {
+        "phase": "stdout",
+        "label": "30 rows, all cells changed",
+        "repetition": 0,
+        "meanMs": 0.8538620433333411,
+        "p95Ms": 0.9078330000002097,
+        "bytesPerFrame": 8132
+      },
+      {
+        "phase": "stdout",
+        "label": "30 rows, all cells changed",
+        "repetition": 1,
+        "meanMs": 0.8494952766666787,
+        "p95Ms": 0.8909579999999551,
+        "bytesPerFrame": 8132
+      },
+      {
+        "phase": "stdout",
+        "label": "30 rows, all cells changed",
+        "repetition": 2,
+        "meanMs": 0.8591787233333252,
+        "p95Ms": 0.9305410000006304,
+        "bytesPerFrame": 8132
+      },
+      {
+        "phase": "stdout",
+        "label": "50 rows, all cells changed",
+        "repetition": 0,
+        "meanMs": 0.9783235966666628,
+        "p95Ms": 1.0372500000003129,
+        "bytesPerFrame": 8132
+      },
+      {
+        "phase": "stdout",
+        "label": "50 rows, all cells changed",
+        "repetition": 1,
+        "meanMs": 0.9756865333333553,
+        "p95Ms": 1.0235409999995682,
+        "bytesPerFrame": 8132
+      },
+      {
+        "phase": "stdout",
+        "label": "50 rows, all cells changed",
+        "repetition": 2,
+        "meanMs": 0.9740425066666618,
+        "p95Ms": 1.0264999999999418,
+        "bytesPerFrame": 8132
+      },
+      {
+        "phase": "stdout",
+        "label": "unchanged full invalidation",
+        "repetition": 0,
+        "meanMs": 0.8008644366666825,
+        "p95Ms": 0.8383750000002692,
+        "bytesPerFrame": 8132
+      },
+      {
+        "phase": "stdout",
+        "label": "unchanged full invalidation",
+        "repetition": 1,
+        "meanMs": 0.7961391533333365,
+        "p95Ms": 0.8191249999999854,
+        "bytesPerFrame": 8132
+      },
+      {
+        "phase": "stdout",
+        "label": "unchanged full invalidation",
+        "repetition": 2,
+        "meanMs": 0.7969220533333737,
+        "p95Ms": 0.8366249999999127,
+        "bytesPerFrame": 8132
+      },
+      {
+        "phase": "paint",
+        "nodeCount": 2,
+        "repetition": 0,
+        "meanMs": 1.9661505366667007,
+        "p95Ms": 2.0163329999995767,
+        "stats": {
+          "rows": 50,
+          "scannedNodes": 2,
+          "paintedNodes": 2,
+          "candidatePlanes": ["transcript"],
+          "rowBucketFallbacks": [
+            {
+              "plane": "transcript",
+              "reason": "dirty-ratio",
+              "dirtyRows": 30,
+              "planeNodes": 2
+            }
+          ]
+        }
+      },
+      {
+        "phase": "paint",
+        "nodeCount": 2,
+        "repetition": 1,
+        "meanMs": 1.9546419566666373,
+        "p95Ms": 2.0038340000010066,
+        "stats": {
+          "rows": 50,
+          "scannedNodes": 2,
+          "paintedNodes": 2,
+          "candidatePlanes": ["transcript"],
+          "rowBucketFallbacks": [
+            {
+              "plane": "transcript",
+              "reason": "dirty-ratio",
+              "dirtyRows": 30,
+              "planeNodes": 2
+            }
+          ]
+        }
+      },
+      {
+        "phase": "paint",
+        "nodeCount": 2,
+        "repetition": 2,
+        "meanMs": 1.9543123599999792,
+        "p95Ms": 2.012416999999914,
+        "stats": {
+          "rows": 50,
+          "scannedNodes": 2,
+          "paintedNodes": 2,
+          "candidatePlanes": ["transcript"],
+          "rowBucketFallbacks": [
+            {
+              "plane": "transcript",
+              "reason": "dirty-ratio",
+              "dirtyRows": 30,
+              "planeNodes": 2
+            }
+          ]
+        }
+      },
+      {
+        "phase": "paint",
+        "nodeCount": 50,
+        "repetition": 0,
+        "meanMs": 1.2276295966666537,
+        "p95Ms": 1.2637089999989257,
+        "stats": {
+          "rows": 50,
+          "scannedNodes": 50,
+          "paintedNodes": 50,
+          "candidatePlanes": ["transcript"],
+          "rowBucketFallbacks": [
+            {
+              "plane": "transcript",
+              "reason": "dirty-ratio",
+              "dirtyRows": 30,
+              "planeNodes": 50
+            }
+          ]
+        }
+      },
+      {
+        "phase": "paint",
+        "nodeCount": 50,
+        "repetition": 1,
+        "meanMs": 1.236727646666665,
+        "p95Ms": 1.2687079999996058,
+        "stats": {
+          "rows": 50,
+          "scannedNodes": 50,
+          "paintedNodes": 50,
+          "candidatePlanes": ["transcript"],
+          "rowBucketFallbacks": [
+            {
+              "plane": "transcript",
+              "reason": "dirty-ratio",
+              "dirtyRows": 30,
+              "planeNodes": 50
+            }
+          ]
+        }
+      },
+      {
+        "phase": "paint",
+        "nodeCount": 50,
+        "repetition": 2,
+        "meanMs": 1.246987223333387,
+        "p95Ms": 1.2900410000002012,
+        "stats": {
+          "rows": 50,
+          "scannedNodes": 50,
+          "paintedNodes": 50,
+          "candidatePlanes": ["transcript"],
+          "rowBucketFallbacks": [
+            {
+              "plane": "transcript",
+              "reason": "dirty-ratio",
+              "dirtyRows": 30,
+              "planeNodes": 50
+            }
+          ]
+        }
+      },
+      {
+        "phase": "paint",
+        "nodeCount": 200,
+        "repetition": 0,
+        "meanMs": 2.996830153333352,
+        "p95Ms": 3.06237499999952,
+        "stats": {
+          "rows": 30,
+          "scannedNodes": 120,
+          "paintedNodes": 120,
+          "candidatePlanes": ["transcript"]
+        }
+      },
+      {
+        "phase": "paint",
+        "nodeCount": 200,
+        "repetition": 1,
+        "meanMs": 2.9818994399999914,
+        "p95Ms": 3.050250000000233,
+        "stats": {
+          "rows": 30,
+          "scannedNodes": 120,
+          "paintedNodes": 120,
+          "candidatePlanes": ["transcript"]
+        }
+      },
+      {
+        "phase": "paint",
+        "nodeCount": 200,
+        "repetition": 2,
+        "meanMs": 2.991138076666618,
+        "p95Ms": 3.0679999999993015,
+        "stats": {
+          "rows": 30,
+          "scannedNodes": 120,
+          "paintedNodes": 120,
+          "candidatePlanes": ["transcript"]
+        }
+      }
+    ]
+  },
+  "after": {
+    "node": "v24.16.0",
+    "cpu": "Apple M1 Pro",
+    "cols": 160,
+    "rows": 50,
+    "frames": 300,
+    "warmupFrames": 60,
+    "repetitions": 3,
+    "output": "buffered byte-counting sink; terminal emulator and GPU are excluded",
+    "results": [
+      {
+        "phase": "stdout",
+        "label": "29 rows, one changed cell",
+        "repetition": 0,
+        "meanMs": 0.43718959666666685,
+        "p95Ms": 0.47920799999999986,
+        "bytesPerFrame": 251
+      },
+      {
+        "phase": "stdout",
+        "label": "29 rows, one changed cell",
+        "repetition": 1,
+        "meanMs": 0.5243926499999996,
+        "p95Ms": 0.6018339999999966,
+        "bytesPerFrame": 251
+      },
+      {
+        "phase": "stdout",
+        "label": "29 rows, one changed cell",
+        "repetition": 2,
+        "meanMs": 0.49742474666666986,
+        "p95Ms": 0.5389579999999796,
+        "bytesPerFrame": 251
+      },
+      {
+        "phase": "stdout",
+        "label": "30 rows, one changed cell",
+        "repetition": 0,
+        "meanMs": 0.5094584300000053,
+        "p95Ms": 0.5562499999999773,
+        "bytesPerFrame": 259
+      },
+      {
+        "phase": "stdout",
+        "label": "30 rows, one changed cell",
+        "repetition": 1,
+        "meanMs": 0.5007805533333339,
+        "p95Ms": 0.5298329999999396,
+        "bytesPerFrame": 259
+      },
+      {
+        "phase": "stdout",
+        "label": "30 rows, one changed cell",
+        "repetition": 2,
+        "meanMs": 0.5042191533333221,
+        "p95Ms": 0.5550829999999678,
+        "bytesPerFrame": 259
+      },
+      {
+        "phase": "stdout",
+        "label": "50 rows, one changed cell",
+        "repetition": 0,
+        "meanMs": 0.812492653333336,
+        "p95Ms": 0.9026249999999436,
+        "bytesPerFrame": 419
+      },
+      {
+        "phase": "stdout",
+        "label": "50 rows, one changed cell",
+        "repetition": 1,
+        "meanMs": 0.820253510000006,
+        "p95Ms": 0.9031250000000455,
+        "bytesPerFrame": 419
+      },
+      {
+        "phase": "stdout",
+        "label": "50 rows, one changed cell",
+        "repetition": 2,
+        "meanMs": 0.8079027566666628,
+        "p95Ms": 0.8872919999998885,
+        "bytesPerFrame": 419
+      },
+      {
+        "phase": "stdout",
+        "label": "30 rows, all cells changed",
+        "repetition": 0,
+        "meanMs": 0.6666981433333437,
+        "p95Ms": 0.7445000000002437,
+        "bytesPerFrame": 4892
+      },
+      {
+        "phase": "stdout",
+        "label": "30 rows, all cells changed",
+        "repetition": 1,
+        "meanMs": 0.6682379299999957,
+        "p95Ms": 0.7290419999999358,
+        "bytesPerFrame": 4892
+      },
+      {
+        "phase": "stdout",
+        "label": "30 rows, all cells changed",
+        "repetition": 2,
+        "meanMs": 0.6610289099999849,
+        "p95Ms": 0.7068749999998545,
+        "bytesPerFrame": 4892
+      },
+      {
+        "phase": "stdout",
+        "label": "50 rows, all cells changed",
+        "repetition": 0,
+        "meanMs": 1.076410556666689,
+        "p95Ms": 1.1867500000007567,
+        "bytesPerFrame": 8132
+      },
+      {
+        "phase": "stdout",
+        "label": "50 rows, all cells changed",
+        "repetition": 1,
+        "meanMs": 1.0708226399999996,
+        "p95Ms": 1.1505829999996422,
+        "bytesPerFrame": 8132
+      },
+      {
+        "phase": "stdout",
+        "label": "50 rows, all cells changed",
+        "repetition": 2,
+        "meanMs": 1.0693965033333643,
+        "p95Ms": 1.1392919999998412,
+        "bytesPerFrame": 8132
+      },
+      {
+        "phase": "stdout",
+        "label": "unchanged full invalidation",
+        "repetition": 0,
+        "meanMs": 0.5989672699999604,
+        "p95Ms": 0.6217090000000098,
+        "bytesPerFrame": 0
+      },
+      {
+        "phase": "stdout",
+        "label": "unchanged full invalidation",
+        "repetition": 1,
+        "meanMs": 0.5767637633333531,
+        "p95Ms": 0.6037500000002183,
+        "bytesPerFrame": 0
+      },
+      {
+        "phase": "stdout",
+        "label": "unchanged full invalidation",
+        "repetition": 2,
+        "meanMs": 0.5735226333333079,
+        "p95Ms": 0.5974580000001879,
+        "bytesPerFrame": 0
+      },
+      {
+        "phase": "paint",
+        "nodeCount": 2,
+        "repetition": 0,
+        "meanMs": 1.5278536066666766,
+        "p95Ms": 1.5622920000005251,
+        "stats": {
+          "rows": 30,
+          "scannedNodes": 2,
+          "paintedNodes": 2,
+          "candidatePlanes": ["transcript"],
+          "rowBucketFallbacks": [
+            {
+              "plane": "transcript",
+              "reason": "dirty-ratio",
+              "dirtyRows": 30,
+              "planeNodes": 2
+            }
+          ]
+        }
+      },
+      {
+        "phase": "paint",
+        "nodeCount": 2,
+        "repetition": 1,
+        "meanMs": 1.5233691700000114,
+        "p95Ms": 1.554957999999715,
+        "stats": {
+          "rows": 30,
+          "scannedNodes": 2,
+          "paintedNodes": 2,
+          "candidatePlanes": ["transcript"],
+          "rowBucketFallbacks": [
+            {
+              "plane": "transcript",
+              "reason": "dirty-ratio",
+              "dirtyRows": 30,
+              "planeNodes": 2
+            }
+          ]
+        }
+      },
+      {
+        "phase": "paint",
+        "nodeCount": 2,
+        "repetition": 2,
+        "meanMs": 1.5374961166666798,
+        "p95Ms": 1.5715830000008282,
+        "stats": {
+          "rows": 30,
+          "scannedNodes": 2,
+          "paintedNodes": 2,
+          "candidatePlanes": ["transcript"],
+          "rowBucketFallbacks": [
+            {
+              "plane": "transcript",
+              "reason": "dirty-ratio",
+              "dirtyRows": 30,
+              "planeNodes": 2
+            }
+          ]
+        }
+      },
+      {
+        "phase": "paint",
+        "nodeCount": 50,
+        "repetition": 0,
+        "meanMs": 0.7899113733333737,
+        "p95Ms": 0.8082090000007156,
+        "stats": {
+          "rows": 30,
+          "scannedNodes": 50,
+          "paintedNodes": 30,
+          "candidatePlanes": ["transcript"],
+          "rowBucketFallbacks": [
+            {
+              "plane": "transcript",
+              "reason": "dirty-ratio",
+              "dirtyRows": 30,
+              "planeNodes": 50
+            }
+          ]
+        }
+      },
+      {
+        "phase": "paint",
+        "nodeCount": 50,
+        "repetition": 1,
+        "meanMs": 0.7828647366667489,
+        "p95Ms": 0.8178750000006403,
+        "stats": {
+          "rows": 30,
+          "scannedNodes": 50,
+          "paintedNodes": 30,
+          "candidatePlanes": ["transcript"],
+          "rowBucketFallbacks": [
+            {
+              "plane": "transcript",
+              "reason": "dirty-ratio",
+              "dirtyRows": 30,
+              "planeNodes": 50
+            }
+          ]
+        }
+      },
+      {
+        "phase": "paint",
+        "nodeCount": 50,
+        "repetition": 2,
+        "meanMs": 0.7746022766666829,
+        "p95Ms": 0.8030420000013692,
+        "stats": {
+          "rows": 30,
+          "scannedNodes": 50,
+          "paintedNodes": 30,
+          "candidatePlanes": ["transcript"],
+          "rowBucketFallbacks": [
+            {
+              "plane": "transcript",
+              "reason": "dirty-ratio",
+              "dirtyRows": 30,
+              "planeNodes": 50
+            }
+          ]
+        }
+      },
+      {
+        "phase": "paint",
+        "nodeCount": 200,
+        "repetition": 0,
+        "meanMs": 3.0961402666666555,
+        "p95Ms": 3.1607089999997697,
+        "stats": {
+          "rows": 30,
+          "scannedNodes": 120,
+          "paintedNodes": 120,
+          "candidatePlanes": ["transcript"]
+        }
+      },
+      {
+        "phase": "paint",
+        "nodeCount": 200,
+        "repetition": 1,
+        "meanMs": 3.0901462533333084,
+        "p95Ms": 3.1459589999994932,
+        "stats": {
+          "rows": 30,
+          "scannedNodes": 120,
+          "paintedNodes": 120,
+          "candidatePlanes": ["transcript"]
+        }
+      },
+      {
+        "phase": "paint",
+        "nodeCount": 200,
+        "repetition": 2,
+        "meanMs": 3.096293083333373,
+        "p95Ms": 3.1718330000003334,
+        "stats": {
+          "rows": 30,
+          "scannedNodes": 120,
+          "paintedNodes": 120,
+          "candidatePlanes": ["transcript"]
+        }
+      }
+    ]
+  }
+}
