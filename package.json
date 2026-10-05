@@ -406,7 +406,7 @@
     "esbuild": "^0.20.2",
     "happy-dom": "^17.6.3",
     "katex": "^0.16.47",
-    "lint-staged": "^13.3.0",
+    "lint-staged": "^17.0.0",
     "mathjax-full": "^3.2.2",
     "oxfmt": "^0.47.0",
     "oxlint": "^1.77.0",
