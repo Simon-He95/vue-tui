@@ -58,9 +58,9 @@
   "devDependencies": {
     "@types/node": "^18.19.130",
     "tsdown": "^0.9.9",
-    "tsx": "^4.23.11",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
-    "vue": "^3.5.41"
+    "vue": "^3.5.44"
   },
   "peerDependencies": {
     "vue": "^3.3.0"
