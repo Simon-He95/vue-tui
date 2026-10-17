@@ -1306,6 +1306,96 @@ describe("TTranscriptView", () => {
     }
   });
 
+  /**
+   * The red baseline this pins down: the fixed-row layout cache kept every row it ever laid out, so
+   * a transcript that appends while following the bottom grew its retained layout space with the
+   * row space — measured on an agent TUI as ~2 MB of new retention per turn of appended code (spec
+   * 413 P2 in that repository). Retention is now the drawn window plus a margin, and this test is
+   * the two directions of it: rows that scrolled out are released (their return is a fresh layout),
+   * and rows inside the margin keep their layouts (a small scroll lays out only what entered).
+   */
+  it("releases the layouts of rows that scrolled out of the window, and keeps the ones nearby", async () => {
+    const lines = Array.from({ length: 2_400 }, (_, index) => ({
+      version: 1,
+      text: `row-${index}`,
+    }));
+    const scrollTop = ref(0);
+    const transcriptVersion = ref(1);
+    const viewport = 6;
+    let rowBuilds = 0;
+
+    const source: TTranscriptDataSource = {
+      rowCount: () => lines.length,
+      getRow: (index) => {
+        rowBuilds++;
+        const line = lines[index];
+        return {
+          kind: "message",
+          key: `line-${index}`,
+          segments: [{ text: line?.text ?? "" }],
+          selectableText: line?.text ?? "",
+        };
+      },
+      getRowKey: (index) => `line-${index}`,
+      getRowVersion: (index) => lines[index]?.version ?? 0,
+    };
+
+    const App = defineComponent({
+      name: "TranscriptRowRetentionProbe",
+      setup() {
+        return () =>
+          h(TTranscriptView, {
+            x: 0,
+            y: 0,
+            w: 16,
+            h: viewport,
+            source,
+            version: transcriptVersion.value,
+            scrollTop: scrollTop.value,
+          });
+      },
+    });
+    const app = createTerminalApp({ cols: 16, rows: viewport, component: App });
+
+    try {
+      app.mount();
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("row-0");
+      expect(rowBuilds).toBe(viewport);
+
+      // A jump far down the transcript draws the rows it lands on and lets go of the ones it left:
+      // they sit outside the drawn window's margin.
+      rowBuilds = 0;
+      scrollTop.value = 1_200;
+      transcriptVersion.value++;
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("row-1200");
+      expect(rowBuilds).toBe(viewport);
+
+      // Coming back lays the same rows out again, which is what "released" has to mean here.
+      rowBuilds = 0;
+      scrollTop.value = 0;
+      transcriptVersion.value++;
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("row-0");
+      expect(rowBuilds).toBe(viewport);
+
+      // A move inside the margin keeps what it covers: only the rows that entered are laid out.
+      rowBuilds = 0;
+      scrollTop.value = 3;
+      transcriptVersion.value++;
+      await nextTick();
+      app.scheduler.flushNow();
+      expect(rowText(app, 0)).toBe("row-3");
+      expect(rowBuilds).toBe(3);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it("does not focus or activate offscreen regions by keyboard navigation", async () => {
     const actionClick = vi.fn();
     const viewRef = ref<TTranscriptViewHandle | null>(null);

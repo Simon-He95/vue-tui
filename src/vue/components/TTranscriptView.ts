@@ -79,6 +79,20 @@ const EMPTY_LAYOUT: LayoutState = Object.freeze({
   rowCount: 0,
 });
 const MAX_KEYED_ROW_LAYOUT_CACHE_ENTRIES = 2048;
+/**
+ * How far outside the drawn window a fixed-row transcript keeps a row's layout.
+ *
+ * The fixed-row path lays a frame's rows out on demand, so its cache is the one structure that
+ * grows with a transcript nobody re-reads: a reply appended while the view follows the bottom draws
+ * every one of its new rows exactly once, and without a retention margin every one of them stayed
+ * for the life of the component (measured in an agent TUI: ~2 MB of retained layout per turn of
+ * 152 KB of appended code). The margin is what makes releasing them safe to do: scrolling back
+ * within it still finds its layouts, and a row that returns after it is laid out again on demand —
+ * the same work its first draw did — while the retained row space stays bounded at the drawn window
+ * plus this margin on each side. The wrapped path is untouched: it keeps its layouts for the whole
+ * row space in `previousWrappedLayout`, which its incremental repaint reads.
+ */
+const RETAINED_ROW_LAYOUT_MARGIN_ROWS = 512;
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
@@ -235,6 +249,8 @@ export const TTranscriptView = defineComponent({
     const focusedRegion = ref<TTranscriptHitRegion | null>(null);
     const rowLayoutCache = new Map<number, RowLayoutCacheEntry>();
     const keyedRowLayoutCache = new Map<string, RowLayoutCacheEntry>();
+    /** The retained row window the last release ran for (see `pruneRowLayoutCacheOutsideWindow`). */
+    let retainedWindow: { start: number; end: number } | null = null;
     let previousWrappedLayout: LayoutState | null = null;
     let previousWrappedDeps: WrappedLayoutDeps | null = null;
     let canUseWrappedChangedRangeRepaint = false;
@@ -369,6 +385,32 @@ export const TTranscriptView = defineComponent({
       }
     }
 
+    /**
+     * Drops the layouts of rows that scrolled out of the drawn window's retention margin.
+     *
+     * The alternative — letting the cache keep every row it ever laid out — makes a followed
+     * transcript's retention follow its row space, without bound, so the release has to happen here,
+     * where rows are laid out per frame on demand. A released row is laid out again when it is drawn
+     * again, and its identity entry goes with it: that map holds the same entry object, so leaving it
+     * behind would keep the row retained through the keyed cache instead of releasing it.
+     *
+     * The scan runs when the retained window changes, which is exactly when rows can fall out of it
+     * (a jump, a scroll, a grown or shrunk row space); a repaint of the same window finds nothing to
+     * release, so it does not pay for the walk.
+     */
+    function pruneRowLayoutCacheOutsideWindow(count: number, top: number, bottom: number): void {
+      const start = Math.max(0, top - RETAINED_ROW_LAYOUT_MARGIN_ROWS);
+      const end = Math.min(count, bottom + RETAINED_ROW_LAYOUT_MARGIN_ROWS);
+      if (retainedWindow && retainedWindow.start === start && retainedWindow.end === end) return;
+      retainedWindow = { start, end };
+      for (const [rowIndex, entry] of rowLayoutCache) {
+        if (rowIndex >= start && rowIndex < end) continue;
+        const identity = rowLayoutIdentityKey(entry.rowKey, entry.rowVersion);
+        if (keyedRowLayoutCache.get(identity) === entry) keyedRowLayoutCache.delete(identity);
+        rowLayoutCache.delete(rowIndex);
+      }
+    }
+
     function sameWrappedDeps(a: WrappedLayoutDeps | null, b: WrappedLayoutDeps): boolean {
       return (
         Boolean(a) &&
@@ -477,6 +519,7 @@ export const TTranscriptView = defineComponent({
       if (!count) {
         rowLayoutCache.clear();
         keyedRowLayoutCache.clear();
+        retainedWindow = null;
         previousWrappedLayout = null;
         previousWrappedDeps = null;
         if (perfEnabled) {
@@ -537,6 +580,7 @@ export const TTranscriptView = defineComponent({
           visualRows[rowIndex] = row;
           regions.push(...row.hitRegions);
         }
+        pruneRowLayoutCacheOutsideWindow(count, top, bottom);
       } else {
         const incremental = tryUpdateWrappedLayoutFromChangedRange(
           count,

@@ -14,6 +14,7 @@
 
 ### Fixed
 
+- `TTranscriptView` fixed-row transcripts release the layouts of rows that scrolled out of the drawn window (the drawn window plus a 512-row margin on each side) instead of keeping every row they ever laid out; a released row is laid out again when it is drawn again. A transcript that appends while following the bottom no longer grows its retained layout space with its row space.
 - `TInput` Ctrl+U (the `^U` encoding many terminals use for Cmd+Backspace) now deletes from the caret to the start of the current line instead of clearing the whole value, matching readline's `unix-line-discard` and the macOS Cmd+Delete shortcut.
 - xterm modifyOtherKeys `CSI 27;<mods>;127~` (the Cmd(Meta)+Backspace encoding used by terminals without Kitty protocol) now decodes to Backspace instead of a stray DEL character, so it reaches input widgets with its modifiers intact.
 - Legacy `ESC DEL` (Option+Backspace on Apple Terminal and other non-Kitty terminals) now parses to Alt+Backspace instead of being silently dropped.
