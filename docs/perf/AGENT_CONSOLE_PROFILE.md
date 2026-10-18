@@ -18,10 +18,10 @@ Replay copying was a real application hotspot. Lazy Markdown publication removed
 
 | Workload                  | A median | B median | C median |       C vs A |
 | ------------------------- | -------: | -------: | -------: | -----------: |
-| CLI framed burst          | 2,513 ms | 1,151 ms |   448 ms | 82.2% faster |
-| Browser framed burst      | 2,024 ms | 1,121 ms |   857 ms | 57.6% faster |
-| CLI single-task burst     | 2,218 ms |   777 ms |    85 ms | 96.2% faster |
-| Browser single-task burst | 1,662 ms |   738 ms |    38 ms | 97.7% faster |
+| CLI framed burst          | 2,517 ms | 1,215 ms |   603 ms | 76.0% faster |
+| Browser framed burst      | 2,047 ms | 1,712 ms | 1,705 ms | 16.7% faster |
+| CLI single-task burst     | 1,959 ms |   738 ms |   143 ms | 92.7% faster |
+| Browser single-task burst | 1,547 ms |   555 ms |    71 ms | 95.4% faster |
 
 The real 12 ms product workloads remain stable: product-tail frame p95 is 2.21 → 2.10 ms CLI and 1.20 → 1.20 ms Browser; product Markdown frame p95 is 2.07 → 1.99 ms CLI and 1.50 → 1.60 ms Browser. Product stream + scroll input-to-commit p95 changes by a paired median of +0.26 ms CLI and +0.15 ms Browser; Browser DOM-flush and paint-opportunity p95 deltas are −0.20 ms and −0.05 ms.
 
