@@ -20,6 +20,8 @@ export type { MentionPathProvider, MentionSuggestionProvider } from "./promptMen
 
 type HighlightRange = Readonly<{ start: number; end: number }>;
 
+const SELECTED_ROW_MARKER = "›";
+
 function omitInverse(style?: Style): Style {
   if (!style) return {};
   const { inverse: _inverse, ...rest } = style;
@@ -167,6 +169,11 @@ function mentionIndexAt(value: string, mentionToken: string, index: number): num
 export type PromptMentionPluginOptions = Readonly<{
   mentionSuggestionProviders?: readonly MentionSuggestionProvider[];
   mentionPathProvider?: MentionPathProvider;
+  /**
+   * Style for the `›` gutter marker drawn on the selected popup row.
+   * Called on every paint, so a theme lookup stays live; omit it to keep the popup gutter-free.
+   */
+  selectedMarkerStyle?: () => Style;
 }>;
 
 export function createPromptMentionPlugin(options: PromptMentionPluginOptions = {}): TInputPlugin {
@@ -577,6 +584,7 @@ export function createPromptMentionPlugin(options: PromptMentionPluginOptions = 
           getProps().zIndex,
           ctx.defaultStyle.value,
           promptMention.mentionKindVersion.value,
+          options.selectedMarkerStyle?.(),
         ],
         paint: () => {
           if (!ctx.visible.value || !promptMention.promptVisible.value) return;
@@ -626,8 +634,9 @@ export function createPromptMentionPlugin(options: PromptMentionPluginOptions = 
           const h = Math.max(0, Math.floor(r.h));
           const innerW = Math.max(0, w - 2);
           const sidePad = innerW >= 4 ? 1 : 0;
-          const contentW = Math.max(0, innerW - sidePad * 2);
-          const contentX = x0 + 1 + sidePad;
+          const markerW = options.selectedMarkerStyle && innerW >= 6 ? 1 : 0;
+          const contentW = Math.max(0, innerW - sidePad * 2 - markerW);
+          const contentX = x0 + 1 + sidePad + markerW;
 
           const borderStyle = derived.borderStyle;
           if (lastTopClampedRect && y0 > 0) {
@@ -692,7 +701,7 @@ export function createPromptMentionPlugin(options: PromptMentionPluginOptions = 
               const highlightStyle = buildPromptMatchHighlightStyle(valueStyle, popupMatchStyle);
               const rowStyle = valueStyle;
               if (sidePad > 0) {
-                ctx.terminal.write(spaces(sidePad), {
+                ctx.terminal.write(spaces(sidePad + markerW), {
                   x: x0 + 1,
                   y,
                   style: rowStyle,
@@ -735,7 +744,7 @@ export function createPromptMentionPlugin(options: PromptMentionPluginOptions = 
               const style = isSelected ? derived.selectedStyle : derived.itemStyle;
               const highlightStyle = buildPromptMatchHighlightStyle(style, popupMatchStyle);
               if (sidePad > 0) {
-                ctx.terminal.write(spaces(sidePad), {
+                ctx.terminal.write(spaces(sidePad + markerW), {
                   x: x0 + 1,
                   y,
                   style,
@@ -767,6 +776,12 @@ export function createPromptMentionPlugin(options: PromptMentionPluginOptions = 
                 });
               }
             }
+            if (markerW && isSelected) {
+              ctx.terminal.put(x0 + 1, y, SELECTED_ROW_MARKER, {
+                ...derived.selectedStyle,
+                ...options.selectedMarkerStyle?.(),
+              });
+            }
           }
 
           if (list.length === 0 && contentH > 0) {
@@ -775,7 +790,7 @@ export function createPromptMentionPlugin(options: PromptMentionPluginOptions = 
             ctx.terminal.put(x0 + w - 1, y, "│", borderStyle);
             const msg = padEndByCells(sliceByCellsWindow("(no matches)", 0, contentW), contentW);
             if (sidePad > 0) {
-              ctx.terminal.write(spaces(sidePad), {
+              ctx.terminal.write(spaces(sidePad + markerW), {
                 x: x0 + 1,
                 y,
                 style: derived.emptyStyle,

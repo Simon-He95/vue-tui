@@ -704,6 +704,7 @@ const app = createTerminalApp({
 - mention：基于 `mentionTrigger`（默认 `@`）匹配；配合 `collectMentions=true` 会把选择结果写入 `mentions`（通过 `update:mentions`）
 - mention 数据源既可以来自 `mentionSuggestions` / `mentionSuggestionProviders`，也可以通过 `mentionPathProvider` 注入路径补全能力
 - 如果宿主就是 Node / 本地文件系统语义，可以直接用 `createNodeMentionPathProvider()`
+- 选中行标记：传入 `selectedMarkerStyle: () => style` 会在选中行左侧预留 1 列并绘制 `›`；弹窗内容区不足 6 列时自动省略，不传则保持无标记布局
 - 键盘：`↑/↓` 选择，`Tab`/`Enter` 接受，`Esc` 关闭浮层
 
 ### `createTextRestrictionPlugin({ rules })`
@@ -1663,6 +1664,7 @@ const app = createTerminalApp({
 - mention：基于 `mentionTrigger`（默认 `@`）匹配；配合 `collectMentions=true` 会把选择结果写入 `mentions`（通过 `update:mentions`）
 - mention 数据源既可以来自 `mentionSuggestions` / `mentionSuggestionProviders`，也可以通过 `mentionPathProvider` 注入路径补全能力
 - 如果宿主就是 Node / 本地文件系统语义，可以直接用 `createNodeMentionPathProvider()`
+- 选中行标记：传入 `selectedMarkerStyle: () => style` 会在选中行左侧预留 1 列并绘制 `›`；弹窗内容区不足 6 列时自动省略，不传则保持无标记布局
 - 键盘：`↑/↓` 选择，`Tab`/`Enter` 接受，`Esc` 关闭浮层
 
 ### `createTextRestrictionPlugin({ rules })`

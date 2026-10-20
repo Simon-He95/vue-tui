@@ -4,6 +4,7 @@
 
 ### Added
 
+- `createPromptMentionPlugin({ selectedMarkerStyle })` draws a `›` marker in a one-cell gutter on the selected popup row, matching the `TCommandPalette` selection cursor. The gutter is skipped when the popup is too narrow, and omitting the option keeps the previous gutter-free layout.
 - `TInput` word-wise deletion: Alt(Option)+Backspace deletes the word before the caret, and Alt+Delete or Alt+D (the `ESC d` "delete word right" encoding VS Code uses for ⌥⌦/Ctrl+Delete) deletes the word after it. Word boundaries stop at newlines, and selection/mention/multiline bookkeeping is shared with the existing delete paths.
 
 ### Experimental
