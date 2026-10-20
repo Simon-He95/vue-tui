@@ -13,8 +13,8 @@ importers:
   .:
     dependencies:
       stream-markdown-parser:
-        specifier: 1.2.20
-        version: 1.2.20
+        specifier: 1.2.21
+        version: 1.2.21
     devDependencies:
       '@arethetypeswrong/core':
         specifier: ^0.18.5
@@ -2951,8 +2951,8 @@ packages:
   std-env@4.1.0:
     resolution: {integrity: sha512-Rq7ybcX2RuC55r9oaPVEW7/xu3tj8u4GeBYHBWCychFtzMIr86A7e3PPEBPT37sHStKX3+TiX/Fr/ACmJLVlLQ==}
 
-  stream-markdown-parser@1.2.20:
-    resolution: {integrity: sha512-mJL83Q3IEoJ2hv/uZZbGbGD755Ii2g5beWy10y7AaJSzgvAlGe4DlxhgIMHuqS/Sy4lKn8iOvSnXLS7SpmB9cQ==}
+  stream-markdown-parser@1.2.21:
+    resolution: {integrity: sha512-KxR+1MKx+8KU60pWrEPKZKWoze9GAu/hfaawZQRqFdpFUSE2L38FvxZROkdPZpmArQwaJntzM0eiv94+ITxQxQ==}
 
   string-argv@0.3.1:
     resolution: {integrity: sha512-a1uQGz7IyVy9YwhqjZIZu1c8JO8dNIe20xBmSS6qu9kv++k3JGzCVmprbNN5Kn+BgzD5E7YYwg1CcjuJMRNsvg==}
@@ -5632,7 +5632,7 @@ snapshots:
 
   std-env@4.1.0: {}
 
-  stream-markdown-parser@1.2.20:
+  stream-markdown-parser@1.2.21:
     dependencies:
       markdown-it-container: 4.0.0
       markdown-it-footnote: 4.0.0
