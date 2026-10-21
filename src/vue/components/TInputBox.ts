@@ -19,6 +19,8 @@ export const TInputBox = defineComponent({
     placeholder: { type: String, default: "" },
     style: { type: Object as PropType<Style>, default: undefined },
     autoFocus: { type: Boolean, default: false },
+    /** Automatically copies terminal mouse selections, as in TInput. */
+    autoCopy: { type: Boolean, default: true },
     plugins: {
       type: Array as PropType<readonly TInputPlugin[]>,
       default: () => [],
@@ -64,6 +66,7 @@ export const TInputBox = defineComponent({
             placeholder: props.placeholder,
             style: props.style,
             autoFocus: props.autoFocus,
+            autoCopy: props.autoCopy,
             plugins: props.plugins,
             cursorBlink: props.cursorBlink,
             cursorShape: props.cursorShape,

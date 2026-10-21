@@ -1,5 +1,5 @@
 {
-  "packageVersion": "1.1.16",
+  "packageVersion": "1.1.17",
   "entrypoints": {
     "@simon_he/vue-tui": {
       "maturity": "public",
@@ -4573,6 +4573,14 @@
           "descriptionSource": "shared-default"
         },
         {
+          "name": "autoCopy",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Automatically copies terminal mouse selections; secret inputs never auto-copy.",
+          "descriptionSource": "jsdoc"
+        },
+        {
           "name": "cursorBlink",
           "type": "boolean",
           "required": false,
@@ -5011,6 +5019,13 @@
           "type": "boolean",
           "required": false,
           "defaultValue": "false"
+        },
+        {
+          "name": "autoCopy",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": "true",
+          "description": "Automatically copies terminal mouse selections, as in TInput."
         },
         {
           "name": "plugins",
