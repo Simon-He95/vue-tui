@@ -1068,6 +1068,7 @@ Import: `@simon_he/vue-tui`
 | <code>placeholderWhenFocused</code>      | <code>boolean</code>                                                                             | <code>false</code>             | 否   | Placeholder text used while the input has focus.                                      |
 | <code>style</code>                       | <code>Style</code>                                                                               | <code>undefined</code>         | 否   | Base terminal cell style override.                                                    |
 | <code>autoFocus</code>                   | <code>boolean</code>                                                                             | <code>false</code>             | 否   | Requests focus when the component becomes visible.                                    |
+| <code>autoCopy</code>                    | <code>boolean</code>                                                                             | <code>true</code>              | 否   | Automatically copies terminal mouse selections; secret inputs never auto-copy.        |
 | <code>cursorBlink</code>                 | <code>boolean</code>                                                                             | <code>true</code>              | 否   | Enables cursor blink rendering.                                                       |
 | <code>cursorShape</code>                 | <code>&quot;block&quot; &#124; &quot;underline&quot; &#124; &quot;bar&quot;</code>               | <code>&quot;block&quot;</code> | 否   | Cursor glyph shape.                                                                   |
 | <code>blinkInterval</code>               | <code>number</code>                                                                              | <code>500</code>               | 否   | Cursor blink interval in milliseconds.                                                |
@@ -1132,23 +1133,24 @@ Import: `@simon_he/vue-tui/vue`
 
 ### Props
 
-| 名称                       | 类型                                                                               | 默认值                         | 必填 | 说明 |
-| -------------------------- | ---------------------------------------------------------------------------------- | ------------------------------ | ---- | ---- |
-| <code>x</code>             | <code>number</code>                                                                | —                              | 是   | —    |
-| <code>y</code>             | <code>number</code>                                                                | —                              | 是   | —    |
-| <code>w</code>             | <code>number</code>                                                                | —                              | 是   | —    |
-| <code>h</code>             | <code>number</code>                                                                | —                              | 是   | —    |
-| <code>zIndex</code>        | <code>number</code>                                                                | <code>0</code>                 | 否   | —    |
-| <code>title</code>         | <code>string</code>                                                                | <code>&quot;&quot;</code>      | 否   | —    |
-| <code>padding</code>       | <code>number</code>                                                                | <code>0</code>                 | 否   | —    |
-| <code>modelValue</code>    | <code>string</code>                                                                | —                              | 是   | —    |
-| <code>placeholder</code>   | <code>string</code>                                                                | <code>&quot;&quot;</code>      | 否   | —    |
-| <code>style</code>         | <code>Style</code>                                                                 | <code>undefined</code>         | 否   | —    |
-| <code>autoFocus</code>     | <code>boolean</code>                                                               | <code>false</code>             | 否   | —    |
-| <code>plugins</code>       | <code>readonly TInputPlugin[]</code>                                               | <code>() =&gt; []</code>       | 否   | —    |
-| <code>cursorBlink</code>   | <code>boolean</code>                                                               | <code>true</code>              | 否   | —    |
-| <code>cursorShape</code>   | <code>&quot;block&quot; &#124; &quot;underline&quot; &#124; &quot;bar&quot;</code> | <code>&quot;block&quot;</code> | 否   | —    |
-| <code>blinkInterval</code> | <code>number</code>                                                                | <code>500</code>               | 否   | —    |
+| 名称                       | 类型                                                                               | 默认值                         | 必填 | 说明                                                          |
+| -------------------------- | ---------------------------------------------------------------------------------- | ------------------------------ | ---- | ------------------------------------------------------------- |
+| <code>x</code>             | <code>number</code>                                                                | —                              | 是   | —                                                             |
+| <code>y</code>             | <code>number</code>                                                                | —                              | 是   | —                                                             |
+| <code>w</code>             | <code>number</code>                                                                | —                              | 是   | —                                                             |
+| <code>h</code>             | <code>number</code>                                                                | —                              | 是   | —                                                             |
+| <code>zIndex</code>        | <code>number</code>                                                                | <code>0</code>                 | 否   | —                                                             |
+| <code>title</code>         | <code>string</code>                                                                | <code>&quot;&quot;</code>      | 否   | —                                                             |
+| <code>padding</code>       | <code>number</code>                                                                | <code>0</code>                 | 否   | —                                                             |
+| <code>modelValue</code>    | <code>string</code>                                                                | —                              | 是   | —                                                             |
+| <code>placeholder</code>   | <code>string</code>                                                                | <code>&quot;&quot;</code>      | 否   | —                                                             |
+| <code>style</code>         | <code>Style</code>                                                                 | <code>undefined</code>         | 否   | —                                                             |
+| <code>autoFocus</code>     | <code>boolean</code>                                                               | <code>false</code>             | 否   | —                                                             |
+| <code>autoCopy</code>      | <code>boolean</code>                                                               | <code>true</code>              | 否   | Automatically copies terminal mouse selections, as in TInput. |
+| <code>plugins</code>       | <code>readonly TInputPlugin[]</code>                                               | <code>() =&gt; []</code>       | 否   | —                                                             |
+| <code>cursorBlink</code>   | <code>boolean</code>                                                               | <code>true</code>              | 否   | —                                                             |
+| <code>cursorShape</code>   | <code>&quot;block&quot; &#124; &quot;underline&quot; &#124; &quot;bar&quot;</code> | <code>&quot;block&quot;</code> | 否   | —                                                             |
+| <code>blinkInterval</code> | <code>number</code>                                                                | <code>500</code>               | 否   | —                                                             |
 
 ### Events
 

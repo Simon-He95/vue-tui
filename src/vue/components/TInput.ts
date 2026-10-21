@@ -158,6 +158,8 @@ export const TInput = defineComponent({
     placeholderWhenFocused: { type: Boolean, default: false },
     style: { type: Object as PropType<Style>, default: undefined },
     autoFocus: { type: Boolean, default: false },
+    /** Automatically copies terminal mouse selections; secret inputs never auto-copy. */
+    autoCopy: { type: Boolean, default: true },
     cursorBlink: { type: Boolean, default: true },
     cursorShape: {
       type: String as PropType<"block" | "underline" | "bar">,
@@ -1554,6 +1556,12 @@ export const TInput = defineComponent({
         });
     }
 
+    function autoCopySelection(): void {
+      if (!props.autoCopy || props.secret || !isTerminalHost()) return;
+      const sel = selection.value;
+      if (sel) copySelectionText(getValue().slice(sel.start, sel.end));
+    }
+
     function onKeydown(e: TerminalKeyboardEvent): void {
       if (e.key === "Enter") {
         const ts = typeof e.timeStamp === "number" ? e.timeStamp : Date.now();
@@ -2138,14 +2146,7 @@ export const TInput = defineComponent({
           scheduler.invalidate();
         },
         pointerup: () => {
-          if (isTerminalHost() && mouseDragSelecting) {
-            const sel = selection.value;
-            if (sel) {
-              const value = getValue();
-              const text = value.slice(sel.start, sel.end);
-              if (text) copySelectionText(text);
-            }
-          }
+          if (mouseDragSelecting) autoCopySelection();
           if (mouseDragSelecting) suppressNextClick = true;
           mouseDownCell = null;
           mouseDownShift = false;
@@ -2190,11 +2191,10 @@ export const TInput = defineComponent({
           if (isTripleClick) {
             selectAll();
             lastClick = null;
-            return;
-          }
-          if (isDoubleClick) {
+          } else if (isDoubleClick) {
             selectTokenAtCursor();
           }
+          if (isDoubleClick || isTripleClick) autoCopySelection();
           scheduler.invalidate();
         },
         paste: (e: TerminalInputEvent) => {

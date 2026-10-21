@@ -630,6 +630,7 @@ const theme = createTheme({
 - `placeholder` `(string?)`
 - `placeholderWhenFocused` `(boolean)`：聚焦时是否显示 placeholder（默认 `false`）
 - `autoFocus` `(boolean)`
+- `autoCopy` `(boolean)`：终端模式下，拖选松开、双击选词、三连击全选时自动复制选区（默认 `true`）；设为 `false` 只选择、不自动复制。`secret` 输入始终不自动复制；浏览器模式不自动复制。`TInputBox` 也支持此开关。
 - `cursorBlink` `(boolean)`
 - `cursorShape` `('block'|'underline'|'bar')`
 - `style` `(Style?)`
