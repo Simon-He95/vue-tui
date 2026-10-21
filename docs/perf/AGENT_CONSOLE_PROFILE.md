@@ -18,12 +18,12 @@ Replay copying was a real application hotspot. Lazy Markdown publication removed
 
 | Workload                  | A median | B median | C median |       C vs A |
 | ------------------------- | -------: | -------: | -------: | -----------: |
-| CLI framed burst          | 2,517 ms | 1,215 ms |   603 ms | 76.0% faster |
-| Browser framed burst      | 2,047 ms | 1,712 ms | 1,705 ms | 16.7% faster |
-| CLI single-task burst     | 1,959 ms |   738 ms |   143 ms | 92.7% faster |
-| Browser single-task burst | 1,547 ms |   555 ms |    71 ms | 95.4% faster |
+| CLI framed burst          | 2,579 ms | 1,275 ms |   618 ms | 76.0% faster |
+| Browser framed burst      | 2,199 ms | 1,719 ms | 1,703 ms | 22.6% faster |
+| CLI single-task burst     | 1,979 ms |   761 ms |   144 ms | 92.7% faster |
+| Browser single-task burst | 1,599 ms |   577 ms |    67 ms | 95.8% faster |
 
-The real 12 ms product workloads remain stable: product-tail frame p95 is 2.21 → 2.10 ms CLI and 1.20 → 1.20 ms Browser; product Markdown frame p95 is 2.07 → 1.99 ms CLI and 1.50 → 1.60 ms Browser. Product stream + scroll input-to-commit p95 changes by a paired median of +0.26 ms CLI and +0.15 ms Browser; Browser DOM-flush and paint-opportunity p95 deltas are −0.20 ms and −0.05 ms.
+The real 12 ms product workloads remain stable: product-tail frame p95 is 2.05 → 1.91 ms CLI and 1.10 → 1.10 ms Browser; product Markdown frame p95 is 1.90 → 1.76 ms CLI and 1.25 → 1.20 ms Browser. Product stream + scroll input-to-commit p95 changes by a paired median of -0.09 ms CLI and -0.05 ms Browser; Browser DOM-flush and paint-opportunity p95 deltas are -0.40 ms and -0.10 ms.
 
 In C's default Log burst, `mergeGroups` no longer dominates CPU samples. Scenario-specific preludes occur before counters reset and timing starts. Visible Markdown publication is rate-limited to a 32 ms minimum interval through one timer and one fixed-id low-priority frame task; mode exit and disposal cancel both stages. The controlled synthetic producer remains at 64 ms. Three separate product scenarios execute the real `startStream()` / `stopStream()` 12 ms timer for fixed tick counts. Formal benefits use the inner workload `totalElapsedMs`, paired by round; Playwright controller time remains diagnostic only. `validate:agent-console:abc` gates cadence, frames, interaction latency, Long Tasks, DOM/stdout amplification, CPU artifacts, correctness, and provenance. The committed schema-5 baseline retains paired frame, long-frame, Long Task, latency, and amplification evidence for independent checking.
 
@@ -70,6 +70,8 @@ Synthetic append indices use an explicit post-seed cursor. Product scenarios cal
 ## Evidence and commands
 
 The complete machine-readable summary is [`agent-console-profile-baseline.json`](./agent-console-profile-baseline.json). Raw frames and CPU profiles remain workflow artifacts.
+
+The current baseline was recorded from the [complete six-run workflow](https://github.com/Simon-He95/vue-tui/actions/runs/39558845751) on clean measurement commit `c00d177748fc5eb30787d002f811ecba5704656a`.
 
 ```bash
 pnpm run profile:agent-console:smoke
