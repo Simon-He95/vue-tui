@@ -403,7 +403,8 @@ export function indexToWrappedCellColFirstWidthInline(
   );
   for (let i = 0; i < lines.length; i++) {
     const info = lines[i]!;
-    if (safe <= info.end) {
+    // A soft-wrap boundary belongs to the next display row; a newline belongs to this one.
+    if (safe < info.end || (safe === info.end && lines[i + 1]?.start !== safe)) {
       const col = textCellWidthInline(
         value,
         multilineToken,
