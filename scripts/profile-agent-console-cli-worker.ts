@@ -2,6 +2,7 @@
 import type { AgentConsoleApi } from "../examples/agent-console/src/AgentConsoleSurface.js";
 import type { AgentConsoleProfileAdapter } from "../examples/agent-console/src/perf-harness.js";
 import { mkdirSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { Session } from "node:inspector";
 import { resolve } from "node:path";
 import { summarizeCpuProfile, type CpuProfile } from "./agent-console-cpu-profile.js";
@@ -228,8 +229,15 @@ for (const scenario of scenarios) {
     }
     await collectGarbage();
     const memoryAfter = process.memoryUsage();
-    const enriched = {
+    const measured = {
       ...result,
+      replaySha256: createHash("sha256")
+        .update(JSON.stringify(mountedApi.captureReplayLog()))
+        .digest("hex"),
+      terminalSha256: createHash("sha256")
+        .update(JSON.stringify(app.terminal.snapshot()))
+        .digest("hex"),
+      terminalSnapshot: app.terminal.snapshot(),
       memory: {
         includesProfilerBuffers: true,
         before: memoryBefore,
@@ -250,6 +258,14 @@ for (const scenario of scenarios) {
         ...output,
         bytesPerFrame: result.frameSamples.length ? output.bytes / result.frameSamples.length : 0,
       },
+    };
+    mountedApi.jumpToBottom();
+    await adapter.waitUntilSettled();
+    const enriched = {
+      ...measured,
+      settledBottomSha256: createHash("sha256")
+        .update(JSON.stringify(app.terminal.snapshot()))
+        .digest("hex"),
     };
     results.push(enriched);
     writeFileSync(resolve(outputDir, `${scenario}.json`), JSON.stringify(enriched, null, 2));
