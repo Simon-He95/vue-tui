@@ -337,11 +337,21 @@ describe("T3DViewport", () => {
     expect(contexts.at(-1)!.motion.zoom).toBe(0.8);
     expect(contexts.at(-1)!.motion.zoomVelocity).toBe(0);
 
-    handle.value?.resetMotion();
-    await new Promise((resolve) => setTimeout(resolve, 60));
-    await settle(app);
-    expect(contexts.at(-1)!.motion).toMatchObject({ zoom: 0.9, zoomVelocity: 0 });
-    app.dispose();
+    expect(handle.value).toBeDefined();
+    const beforeReset = contexts.length;
+    handle.value!.resetMotion();
+    try {
+      await vi.waitFor(
+        () => {
+          app.scheduler.flushNow();
+          expect(contexts.length).toBeGreaterThan(beforeReset);
+          expect(contexts.at(-1)!.motion).toMatchObject({ zoom: 0.9, zoomVelocity: 0 });
+        },
+        { timeout: 1_000 },
+      );
+    } finally {
+      app.dispose();
+    }
   });
 
   it("aborts active pulls, disposes the renderer, and exposes resetMotion", async () => {

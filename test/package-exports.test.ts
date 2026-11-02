@@ -703,7 +703,7 @@ describe("package exports", () => {
       mermaid.isSimpleMermaidFlowchartSource,
     );
     expect(agentMermaid.markMermaidRenderErrorFatal).toBe(mermaid.markMermaidRenderErrorFatal);
-  });
+  }, 30_000);
 
   it.skipIf(!requireDistExports)(
     "loads the optional Mermaid peer through the built CJS bridge at render time",

@@ -563,16 +563,7 @@ function tableRows(
 
 function styleSignature(style?: Style): string {
   if (!style) return "";
-  return [
-    style.fg ?? "",
-    style.bg ?? "",
-    style.bold ? "1" : "0",
-    style.dim ? "1" : "0",
-    style.italic ? "1" : "0",
-    style.underline ? "1" : "0",
-    style.inverse ? "1" : "0",
-    style.href ?? "",
-  ].join("\u0001");
+  return `${style.fg ?? ""}\u0001${style.bg ?? ""}\u0001${style.bold ? "1" : "0"}\u0001${style.dim ? "1" : "0"}\u0001${style.italic ? "1" : "0"}\u0001${style.underline ? "1" : "0"}\u0001${style.inverse ? "1" : "0"}\u0001${style.href ?? ""}`;
 }
 
 function inlineSegmentSignature(segment: TuiMarkdownInlineSegment): string {
@@ -595,44 +586,27 @@ function inlineSegmentSignature(segment: TuiMarkdownInlineSegment): string {
         segment.mathAction.rendered ? "1" : "0",
       ].join("\u0006")
     : "";
-  return [
-    segment.text,
-    segment.hardBreak ? "1" : "0",
-    styleSignature(segment.style),
-    graphic,
-    mathAction,
-  ].join("\u0002");
+  return `${segment.text}\u0002${segment.hardBreak ? "1" : "0"}\u0002${styleSignature(segment.style)}\u0002${graphic}\u0002${mathAction}`;
 }
 
 function inlineSegmentsSignature(segments?: readonly TuiMarkdownInlineSegment[]): string {
-  return (segments ?? []).map(inlineSegmentSignature).join("\u0003");
+  let signature = "";
+  let separator = "";
+  for (const segment of segments ?? []) {
+    signature += separator + inlineSegmentSignature(segment);
+    separator = "\u0003";
+  }
+  return signature;
 }
 
 function blockLayoutSignature(block: TuiMarkdownBlock): string {
   switch (block.type) {
     case "inline":
-      return [
-        block.type,
-        inlineSegmentsSignature(block.segments),
-        inlineSegmentsSignature(block.prefixSegments),
-        inlineSegmentsSignature(block.continuationPrefixSegments),
-      ].join("\u0004");
+      return `${block.type}\u0004${inlineSegmentsSignature(block.segments)}\u0004${inlineSegmentsSignature(block.prefixSegments)}\u0004${inlineSegmentsSignature(block.continuationPrefixSegments)}`;
     case "code_block":
-      return [
-        block.type,
-        block.language ?? "",
-        block.lines.join("\u0002"),
-        styleSignature(block.style),
-        inlineSegmentsSignature(block.prefixSegments),
-        inlineSegmentsSignature(block.continuationPrefixSegments),
-      ].join("\u0004");
+      return `${block.type}\u0004${block.language ?? ""}\u0004${block.lines.join("\u0002")}\u0004${styleSignature(block.style)}\u0004${inlineSegmentsSignature(block.prefixSegments)}\u0004${inlineSegmentsSignature(block.continuationPrefixSegments)}`;
     case "thematic_break":
-      return [
-        block.type,
-        block.char ?? "",
-        styleSignature(block.style),
-        inlineSegmentsSignature(block.prefixSegments),
-      ].join("\u0004");
+      return `${block.type}\u0004${block.char ?? ""}\u0004${styleSignature(block.style)}\u0004${inlineSegmentsSignature(block.prefixSegments)}`;
     case "table":
       return [
         block.type,

@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { build } from "esbuild";
@@ -42,7 +42,13 @@ try {
   }
   writeFileSync(
     join(consumer, "package.json"),
-    JSON.stringify({ name: "consumer-check", private: true, type: "module" }),
+    JSON.stringify({
+      name: "consumer-check",
+      private: true,
+      type: "module",
+      packageManager: JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"))
+        .packageManager,
+    }),
   );
   run("pnpm", ["add", "--ignore-workspace", "--lockfile=false", tarball], consumer);
   for (const [name, source] of Object.entries(fixtures)) {
