@@ -1,5 +1,5 @@
 {
-  "status": "local paired evidence; full acceptance pending",
+  "status": "local paired evidence; final source/package/browser/consumer acceptance recorded in rust-ts-20261102.md",
   "baseline": "59a30cb4fd031463eb7f9335d1faa80a484ca93a",
   "node": "v24.16.0",
   "sourceHashes": {
