@@ -17,7 +17,7 @@ import {
   paintMarkdownVisualRow,
 } from "../src/vue/markdown/render.js";
 import { DEFAULT_TUI_MARKDOWN_THEME } from "../src/vue/markdown/theme.js";
-import type { TuiMarkdownNode } from "../src/vue/markdown/types.js";
+import type { TuiMarkdownBlock, TuiMarkdownNode } from "../src/vue/markdown/types.js";
 import { withTextWidthProvider } from "../src/vue/utils/text.js";
 
 function visualRowCells(row: { segments: readonly { cells: number }[] }): number {
@@ -25,6 +25,91 @@ function visualRowCells(row: { segments: readonly { cells: number }[] }): number
 }
 
 describe("markdown layout", () => {
+  it("invalidates mutated segment content, styling, graphics and math actions without losing source text", () => {
+    const segment = {
+      text: "failed: ENOENT 中文🙂",
+      style: {
+        fg: "cyan",
+        bg: "black",
+        bold: false,
+        dim: false,
+        italic: false,
+        underline: false,
+        inverse: false,
+        href: "https://example.com/original",
+      },
+      graphic: {
+        kind: "image" as const,
+        src: "original.png",
+        alt: "original",
+        displayWidth: 3,
+        displayHeight: 2,
+      },
+      mathAction: { source: "x", raw: "$x$", rendered: false },
+    };
+    const block: TuiMarkdownBlock = { type: "inline", key: "source", segments: [segment] };
+    let previous = layoutMarkdownBlocksCached([block], 80);
+    const unchanged = layoutMarkdownBlocksCached([block], 80, previous.cache);
+    expect(unchanged.rows[0]).toBe(previous.rows[0]);
+    for (const mutate of [
+      () => {
+        segment.text = "failed: EACCES 中文🙂";
+      },
+      () => {
+        segment.style.fg = "red";
+      },
+      () => {
+        segment.style.bg = "blue";
+      },
+      () => {
+        segment.style.bold = true;
+      },
+      () => {
+        segment.style.dim = true;
+      },
+      () => {
+        segment.style.italic = true;
+      },
+      () => {
+        segment.style.underline = true;
+      },
+      () => {
+        segment.style.inverse = true;
+      },
+      () => {
+        segment.style.href = "https://example.com/changed";
+      },
+      () => {
+        segment.graphic.src = "changed.png";
+      },
+      () => {
+        segment.graphic.alt = "changed";
+      },
+      () => {
+        segment.graphic.displayWidth = 4;
+      },
+      () => {
+        segment.graphic.displayHeight = 3;
+      },
+      () => {
+        segment.mathAction.source = "y";
+      },
+      () => {
+        segment.mathAction.raw = "$y$";
+      },
+      () => {
+        segment.mathAction.rendered = true;
+      },
+    ]) {
+      mutate();
+      const current = layoutMarkdownBlocksCached([block], 80, previous.cache);
+      expect(current.rows[0]).not.toBe(previous.rows[0]);
+      expect(current).toEqual(layoutMarkdownBlocksCached([block], 80));
+      expect(current.rows.map((row) => row.plainText).join("")).toContain("failed:");
+      previous = current;
+    }
+  });
+
   it("maps headings, links, and unsafe links into terminal blocks", () => {
     const parser = createTuiMarkdownParser();
     const nodes = parser.parse(

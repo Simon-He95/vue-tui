@@ -119,7 +119,7 @@ export function createAgentTranscriptStore(): AgentTranscriptStore {
   const logStore = createAppendOnlyLogStore({ maxLines: 8_000 });
   const markdownSource = createMarkdownBlockSource({ theme: markdownTheme });
   const markdown = ref("");
-  const markdownBlocks = ref<readonly TuiMarkdownBlock[]>(
+  const markdownBlocks = shallowRef<readonly TuiMarkdownBlock[]>(
     eagerMarkdown ? markdownSource.blocks : [],
   );
   let markdownBlocksDirty = variant === "C";
