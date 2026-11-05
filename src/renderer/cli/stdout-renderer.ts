@@ -3040,6 +3040,7 @@ export function createStdoutRenderer(
     })();
 
     const terminalGraphicsAffectedRows = new Set<number>();
+    const terminalGraphicsClearRows = new Set<number>();
     const terminalGraphicTextPreserveSpans = new Map<number, TextPreserveSpan[]>();
     const addTerminalGraphicRows = (
       rect: Readonly<{ x: number; y: number; w: number; h: number }> | null | undefined,
@@ -3050,6 +3051,45 @@ export function createStdoutRenderer(
 
       for (let y = visible.y; y < visible.y + visible.h; y++) {
         terminalGraphicsAffectedRows.add(y);
+      }
+    };
+    // Clearing a graphic erases the cells it covered (or relies on text being
+    // painted back over an iTerm2/Sixel image). Those rows must be repainted in
+    // this frame even when they were not part of the requested dirty rows;
+    // otherwise a graphics-only flush can erase text that a later dirty-span
+    // render never restores. Blank rows stay on the erase-only path.
+    const rowHasVisibleContent = (y: number): boolean => {
+      const row = terminal.getRow(y);
+      for (let x = 0; x < row.length; x++) {
+        const cell = row[x]!;
+        if (cell.continuation) continue;
+        if (cell.ch !== " ") return true;
+        const style = cell.style;
+        if (
+          style.fg != null ||
+          style.bg != null ||
+          style.href != null ||
+          style.bold ||
+          style.dim ||
+          style.italic ||
+          style.underline ||
+          style.inverse
+        ) {
+          return true;
+        }
+      }
+      return false;
+    };
+    const addTerminalGraphicClearRows = (
+      rect: Readonly<{ x: number; y: number; w: number; h: number }> | null | undefined,
+    ): void => {
+      if (!rect) return;
+      const visible = clipGraphicRectToViewport(rect, size);
+      if (!visible) return;
+
+      for (let y = visible.y; y < visible.y + visible.h; y++) {
+        terminalGraphicsAffectedRows.add(y);
+        if (rowHasVisibleContent(y)) terminalGraphicsClearRows.add(y);
       }
     };
     const addTerminalGraphicTextPreserveSpans = (
@@ -3137,7 +3177,7 @@ export function createStdoutRenderer(
 
     for (const id of graphicsClearsToRender) {
       const active = activeGraphics.get(id);
-      addTerminalGraphicRows(active);
+      addTerminalGraphicClearRows(active);
       if (intersectsScrollOperations(active)) terminalGraphicsBlockScrollRegions = true;
     }
 
@@ -3146,7 +3186,7 @@ export function createStdoutRenderer(
 
       if (payload.op === "clear") {
         const rect = active ?? payloadRect(payload);
-        addTerminalGraphicRows(rect);
+        addTerminalGraphicClearRows(rect);
         if (intersectsScrollOperations(rect)) terminalGraphicsBlockScrollRegions = true;
         continue;
       }
@@ -3155,6 +3195,13 @@ export function createStdoutRenderer(
       if (!payload.allowTextOverlay) addTerminalGraphicTextPreserveSpans(next);
       addTerminalGraphicRows(active);
       addTerminalGraphicRows(next);
+
+      // A graphic that moves or disappears while being replaced leaves its old
+      // rect uncovered, so the text underneath has to be restored.
+      const nextRect = anchoredGraphicRectInViewport(next, size);
+      if (active && (!nextRect || !sameGraphicRect(active, nextRect))) {
+        addTerminalGraphicClearRows(active);
+      }
 
       if (intersectsScrollOperations(active) || intersectsScrollOperations(next)) {
         terminalGraphicsBlockScrollRegions = true;
@@ -3289,6 +3336,18 @@ export function createStdoutRenderer(
       if (!sorted) outRows.sort((a, b) => a - b);
       return outRows;
     })();
+    if (!allowGraphicsOnlyWithoutBaseline && rowsToRender && terminalGraphicsClearRows.size > 0) {
+      let added = false;
+      for (const y of terminalGraphicsClearRows) {
+        if (rowsToRender.includes(y)) continue;
+        rowsToRender.push(y);
+        added = true;
+      }
+      if (added) {
+        rowsToRender.sort((a, b) => a - b);
+        dirtySorted = true;
+      }
+    }
     if (
       rowsToRender?.length === 0 &&
       !normalizedScrollOperations &&
