@@ -21,6 +21,8 @@
 - Legacy `ESC DEL` (Option+Backspace on Apple Terminal and other non-Kitty terminals) now parses to Alt+Backspace instead of being silently dropped.
 - Kitty terminal resize redraws now retransmit changed image data while reusing placement-only sequences for unchanged pixels.
 - Moving or resizing terminal graphics no longer erases text or borders outside the graphic-owned rectangle.
+- A terminal graphic is written with the frame that queued it instead of a later throttled frame, so a picture no longer sits one row off the cells it hangs from, or jumps while the transcript scrolls.
+- A Kitty picture that scrolls out of the viewport and back is placed again from the raster the terminal already holds, so it is not retransmitted and its cell box stays stable across scroll positions.
 
 ## 1.0.0-rc.0 - 2026-05-16
 

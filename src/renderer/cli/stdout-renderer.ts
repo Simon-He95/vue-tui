@@ -567,6 +567,12 @@ export function createStdoutRenderer(
   let lastFrameTime = 0;
   let pendingRender = false;
   let renderTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * Whether a frame is being written right now. A paint can write a terminal graphic, and that
+   * write asks for a frame of its own; nesting it inside the frame that is already writing would
+   * interleave two writers on the same terminal state. Such a request is scheduled instead.
+   */
+  let renderingFrame = false;
   let rowsOnlyResizeRepaintTimer: ReturnType<typeof setTimeout> | null = null;
   let writeEmaMs = 0;
   let lastCursorX: number | null = null;
@@ -5060,12 +5066,17 @@ export function createStdoutRenderer(
 
     // If already pending, let the scheduled render handle accumulated rows
     // (unless this is a sync render which should flush immediately)
-    if (pendingRender && !sync) {
+    if (pendingRender && !sync && !hasPendingTerminalGraphics()) {
       cliLatency?.recordStdoutQueued(queuedDelayMs);
       return;
     }
 
-    if (sync) {
+    // A frame that has to write a terminal graphic renders now. The graphic was queued by the
+    // paint that produced these rows, and the terminal keeps text and graphics as separate
+    // surfaces: holding the placement back for the frame window leaves the picture on the previous
+    // rows while the text has already moved, which reads as the picture jumping and its surrounding
+    // spacing collapsing. There is at most one such frame per paint.
+    if (!renderingFrame && (sync || hasPendingTerminalGraphics())) {
       if (pendingRender) {
         pendingRender = false;
         if (renderTimer) {
@@ -5077,17 +5088,17 @@ export function createStdoutRenderer(
       const pendingScrolls = buildAccumulatedScrollOperations();
       const forceDirtyRowsRepaint = accumulatedDirtyRowsRequireRepaint;
       cliLatency?.recordStdoutQueued(0);
-      doRender(rows, pendingScrolls, forceDirtyRowsRepaint);
+      runFrame(rows, pendingScrolls, forceDirtyRowsRepaint);
       return;
     }
 
-    if (elapsed >= MIN_FRAME_MS) {
+    if (elapsed >= MIN_FRAME_MS && !renderingFrame) {
       // Enough time has passed, render immediately
       const rows = buildAccumulatedRows(dirtyRows);
       const pendingScrolls = buildAccumulatedScrollOperations();
       const forceDirtyRowsRepaint = accumulatedDirtyRowsRequireRepaint;
       cliLatency?.recordStdoutQueued(0);
-      doRender(rows, pendingScrolls, forceDirtyRowsRepaint);
+      runFrame(rows, pendingScrolls, forceDirtyRowsRepaint);
     } else {
       // Too soon, schedule render for later
       pendingRender = true;
@@ -5098,10 +5109,27 @@ export function createStdoutRenderer(
           const rows = buildAccumulatedRows(dirtyRows);
           const pendingScrolls = buildAccumulatedScrollOperations();
           const forceDirtyRowsRepaint = accumulatedDirtyRowsRequireRepaint;
-          doRender(rows, pendingScrolls, forceDirtyRowsRepaint);
+          runFrame(rows, pendingScrolls, forceDirtyRowsRepaint);
         }
       }, queuedDelayMs);
       cliLatency?.recordStdoutQueued(queuedDelayMs);
+    }
+  }
+
+  /**
+   * Writes one frame. `renderingFrame` stays set for the whole write so a graphic queued by a paint
+   * inside it cannot start a nested frame over the state the outer frame is still building.
+   */
+  function runFrame(
+    rows: readonly number[] | null,
+    scrolls: readonly TerminalScrollOperation[] | null,
+    forceDirtyRowsRepaint: boolean,
+  ): void {
+    renderingFrame = true;
+    try {
+      doRender(rows, scrolls, forceDirtyRowsRepaint);
+    } finally {
+      renderingFrame = false;
     }
   }
 

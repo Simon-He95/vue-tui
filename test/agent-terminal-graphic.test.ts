@@ -1206,32 +1206,27 @@ describe("TAgentTerminalGraphic", () => {
     const graphics = getTerminalGraphicsOutput(app.terminal);
     const sequence = createKittyGraphicsSequence("QUJD");
     const clearSequence = createKittyDeleteGraphicsSequence({ imageId: 123, placementId: 456 });
+    const drawPayload = {
+      id: "g1",
+      x: 1,
+      y: 1,
+      w: 4,
+      h: 2,
+      protocol: "kitty" as const,
+      sequence,
+      clearSequence,
+    };
 
     try {
       writes.length = 0;
-      expect(
-        graphics?.queue({
-          id: "g1",
-          x: 1,
-          y: 1,
-          w: 4,
-          h: 2,
-          protocol: "kitty",
-          sequence,
-          clearSequence,
-        }),
-      ).toBe(true);
-      expect(writes.join("")).not.toContain(sequence);
-
-      vi.advanceTimersByTime(16);
+      expect(graphics?.queue(drawPayload)).toBe(true);
+      // A draw queued outside a paint is written with the frame that queued it, so the placement
+      // cannot land after the cells it hangs from.
       expect(writes.join("")).toContain(sequence);
       expect(graphics?.isActive?.("g1")).toBe(true);
 
       writes.length = 0;
-      expect(graphics?.clear?.("g1")).toBe(true);
-      expect(graphics?.isActive?.("g1")).toBe(false);
-      expect(writes.join("")).not.toContain(clearSequence);
-
+      // A clear queued by a paint defers its flush to that paint's own frame.
       expect(
         graphics?.queue({
           id: "g1",
@@ -1240,10 +1235,17 @@ describe("TAgentTerminalGraphic", () => {
           w: 4,
           h: 2,
           protocol: "kitty",
-          sequence,
-          clearSequence,
+          sequence: clearSequence,
+          op: "clear",
+          retainOnClear: true,
+          deferFlush: true,
         }),
       ).toBe(true);
+      expect(graphics?.isActive?.("g1")).toBe(false);
+      expect(writes.join("")).not.toContain(clearSequence);
+
+      // The identical draw supersedes it: no clear, and no second copy of the raster.
+      expect(graphics?.queue(drawPayload)).toBe(true);
       expect(graphics?.isActive?.("g1")).toBe(true);
 
       vi.advanceTimersByTime(16);
@@ -1251,6 +1253,156 @@ describe("TAgentTerminalGraphic", () => {
       expect(outputText).not.toContain(clearSequence);
       expect(outputText).not.toContain(sequence);
       expect(graphics?.isActive?.("g1")).toBe(true);
+    } finally {
+      stdout.dispose();
+      app.dispose();
+      vi.useRealTimers();
+    }
+  });
+
+  it("writes a queued terminal graphic with the frame that queued it, without waiting for the frame window", () => {
+    vi.useFakeTimers();
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 6,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 6,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = withEnv(
+      {
+        VUE_TUI_TERMINAL_GRAPHICS: "kitty",
+        VUE_TUI_GRAPHICS_FORCE: "1",
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+    const graphics = getTerminalGraphicsOutput(app.terminal);
+    const sequence = createKittyGraphicsSequence("QUJD", {
+      imageId: 123,
+      placementId: 456,
+      columns: 3,
+      rows: 1,
+    });
+
+    try {
+      // A frame just went out, so the frame window is still closing. A graphic queued now belongs
+      // to the paint that produced it: its placement may not land one frame later, on the rows the
+      // text has already left.
+      flushStdout(stdout);
+      writes.length = 0;
+      expect(
+        graphics?.queue({
+          id: "frame-graphic",
+          x: 1,
+          y: 1,
+          w: 3,
+          h: 1,
+          protocol: "kitty",
+          sequence,
+        }),
+      ).toBe(true);
+      expect(writes.join("")).toContain(sequence);
+    } finally {
+      stdout.dispose();
+      app.dispose();
+      vi.useRealTimers();
+    }
+  });
+
+  it("re-places a cleared Kitty graphic from the raster the terminal already holds", () => {
+    vi.useFakeTimers();
+    const writes: string[] = [];
+    const output: CliOutput = {
+      isTTY: true,
+      columns: 20,
+      rows: 6,
+      write(chunk) {
+        writes.push(chunk);
+      },
+    };
+    const app = createTerminalApp({
+      cols: 20,
+      rows: 6,
+      component: defineComponent({ setup: () => () => null }),
+    });
+    const stdout = withEnv(
+      {
+        VUE_TUI_TERMINAL_GRAPHICS: "kitty",
+        VUE_TUI_GRAPHICS_FORCE: "1",
+        CI: undefined,
+        TMUX: undefined,
+      },
+      () =>
+        createStdoutRenderer(app.terminal, {
+          output,
+          clear: false,
+          altScreen: false,
+          hideCursor: false,
+          trackResize: false,
+        }),
+    );
+    const graphics = getTerminalGraphicsOutput(app.terminal);
+    const sequence = createKittyGraphicsSequence("QUJD", {
+      imageId: 123,
+      placementId: 456,
+      columns: 3,
+      rows: 1,
+    });
+    const placementSequence = createKittyPlacementSequence({
+      imageId: 123,
+      placementId: 456,
+      columns: 3,
+      rows: 1,
+    });
+    const clearSequence = createKittyDeleteGraphicsSequence({ imageId: 123, placementId: 456 });
+    const draw = {
+      id: "round-trip",
+      x: 1,
+      y: 1,
+      w: 3,
+      h: 1,
+      protocol: "kitty" as const,
+      sequence,
+      resizeSequence: placementSequence,
+      clearSequence,
+      retainOnClear: true,
+      placementMoveWithoutClear: true,
+    };
+
+    try {
+      expect(graphics?.queue(draw)).toBe(true);
+      flushStdout(stdout);
+      writes.length = 0;
+
+      // The graphic leaves the viewport. The placement goes; the raster stays in the terminal.
+      // A draw anchored outside the viewport is refused and turned into a retained clear.
+      expect(graphics?.queue({ ...draw, x: -40, y: -40 })).toBe(false);
+      flushStdout(stdout);
+      expect(writes.join("")).toContain(clearSequence);
+
+      // It comes back. Re-placing is enough: the terminal already holds the raster.
+      writes.length = 0;
+      expect(graphics?.queue(draw)).toBe(true);
+      flushStdout(stdout);
+      const returned = writes.join("");
+      expect(returned).toContain(placementSequence);
+      expect(returned).not.toContain(sequence);
     } finally {
       stdout.dispose();
       app.dispose();
@@ -7192,7 +7344,9 @@ describe("TAgentTerminalGraphic", () => {
     expect(writes.join("")).toContain(
       createKittyDeleteGraphicsSequence({ imageId: 789, freeImageData: true }),
     );
-    expect(writes.join("")).not.toContain(pendingClearSequence);
+    // The cleared placement is written with the frame that cleared it, so it may precede the data
+    // release; what must not survive is the raster itself, and it is released exactly once.
+    expect(writes.join("").split(pendingClearSequence)).toHaveLength(2);
     expect(writes.join("")).not.toContain(
       createKittyDeleteGraphicsSequence({ allVisible: true, freeImageData: true }),
     );

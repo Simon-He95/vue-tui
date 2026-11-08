@@ -263,6 +263,15 @@ export function createPngTerminalGraphicRenderer(
         rows: png.rows,
         sourceWidth: png.sourceWidth,
         sourceHeight: png.sourceHeight,
+        // The terminal stores one raster per image id and every later placement crops it. A
+        // transmission that already carried the crop of the rect it was first drawn in cannot
+        // serve a placement for another rect: after the picture scrolls out of the viewport and
+        // back, the renderer re-places the stored raster, which has to be the whole image. Keeping
+        // the transmission independent of the visible rect also makes it identical every time, so
+        // the placement is the only thing that changes while scrolling.
+        cropTransmission: false,
+        transmissionColumns: positiveInt(fullRect.w) ?? png.cols,
+        transmissionRows: positiveInt(fullRect.h) ?? png.rows,
         placementColumns: positiveInt(rect.w) ?? png.cols,
         placementRows: positiveInt(rect.h) ?? png.rows,
         rect,

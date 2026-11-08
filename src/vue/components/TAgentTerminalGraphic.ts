@@ -870,8 +870,14 @@ export const TAgentTerminalGraphic = defineComponent({
         current.protocol === "kitty" &&
         Boolean(resizeSequence);
       const scrollVersion = Math.floor(Number(props.scrollVersion ?? 0));
+      // This says what the caller allows, not what the last paint happened to keep active: the
+      // renderer keeps the transmitted raster after a placement is cleared, so a graphic that
+      // scrolls back into the window is re-placed from the image the terminal already holds. The
+      // renderer still verifies the placement identity before it reuses that raster.
       const canMoveWithoutClear =
-        canReusePlacementSequence && Boolean(options.placementMoveWithoutClear);
+        Boolean(options.placementMoveWithoutClear) &&
+        current.protocol === "kitty" &&
+        Boolean(resizeSequence);
 
       if (
         !previousIsRetained &&
@@ -1553,7 +1559,11 @@ export const TAgentTerminalGraphic = defineComponent({
             );
             const queued = queueDrawGraphic(output, current, rawRectForPaint, full, {
               force: forceActiveRawRedraw,
-              deferFlush: preserveActiveRawGraphicForPaint,
+              // A graphic queued by this paint belongs to this paint. Starting a throttled frame
+              // from inside the paint makes the placement land after the cells it hangs from, so
+              // the picture sits one row off until the next frame. The flush is deferred to the
+              // commit of this frame instead: a frame with pending graphics renders immediately.
+              deferFlush: true,
               placementMoveWithoutClear: props.placementMoveWithoutClear || rawCoverageClipped,
               allowTextOverlay,
             });
