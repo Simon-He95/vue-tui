@@ -2043,7 +2043,7 @@ Mermaid 图片 primitive：把 mermaid 源码渲染成 PNG，通过 **Kitty / iT
 >
 > **Kitty 图形协议下支持缩放 + 平移**：按住 `Ctrl`（macOS 浏览器里也可用 `Cmd`）+ 滚轮 → 以鼠标位置为中心放大/缩小，范围限制在容器区域内（越界裁剪，不撑破布局）；放大后可以直接**拖拽图片平移**。缩放通过 `a=p` placement resize 实现，不重新发送 PNG，性能开销极小；iTerm2 没有 in-place resize 序列，自动禁用。**不带修饰键的滚轮直接透传给外层滚动容器**（浏览历史消息时经过 mermaid 不会卡住滚动）。关闭用 `:zoom-on-wheel="false"`，改修饰键用 `:zoom-modifier`。
 >
-> **点击图片区域或 header 上的 copy 按钮，会把完整 mermaid raw content 复制到剪贴板**（触发 `copy` 事件）。
+> **图片模式下点击图片会打开终端全屏预览**：使用根级高层 overlay 覆盖当前页面，图片按终端视口等比缩放（小图放大、大图完整收进视口），背景带遮罩；按 `Esc`、`Enter`、空格或再次点击关闭。header 上的 copy 按钮仍会把完整 mermaid raw content 复制到剪贴板（触发 `copy` 事件）；没有图片可预览（文本回退）时，点击仍按 `copyOnClick` 复制。
 
 ### Example
 
@@ -2099,7 +2099,10 @@ const renderer = async (code, options) => {
 - `box` `(boolean, true)`：是否绘制外框（含 title 与 copy 按钮）
 - `title` `(string, "mermaid")`：header 标题
 - `copyButton` `(boolean, true)`：是否显示 copy 按钮
-- `copyOnClick` `(boolean, true)`：点击图片区域是否复制完整源码
+- `copyOnClick` `(boolean, true)`：没有可打开的预览时（文本回退或 `previewOnClick=false`），点击内容区域是否复制完整源码；图片可预览时 `previewOnClick` 优先
+- `previewOnClick` `(boolean, true)`：图片模式下点击图片是否打开全屏预览；设为 `false` 可恢复“点击图片复制源码”的旧行为
+- `previewTitle` `(string, "mermaid preview")`：全屏预览边框标题
+- `previewHint` `(string, "esc / click close")`：全屏预览右上角关闭提示
 - `copyText` / `copiedText` `(string)`：copy 按钮文案与复制成功文案
 - `copiedDurationMs` `(number, 1200)`：`copied` 反馈持续时间
 - `maxRenderSourceChars` / `maxRenderSourceLines`：超大源码跳过 rasterize，直接显示源码
@@ -2112,6 +2115,7 @@ const renderer = async (code, options) => {
 ### Events
 
 - `copy` `(payload: { text, ok, error? })`：复制完整 mermaid raw content 后触发；`text` 即完整源码
+- `preview` `(payload: { text, open })`：全屏预览打开或关闭时触发；`open` 表示当前状态
 
 ### 模块级 rasterizer API
 

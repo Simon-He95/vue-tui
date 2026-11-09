@@ -4,6 +4,7 @@
 
 ### Added
 
+- `TMermaidImage` image mode now opens a terminal-wide preview lightbox when the diagram is clicked: the image scales to fit the terminal viewport behind a full-screen backdrop, and `Esc`, `Enter`, space, or another click closes it. `previewOnClick`, `previewTitle`, `previewHint`, and a `preview` event control the interaction; the header copy button keeps copying the raw mermaid source.
 - `createPromptMentionPlugin({ selectedMarkerStyle })` draws a `›` marker in a one-cell gutter on the selected popup row, matching the `TCommandPalette` selection cursor. The gutter is skipped when the popup is too narrow, and omitting the option keeps the previous gutter-free layout.
 - `TInput` word-wise deletion: Alt(Option)+Backspace deletes the word before the caret, and Alt+Delete or Alt+D (the `ESC d` "delete word right" encoding VS Code uses for ⌥⌦/Ctrl+Delete) deletes the word after it. Word boundaries stop at newlines, and selection/mention/multiline bookkeeping is shared with the existing delete paths.
 

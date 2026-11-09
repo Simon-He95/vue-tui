@@ -156,6 +156,7 @@ const textRenderer = async (code, options) => "┌───┐\n│ A │\n└�
 | `padding`                                       | `number`                                   | 40           | SVG 画布内边距                                                        |
 | `ascii`                                         | `boolean`                                  | `false`      | ASCII 边框字符（同时透传给 ANSI renderer）                            |
 | `box` / `title` / `copyButton` / `copyOnClick`  | —                                          | —            | 外框与复制交互（与 `TMermaidText` 一致）                              |
+| `previewOnClick`                                | `true`                                     | —            | 图片模式下点击图片打开全屏预览；`false` 恢复点击复制                  |
 | `maxRenderSourceChars` / `maxRenderSourceLines` | `number`                                   | 20000 / 400  | 超大源码跳过渲染，直接显示源码                                        |
 | `zoomOnWheel`                                   | `boolean`                                  | `true`       | Kitty 图形协议下缩放 + 拖拽平移；iTerm2 自动禁用                      |
 | `zoomModifier`                                  | `"meta" \| "ctrl" \| "metaCtrl" \| "none"` | `"metaCtrl"` | 缩放需要的修饰键；不带修饰键的滚轮透传给滚动容器                      |

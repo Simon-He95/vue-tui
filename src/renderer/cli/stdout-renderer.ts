@@ -56,6 +56,7 @@ import {
   hashTerminalGraphicsString,
   isSafeTerminalGraphicsSequence,
   isTerminalGraphicsProtocol,
+  isTerminalGraphicsSuspended,
   normalizeTerminalGraphicSize,
   registerTerminalGraphicsOutput,
   validateTerminalGraphicsPayload,
@@ -1050,6 +1051,9 @@ export function createStdoutRenderer(
       if (!canUseTerminalGraphicsProtocol(normalized.protocol, graphicsCapabilities)) return false;
 
       if (op === "draw") {
+        if (!normalized.bypassSuspension && isTerminalGraphicsSuspended(terminal)) {
+          return false;
+        }
         const cachedFrame = validatedGraphicFrames.get(normalized.id);
         const width = normalized.w ?? 1;
         const height = normalized.h ?? 1;

@@ -24,6 +24,7 @@ import {
   TMermaid,
   loadMermaidImageRenderer,
   type TMermaidImageCopyPayload,
+  type TMermaidImagePreviewPayload,
 } from "../src/mermaid.js";
 import { detectTerminalGraphicsCapabilities } from "../src/renderer/terminal-graphics.js";
 import { TText, useLayout, useTerminal } from "../src/vue.js";
@@ -67,7 +68,9 @@ const App = defineComponent({
         `(reason: ${caps.reason ?? "auto-detected"}) ` +
         `raster=${raster ? "ready" : "missing (install beautiful-mermaid + @resvg/resvg-js)"} ` +
         `=> image / ansi / raw` +
-        (caps.protocol === "kitty" ? " (ctrl+wheel = zoom, drag = pan)" : "");
+        (caps.protocol === "kitty"
+          ? " (click image = preview, ctrl+wheel = zoom, drag = pan, q = quit)"
+          : " (click image = preview, q = quit)");
       scheduler.flushNow();
     })();
 
@@ -78,6 +81,13 @@ const App = defineComponent({
       scheduler.flushNow();
     }
 
+    function onPreview(payload: TMermaidImagePreviewPayload): void {
+      status.value = payload.open
+        ? "Preview opened - click the image or press Esc to close"
+        : "Preview closed";
+      scheduler.flushNow();
+    }
+
     return () => [
       h(TMermaid, {
         x: 1,
@@ -85,7 +95,9 @@ const App = defineComponent({
         w: MERMAID_W,
         content: DIAGRAM,
         final: true,
+        previewOnClick: true,
         onCopy,
+        onPreview,
       }),
       status.value
         ? h(TText, {
@@ -155,10 +167,7 @@ if (process.stdout.isTTY) process.stdout.on("resize", onResize);
 
 driver = createStdinDriver({
   dispatch: (event) => {
-    if (
-      event.type === "keydown" &&
-      (event.key === "q" || event.key === "Escape" || (event.key === "c" && event.ctrl))
-    ) {
+    if (event.type === "keydown" && (event.key === "q" || (event.key === "c" && event.ctrl))) {
       cleanupHandle.uninstall();
       cleanup();
       process.exit(0);

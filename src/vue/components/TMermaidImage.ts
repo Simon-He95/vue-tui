@@ -22,6 +22,7 @@ import type {
   TMermaidRenderer,
   TMermaidResolvedAsciiOptions,
 } from "./TMermaidText.js";
+import { getPlaneTerminal, getRootTerminal } from "../../core/terminal/create-terminal.js";
 import { EventZIndexContextKey } from "../context.js";
 import {
   createTerminalGraphicPngSequence,
@@ -29,9 +30,11 @@ import {
   getTerminalGraphicsOutputVersion,
   stableTerminalGraphicNumericId,
   subscribeTerminalGraphicsOutput,
+  suspendTerminalGraphics,
 } from "../../renderer/terminal-graphics.js";
 import { useLayout } from "../composables/use-layout.js";
 import { useRenderNode } from "../composables/use-render-node.js";
+import { useRenderStack } from "../composables/use-render-stack.js";
 import { useTerminal } from "../composables/use-terminal.js";
 import { useTerminalNode } from "../composables/use-terminal-node.js";
 import { useVisibility } from "../composables/use-visibility.js";
@@ -64,6 +67,11 @@ export type TMermaidImageCopyPayload = Readonly<{
   text: string;
   ok: boolean;
   error?: unknown;
+}>;
+
+export type TMermaidImagePreviewPayload = Readonly<{
+  text: string;
+  open: boolean;
 }>;
 
 type TMermaidImageBoxChars = Readonly<{
@@ -108,6 +116,12 @@ const ASCII_MERMAID_IMAGE_BOX_CHARS: TMermaidImageBoxChars = Object.freeze({
 const DEFAULT_MERMAID_IMAGE_COPIED_DURATION_MS = 1200;
 const DEFAULT_MERMAID_IMAGE_MAX_RENDER_SOURCE_CHARS = 20_000;
 const DEFAULT_MERMAID_IMAGE_MAX_RENDER_SOURCE_LINES = 400;
+const MERMAID_PREVIEW_Z = 50_000;
+const MERMAID_PREVIEW_TITLE = "mermaid preview";
+const MERMAID_PREVIEW_HINT = "esc / click close";
+// Only one mermaid lightbox may own a terminal at a time. Other instances use
+// this to clear their inline image and skip re-queueing it behind the overlay.
+const activeMermaidPreviewOwners = new WeakMap<object, symbol>();
 
 const ESC = String.fromCharCode(27);
 const BEL = String.fromCharCode(7);
@@ -178,6 +192,26 @@ function fitImageCells(
   return { displayW: Math.max(1, w), displayH: Math.max(1, h) };
 }
 
+/**
+ * Preview fit scales the image up as well as down, so a diagram that was
+ * clamped to the message column still fills the lightbox viewport.
+ */
+function fitPreviewImageCells(
+  cells: TuiMermaidImageCells,
+  maxW: number,
+  maxH: number,
+): TMermaidImageFit | null {
+  if (maxW <= 0 || maxH <= 0) return null;
+  const baseW = Math.max(1, Math.floor(cells.widthCells));
+  const baseH = Math.max(1, Math.floor(cells.heightCells));
+  const scale = Math.min(maxW / baseW, maxH / baseH);
+  if (!Number.isFinite(scale) || scale <= 0) return null;
+  return {
+    displayW: Math.max(1, Math.min(maxW, Math.floor(baseW * scale))),
+    displayH: Math.max(1, Math.min(maxH, Math.floor(baseH * scale))),
+  };
+}
+
 export const tMermaidImageProps = {
   x: { type: Number, required: true },
   y: { type: Number, required: true },
@@ -234,8 +268,15 @@ export const tMermaidImageProps = {
   renderTimeoutMs: { type: Number, default: 0 },
   maxRenderSourceChars: { type: Number, default: DEFAULT_MERMAID_IMAGE_MAX_RENDER_SOURCE_CHARS },
   maxRenderSourceLines: { type: Number, default: DEFAULT_MERMAID_IMAGE_MAX_RENDER_SOURCE_LINES },
-  // Clicking the diagram (or the copy button) copies the full raw mermaid source.
+  // Clicking the diagram copies the raw source when no preview is available
+  // (text fallback, or `previewOnClick: false`). When an image can preview,
+  // `previewOnClick` takes precedence; the header copy button always copies.
   copyOnClick: { type: Boolean, default: true },
+  // Image-mode click opens a terminal-wide lightbox. When the diagram is shown
+  // as text (no graphics protocol), click keeps its copy-on-click behavior.
+  previewOnClick: { type: Boolean, default: true },
+  previewTitle: { type: String, default: MERMAID_PREVIEW_TITLE },
+  previewHint: { type: String, default: MERMAID_PREVIEW_HINT },
   ascii: { type: Boolean, default: false },
   // Wheel zoom (Kitty graphics only): with the zoom modifier held, wheel over
   // the image zooms centered on the mouse, clamped to the container area.
@@ -259,14 +300,23 @@ export const TMermaidImage = defineComponent({
   props: tMermaidImageProps,
   emits: {
     copy: (_payload: TMermaidImageCopyPayload) => true,
+    preview: (_payload: TMermaidImagePreviewPayload) => true,
   },
   setup(props, { emit }) {
     const instance = getCurrentInstance();
     const terminalContext = useTerminal();
-    const { terminal, defaultStyle, scheduler, widthProvider } = terminalContext;
+    const { terminal, defaultStyle, scheduler, widthProvider, render } = terminalContext;
     const layout = useLayout();
     const { visible, rootProps } = useVisibility();
+    const renderStack = useRenderStack();
+    let rootRenderStack = renderStack.value;
+    while (rootRenderStack.parent) rootRenderStack = rootRenderStack.parent;
+    // The lightbox must outrank every page stack, not only its own message
+    // subtree: register it as a high-z child of the render root.
+    const previewRenderStack = render.createStack(rootRenderStack, MERMAID_PREVIEW_Z);
+    const previewTerminal = getPlaneTerminal(getRootTerminal(terminal), "overlay");
     const parentEventZ = inject(EventZIndexContextKey, computed(() => 0) as any);
+    const previewOwner = Symbol(`TMermaidImagePreview:${instance?.uid ?? "unknown"}`);
 
     const imageCells = shallowRef<TuiMermaidImageCells | null>(null);
     const textSnapshot = shallowRef<TMermaidImageTextSnapshot | null>(null);
@@ -275,6 +325,8 @@ export const TMermaidImage = defineComponent({
     const panY = shallowRef(0);
     const documentVersion = shallowRef(0);
     const copied = shallowRef(false);
+    const previewOpen = shallowRef(false);
+    const viewportVersion = shallowRef(0);
 
     type MermaidDragState = Readonly<{
       startX: number;
@@ -295,6 +347,8 @@ export const TMermaidImage = defineComponent({
     let copiedTimer: ReturnType<typeof setTimeout> | null = null;
     let copyRequestVersion = 0;
     let activeGraphicId: string | null = null;
+    let activePreviewGraphicId: string | null = null;
+    let releasePreviewGraphicsSuspension: (() => void) | null = null;
     let activeImageSignature = "";
 
     const source = computed(() => props.code ?? props.content ?? "");
@@ -536,6 +590,48 @@ export const TMermaidImage = defineComponent({
       if (!layout.clipRect) return translated;
       return intersectRect(translated, layout.clipRect) ?? { x: 0, y: 0, w: 0, h: 0 };
     });
+
+    const previewViewport = computed<Rect>(() => {
+      void viewportVersion.value;
+      const size = terminal.size();
+      return {
+        x: 0,
+        y: 0,
+        w: Math.max(0, Math.floor(size.cols)),
+        h: Math.max(0, Math.floor(size.rows)),
+      };
+    });
+
+    const previewFrame = computed<Rect>(() => {
+      const viewport = previewViewport.value;
+      return { x: viewport.x, y: viewport.y, w: viewport.w, h: viewport.h };
+    });
+
+    const previewContentRect = computed<Rect>(() => {
+      const frame = previewFrame.value;
+      if (frame.w < 4 || frame.h < 3) return frame;
+      const border = 1;
+      return {
+        x: frame.x + border,
+        y: frame.y + border,
+        w: Math.max(0, frame.w - border * 2),
+        h: Math.max(0, frame.h - border * 2),
+      };
+    });
+
+    const previewImageFit = computed<TMermaidImageFit | null>(() => {
+      const cells = imageCells.value;
+      if (!cells) return null;
+      return fitPreviewImageCells(cells, previewContentRect.value.w, previewContentRect.value.h);
+    });
+
+    const previewAvailable = computed(
+      () =>
+        props.previewOnClick !== false &&
+        imageCells.value != null &&
+        displayFit.value != null &&
+        graphicsProtocol.value != null,
+    );
 
     const copyLabel = computed(() => (copied.value ? props.copiedText : props.copyText));
 
@@ -855,6 +951,19 @@ export const TMermaidImage = defineComponent({
       { immediate: true, deep: true },
     );
 
+    watch(source, () => {
+      if (previewOpen.value) closePreview();
+    });
+    watch(visible, (next) => {
+      if (!next && previewOpen.value) closePreview();
+    });
+    watch(graphicsProtocol, (next) => {
+      if (!next && previewOpen.value) closePreview();
+    });
+    watch(imageCells, (next) => {
+      if (!next && previewOpen.value) closePreview();
+    });
+
     const unsubscribeMermaidImage = subscribeMermaidImage(() => {
       if (!alive) return;
       // Another instance may have rasterized the same source; promote a newly
@@ -874,13 +983,26 @@ export const TMermaidImage = defineComponent({
       scheduleRender();
     });
 
+    const unsubscribeResize = terminal.on("resize", () => {
+      if (!alive) return;
+      viewportVersion.value++;
+      if (previewOpen.value) bump();
+    });
+
     onBeforeUnmount(() => {
       alive = false;
       renderVersion++;
       clearCopiedTimer();
+      if (activeMermaidPreviewOwners.get(terminal) === previewOwner) {
+        activeMermaidPreviewOwners.delete(terminal);
+      }
+      releasePreviewGraphicsSuspension?.();
+      releasePreviewGraphicsSuspension = null;
+      queuePreviewClearGraphic();
       queueClearGraphic();
       unsubscribeMermaidImage();
       unsubscribeGraphicsOutput();
+      unsubscribeResize();
       scheduler.cancelFrameTask?.(frameTaskId);
     });
 
@@ -1001,6 +1123,10 @@ export const TMermaidImage = defineComponent({
     function queueImageGraphic(full: Rect, fit: TMermaidImageFit): void {
       const protocol = graphicsProtocol.value;
       const cells = imageCells.value;
+      if (activeMermaidPreviewOwners.has(terminal)) {
+        queueClearGraphic();
+        return;
+      }
       if (!protocol || !cells) {
         queueClearGraphic();
         return;
@@ -1112,6 +1238,104 @@ export const TMermaidImage = defineComponent({
       }
     }
 
+    function queuePreviewClearGraphic(): void {
+      if (activePreviewGraphicId == null) return;
+      const id = activePreviewGraphicId;
+      activePreviewGraphicId = null;
+      try {
+        graphicsOutput.value?.clear?.(id);
+      } catch {
+        // Best-effort cleanup; the preview must never affect text rendering.
+      }
+    }
+
+    function queuePreviewImageGraphic(): void {
+      const protocol = graphicsProtocol.value;
+      const cells = imageCells.value;
+      const fit = previewImageFit.value;
+      const content = previewContentRect.value;
+      if (activeMermaidPreviewOwners.get(terminal) !== previewOwner) {
+        queuePreviewClearGraphic();
+        return;
+      }
+      if (!protocol || !cells || !fit || content.w <= 0 || content.h <= 0) {
+        queuePreviewClearGraphic();
+        return;
+      }
+
+      const rect: Rect = {
+        x: content.x + Math.floor((content.w - fit.displayW) / 2),
+        y: content.y + Math.floor((content.h - fit.displayH) / 2),
+        w: fit.displayW,
+        h: fit.displayH,
+      };
+      const imageId = stableTerminalGraphicNumericId(`mermaid-preview:${uid}:${renderVersion}:img`);
+      const placementId = stableTerminalGraphicNumericId(
+        `mermaid-preview:${uid}:${renderVersion}:plc`,
+      );
+      const built = createTerminalGraphicPngSequence({
+        protocol,
+        base64: cells.base64,
+        imageId,
+        placementId,
+        // iTerm2 reads display size from cols/rows; Kitty uses the placement
+        // controls below. Both get the enlarged preview rect.
+        cols: rect.w,
+        rows: rect.h,
+        sourceWidth: cells.naturalWidth,
+        sourceHeight: cells.naturalHeight,
+        placementColumns: rect.w,
+        placementRows: rect.h,
+        transmissionColumns: fit.displayW,
+        transmissionRows: fit.displayH,
+        cropTransmission: false,
+        rect,
+        fullRect: rect,
+        zIndex: 0,
+        fallback: source.value,
+      });
+      if (!built) {
+        queuePreviewClearGraphic();
+        return;
+      }
+
+      const id = `mermaid-preview:${uid}:${renderVersion}`;
+      const output = graphicsOutput.value;
+      if (!output) {
+        queuePreviewClearGraphic();
+        return;
+      }
+
+      if (activePreviewGraphicId != null && activePreviewGraphicId !== id) {
+        try {
+          output.clear?.(activePreviewGraphicId);
+        } catch {
+          // Best-effort cleanup.
+        }
+        activePreviewGraphicId = null;
+      }
+
+      const accepted = output.queue({
+        id,
+        x: rect.x,
+        y: rect.y,
+        w: rect.w,
+        h: rect.h,
+        protocol,
+        sequence: built.sequence,
+        resizeSequence: built.resizeSequence,
+        clearSequence: built.clearSequence,
+        fallbackText: source.value,
+        bypassSuspension: true,
+        placementMoveWithoutClear: protocol === "kitty",
+      });
+      if (accepted) {
+        activePreviewGraphicId = id;
+      } else {
+        queuePreviewClearGraphic();
+      }
+    }
+
     const copyHitRect = computed<Rect>(() => {
       const full = fullRect.value;
       if (!visible.value || !props.copyButton || !canDrawBox(full.w, full.h)) {
@@ -1202,6 +1426,68 @@ export const TMermaidImage = defineComponent({
       event.preventDefault();
       event.stopPropagation();
       void copySource();
+    }
+
+    function openPreview(event?: TerminalPointerEvent): void {
+      if (previewOpen.value || !previewAvailable.value) return;
+      if (activeMermaidPreviewOwners.has(terminal)) return;
+      if (previewViewport.value.w <= 0 || previewViewport.value.h <= 0) return;
+      event?.preventDefault();
+      event?.stopPropagation();
+      activeMermaidPreviewOwners.set(terminal, previewOwner);
+      releasePreviewGraphicsSuspension?.();
+      releasePreviewGraphicsSuspension = suspendTerminalGraphics(
+        terminal,
+        `mermaid-preview:${uid}`,
+      );
+      previewOpen.value = true;
+      try {
+        graphicsOutput.value?.clearAll?.();
+      } catch {
+        // Best-effort: the text backdrop and preview placement still render.
+      }
+      queueClearGraphic();
+      queuePreviewClearGraphic();
+      bump();
+      emit("preview", { text: source.value, open: true });
+    }
+
+    function closePreview(event?: TerminalPointerEvent): void {
+      if (!previewOpen.value) return;
+      event?.preventDefault();
+      event?.stopPropagation();
+      if (activeMermaidPreviewOwners.get(terminal) === previewOwner) {
+        activeMermaidPreviewOwners.delete(terminal);
+      }
+      releasePreviewGraphicsSuspension?.();
+      releasePreviewGraphicsSuspension = null;
+      previewOpen.value = false;
+      queuePreviewClearGraphic();
+      bump();
+      emit("preview", { text: source.value, open: false });
+    }
+
+    function onContentClick(event: TerminalPointerEvent): void {
+      event.preventDefault();
+      event.stopPropagation();
+      // Suppress activation when the click is the tail of a drag-to-pan gesture.
+      if (Date.now() - lastDragAt < DRAG_CLICK_SUPPRESS_MS) return;
+      if (previewAvailable.value) {
+        openPreview();
+        return;
+      }
+      if (props.copyOnClick) void copySource();
+    }
+
+    function onPreviewClick(event: TerminalPointerEvent): void {
+      closePreview(event);
+    }
+
+    function onPreviewKeydown(event: TerminalKeyboardEvent): void {
+      if (event.key !== "Escape" && event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      event.stopPropagation();
+      closePreview();
     }
 
     const zoomEnabled = computed(
@@ -1333,7 +1619,11 @@ export const TMermaidImage = defineComponent({
     const contentNodeActive = computed(
       () =>
         visible.value &&
-        (props.copyOnClick || zoomEnabled.value || dragEnabled.value) &&
+        (previewAvailable.value ||
+          previewOpen.value ||
+          props.copyOnClick ||
+          zoomEnabled.value ||
+          dragEnabled.value) &&
         contentHitRect.value.w > 0 &&
         contentHitRect.value.h > 0,
     );
@@ -1346,11 +1636,33 @@ export const TMermaidImage = defineComponent({
       selectable: false,
       handlers: contentNodeActive.value
         ? {
-            click: props.copyOnClick ? onCopyClick : undefined,
+            click: onContentClick,
             wheel: zoomEnabled.value ? onWheel : undefined,
             pointerdown: dragEnabled.value ? onPointerDown : undefined,
             pointermove: dragEnabled.value ? onPointerMove : undefined,
             pointerup: dragEnabled.value ? onPointerUp : undefined,
+          }
+        : {},
+    }));
+
+    const previewNodeActive = computed(
+      () =>
+        previewOpen.value &&
+        visible.value &&
+        previewViewport.value.w > 0 &&
+        previewViewport.value.h > 0,
+    );
+
+    useTerminalNode(() => ({
+      rect: previewNodeActive.value ? previewViewport.value : { x: 0, y: 0, w: 0, h: 0 },
+      zIndex: MERMAID_PREVIEW_Z + (parentEventZ.value ?? 0),
+      visible: previewNodeActive.value,
+      focusable: previewNodeActive.value,
+      selectable: false,
+      handlers: previewNodeActive.value
+        ? {
+            click: onPreviewClick,
+            keydown: onPreviewKeydown,
           }
         : {},
     }));
@@ -1379,6 +1691,7 @@ export const TMermaidImage = defineComponent({
         copyLabel.value,
         graphicsOutputVersion.value,
         documentVersion.value,
+        previewOpen.value,
       ],
       paint: (dirtyRows) => {
         withTextWidthProvider(widthProvider, () => {
@@ -1418,7 +1731,7 @@ export const TMermaidImage = defineComponent({
             }
           };
 
-          if (imageCells.value && displayFit.value) {
+          if (imageCells.value && displayFit.value && !previewOpen.value) {
             queueImageGraphic(full, displayFit.value);
           } else {
             queueClearGraphic();
@@ -1430,6 +1743,108 @@ export const TMermaidImage = defineComponent({
           }
 
           for (let y = r.y; y < r.y + r.h; y++) paintRow(y);
+        });
+      },
+    }));
+
+    function paintPreview(rows: readonly number[]): void {
+      const viewport = previewViewport.value;
+      if (viewport.w <= 0 || viewport.h <= 0) {
+        queuePreviewClearGraphic();
+        return;
+      }
+
+      const frame = previewFrame.value;
+      const chars = boxChars.value;
+      const style = currentStyle.value;
+      const backdropStyle: Style = {
+        ...style,
+        bg: style.bg ?? defaultStyle.value.bg,
+        dim: true,
+      };
+      const borderStyle: Style = { ...style, dim: true };
+      const titleStyle: Style = { ...style, bold: true };
+      const hintStyle: Style = { ...style, dim: true };
+      const blank = spaces(viewport.w);
+      const frameTop = frame.y;
+      const frameBottom = frame.y + frame.h - 1;
+      const frameRight = frame.x + frame.w - 1;
+      const frameDrawable = frame.w >= 4 && frame.h >= 3;
+
+      for (const y of rows) {
+        if (y < viewport.y || y >= viewport.y + viewport.h) continue;
+        previewTerminal.write(blank, { x: viewport.x, y, style: backdropStyle });
+        if (!frameDrawable || y < frameTop || y > frameBottom) continue;
+
+        if (y === frameTop) {
+          previewTerminal.write(`${chars.tl}${repeatChar(chars.h, frame.w - 2)}${chars.tr}`, {
+            x: frame.x,
+            y,
+            style: borderStyle,
+          });
+
+          const innerW = Math.max(0, frame.w - 2);
+          const title = sliceCells(` ${sanitizeInlineText(props.previewTitle)} `, innerW);
+          if (title) previewTerminal.write(title, { x: frame.x + 1, y, style: titleStyle });
+
+          const hint = sliceCells(` ${sanitizeInlineText(props.previewHint)} `, innerW);
+          if (hint) {
+            const hintW = cellWidth(hint);
+            const titleW = cellWidth(title);
+            const hintX = frameRight - hintW;
+            if (hintX > frame.x + 1 + titleW) {
+              previewTerminal.write(hint, { x: hintX, y, style: hintStyle });
+            }
+          }
+        } else if (y === frameBottom) {
+          previewTerminal.write(`${chars.bl}${repeatChar(chars.h, frame.w - 2)}${chars.br}`, {
+            x: frame.x,
+            y,
+            style: borderStyle,
+          });
+        } else {
+          previewTerminal.put(frame.x, y, chars.v, borderStyle);
+          previewTerminal.put(frameRight, y, chars.v, borderStyle);
+        }
+      }
+
+      queuePreviewImageGraphic();
+    }
+
+    useRenderNode(() => ({
+      stack: previewRenderStack,
+      plane: "overlay",
+      zIndex: 0,
+      priority: "high",
+      rect: previewOpen.value ? previewViewport.value : { x: 0, y: 0, w: 0, h: 0 },
+      deps: [
+        previewOpen.value,
+        visible.value,
+        previewViewport.value,
+        previewFrame.value,
+        previewContentRect.value,
+        previewImageFit.value,
+        imageCells.value,
+        source.value,
+        currentStyle.value,
+        defaultStyle.value,
+        boxChars.value,
+        props.previewTitle,
+        props.previewHint,
+        documentVersion.value,
+        graphicsOutputVersion.value,
+      ],
+      paint: (dirtyRows) => {
+        if (!previewOpen.value || !visible.value) {
+          queuePreviewClearGraphic();
+          return;
+        }
+        withTextWidthProvider(widthProvider, () => {
+          const viewport = previewViewport.value;
+          const rows = dirtyRows?.length
+            ? dirtyRows
+            : Array.from({ length: viewport.h }, (_, index) => viewport.y + index);
+          paintPreview(rows);
         });
       },
     }));

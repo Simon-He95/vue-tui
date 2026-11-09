@@ -9,6 +9,8 @@ import { useTerminal } from "./use-terminal.js";
 import { withTextWidthProvider } from "../utils/text.js";
 
 export interface RenderNodeOptions {
+  /** Render plane for this node; defaults to the surrounding plane context. */
+  plane?: TerminalRenderPlane;
   zIndex?: number;
   stack?: RenderStack;
   rect?: RenderRect | null;
@@ -114,7 +116,7 @@ export function useRenderNode(getOptions: () => RenderNodeOptions): {
       const opt = options.value;
       void opt.deps;
       const stack = opt.stack ?? parentStack.value;
-      const nextPlane = plane.value;
+      const nextPlane = opt.plane ?? plane.value;
       const hasRect = Object.prototype.hasOwnProperty.call(opt, "rect");
       const nextRect = hasRect ? (opt.rect ?? null) : null;
       const nextZIndex = opt.zIndex ?? 0;

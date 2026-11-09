@@ -158,7 +158,7 @@ h(TMermaidImage, {
 
 - 终端不支持图形协议、stdout 非 TTY、tmux/screen/zellij 未开 passthrough、或 rasterizer 缺失时，自动降级：传了 `textRenderer` 则尝试 **ANSI 文本图**，否则显示**原始 mermaid 源码**（不会报错）。
 - **Kitty 图形协议下支持缩放 + 拖拽平移**：`Ctrl`（浏览器里 `Cmd` 也可）+ 滚轮以鼠标为中心缩放，放大后可直接拖拽平移；不带修饰键的滚轮透传给外层滚动容器，不拦截历史消息滚动。
-- **点击图片区域或 header 的 copy 按钮，复制完整 mermaid raw content**（触发 `copy` 事件，payload 带 `text`）。
+- **图片模式下点击图片会打开终端全屏预览**：图片按终端视口等比缩放（小图放大、大图完整收进视口），背景遮罩覆盖页面；`Esc`、`Enter`、空格或再次点击关闭。header 的 copy 按钮仍然复制完整 mermaid raw content（触发 `copy` 事件）；文本回退时点击按 `copyOnClick` 复制。
 - 自定义渲染管线：传 `renderer`（`TuiMermaidImageRasterizer`），返回 `{ base64, widthCells, heightCells, naturalWidth?, naturalHeight? }` 或 `null`。
 - 模块级缓存/门控 API（`getMermaidImage` / `getCachedMermaidImage` / `loadMermaidImageRenderer` / `isMermaidImageRendererReady` / `setMermaidImageRasterizer` / `clearMermaidImageCache` / `subscribeMermaidImage`）与 math-image 对齐，便于在 markdown 等宿主里复用同一张缓存图。
 - 仅支持 kitty / iterm2；sixel 终端会走源码降级（`createTerminalGraphicPngSequence` 不产 sixel）。

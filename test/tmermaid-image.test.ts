@@ -14,6 +14,7 @@ import {
   type TMermaidRenderer,
   type TuiMermaidImageRasterizer,
 } from "../src/mermaid.js";
+import { TRenderPlane, TText, TView } from "../src/vue.js";
 import { h, mountTerminal, nextTick } from "./ui-regressions-support.js";
 
 type MountedTerminal = Awaited<ReturnType<typeof mountTerminal>>;
@@ -39,6 +40,19 @@ function clickCell(mounted: MountedTerminal, cellX: number, cellY: number): void
       bubbles: true,
     }),
   );
+}
+
+function lastTransmissionCells(stdout: string): { cols: number; rows: number } | null {
+  const matches = [...stdout.matchAll(/a=T[^\u001B\\]*\bc=(\d+),r=(\d+)/g)];
+  if (matches.length === 0) return null;
+  const last = matches[matches.length - 1]!;
+  return { cols: Number(last[1]), rows: Number(last[2]) };
+}
+
+function countTransmissionSize(stdout: string, cols: number, rows: number): number {
+  return [...stdout.matchAll(/a=T[^\u001B\\]*\bc=(\d+),r=(\d+)/g)].filter(
+    (match) => Number(match[1]) === cols && Number(match[2]) === rows,
+  ).length;
 }
 
 function setDeterministicMetrics(mounted: MountedTerminal, cols: number, rows: number): void {
@@ -542,7 +556,45 @@ describe("TMermaidImage", () => {
     }
   });
 
-  it("copies the full raw mermaid source when clicking the rendered image area", async () => {
+  it("keeps copy-on-click for the raw-source fallback when no image is rendered", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const restoreClipboard = installNavigatorClipboard(writeText);
+    const onPreview = vi.fn();
+
+    try {
+      const cols = 32;
+      const rows = 8;
+      const mounted = await mountTerminal(
+        () =>
+          h(TMermaidImage, {
+            x: 0,
+            y: 0,
+            w: 24,
+            content: SAMPLE_SOURCE,
+            onPreview,
+          }),
+        cols,
+        rows,
+      );
+
+      try {
+        await settle(mounted);
+        setDeterministicMetrics(mounted, cols, rows);
+        clickCell(mounted, 5, 2);
+        await settle(mounted);
+
+        expect(writeText).toHaveBeenCalledWith(SAMPLE_SOURCE);
+        expect(onPreview).not.toHaveBeenCalled();
+        expect(rowText(mounted, 1)).not.toContain("mermaid preview");
+      } finally {
+        mounted.unmount();
+      }
+    } finally {
+      restoreClipboard();
+    }
+  });
+
+  it("opens a larger preview when clicking the rendered image area, and Escape closes it", async () => {
     await withEnv(
       {
         KITTY_WINDOW_ID: "vue-tui-test",
@@ -564,6 +616,217 @@ describe("TMermaidImage", () => {
         const writeText = vi.fn().mockResolvedValue(undefined);
         const restoreClipboard = installNavigatorClipboard(writeText);
         const onCopy = vi.fn();
+        const onPreview = vi.fn();
+
+        try {
+          const cols = 32;
+          const rows = 8;
+          const mounted = await mountTerminal(
+            () => [
+              h(TRenderPlane, { plane: "transcript" }, () =>
+                h(TView, { x: 0, y: 0, w: 24, h: 7, zIndex: 0 }, () =>
+                  h(TMermaidImage, {
+                    x: 0,
+                    y: 0,
+                    w: 20,
+                    content: SAMPLE_SOURCE,
+                    onCopy,
+                    onPreview,
+                  }),
+                ),
+              ),
+              h(TRenderPlane, { plane: "chrome" }, () =>
+                h(TView, { x: 0, y: 7, w: 20, h: 1, zIndex: 20 }, () =>
+                  h(TText, {
+                    x: 0,
+                    y: 0,
+                    w: 20,
+                    value: "background-row",
+                    style: { fg: "cyan" },
+                  }),
+                ),
+              ),
+            ],
+            cols,
+            rows,
+          );
+
+          let stdout = "";
+          const stdoutRenderer = createStdoutRenderer(mounted.terminal, {
+            output: {
+              isTTY: true,
+              write(chunk: string) {
+                stdout += chunk;
+              },
+            },
+            clear: false,
+            hideCursor: false,
+            altScreen: false,
+            terminalGraphics: { protocol: "kitty", force: true },
+          });
+
+          try {
+            await settle(mounted);
+            setDeterministicMetrics(mounted, cols, rows);
+            (stdoutRenderer as any).render(undefined, true);
+            const inline = lastTransmissionCells(stdout);
+            expect(inline).not.toBeNull();
+
+            // Click inside the content area (below the header row), on the image.
+            clickCell(mounted, 5, 2);
+            await settle(mounted);
+            (stdoutRenderer as any).render(undefined, true);
+
+            const preview = lastTransmissionCells(stdout);
+            expect(preview).not.toBeNull();
+            expect(preview!.cols).toBeGreaterThan(inline!.cols);
+            expect(preview!.rows).toBeGreaterThanOrEqual(inline!.rows);
+            expect(rowText(mounted, 0)).toContain("mermaid preview");
+            expect(rowText(mounted, 7)).not.toContain("background-row");
+            expect(onPreview).toHaveBeenCalledWith({ text: SAMPLE_SOURCE, open: true });
+            expect(onCopy).not.toHaveBeenCalled();
+            expect(writeText).not.toHaveBeenCalled();
+
+            mounted.container()?.dispatchEvent(
+              new KeyboardEvent("keydown", {
+                key: "Escape",
+                code: "Escape",
+                bubbles: true,
+                cancelable: true,
+              }),
+            );
+            await settle(mounted);
+            (stdoutRenderer as any).render(undefined, true);
+
+            expect(rowText(mounted, 0)).not.toContain("mermaid preview");
+            expect(rowText(mounted, 7)).toContain("background-row");
+            expect(onPreview).toHaveBeenLastCalledWith({ text: SAMPLE_SOURCE, open: false });
+            expect(writeText).not.toHaveBeenCalled();
+          } finally {
+            stdoutRenderer.dispose();
+            mounted.unmount();
+          }
+        } finally {
+          restoreClipboard();
+        }
+      },
+    );
+  });
+
+  it("clears other mermaid images while the preview is open and restores them on close", async () => {
+    await withEnv(
+      {
+        KITTY_WINDOW_ID: "vue-tui-test",
+        TERM: "xterm-kitty",
+        TERM_PROGRAM: "kitty",
+        CI: undefined,
+        TMUX: undefined,
+        VUE_TUI_GRAPHICS_FORCE: "1",
+      },
+      async () => {
+        setMermaidImageRasterizer(async () => ({
+          base64: TINY_PNG_BASE64,
+          widthCells: 10,
+          heightCells: 3,
+          naturalWidth: 80,
+          naturalHeight: 24,
+        }));
+
+        const cols = 32;
+        const rows = 16;
+        const mounted = await mountTerminal(
+          () => [
+            h(TMermaidImage, {
+              x: 0,
+              y: 0,
+              w: 20,
+              content: SAMPLE_SOURCE,
+            }),
+            h(TMermaidImage, {
+              x: 0,
+              y: 8,
+              w: 20,
+              content: SAMPLE_SOURCE,
+            }),
+          ],
+          cols,
+          rows,
+        );
+
+        let stdout = "";
+        const stdoutRenderer = createStdoutRenderer(mounted.terminal, {
+          output: {
+            isTTY: true,
+            write(chunk: string) {
+              stdout += chunk;
+            },
+          },
+          clear: false,
+          hideCursor: false,
+          altScreen: false,
+          terminalGraphics: { protocol: "kitty", force: true },
+        });
+
+        try {
+          await settle(mounted);
+          setDeterministicMetrics(mounted, cols, rows);
+          (stdoutRenderer as any).render(undefined, true);
+          expect(countTransmissionSize(stdout, 10, 3)).toBe(2);
+
+          clickCell(mounted, 5, 2);
+          await settle(mounted);
+          (stdoutRenderer as any).render(undefined, true);
+
+          expect(rowText(mounted, 0)).toContain("mermaid preview");
+          // The preview is one new transmission; neither inline diagram is
+          // retransmitted behind the lightbox.
+          expect(lastTransmissionCells(stdout)).toEqual({ cols: 30, rows: 9 });
+          expect(countTransmissionSize(stdout, 10, 3)).toBe(2);
+
+          mounted.container()?.dispatchEvent(
+            new KeyboardEvent("keydown", {
+              key: "Escape",
+              code: "Escape",
+              bubbles: true,
+              cancelable: true,
+            }),
+          );
+          await settle(mounted);
+          (stdoutRenderer as any).render(undefined, true);
+
+          expect(rowText(mounted, 0)).not.toContain("mermaid preview");
+          expect(countTransmissionSize(stdout, 10, 3)).toBeGreaterThan(2);
+        } finally {
+          stdoutRenderer.dispose();
+          mounted.unmount();
+        }
+      },
+    );
+  });
+
+  it("keeps copy-on-click when previewOnClick is false", async () => {
+    await withEnv(
+      {
+        KITTY_WINDOW_ID: "vue-tui-test",
+        TERM: "xterm-kitty",
+        TERM_PROGRAM: "kitty",
+        CI: undefined,
+        TMUX: undefined,
+        VUE_TUI_GRAPHICS_FORCE: "1",
+      },
+      async () => {
+        setMermaidImageRasterizer(async () => ({
+          base64: TINY_PNG_BASE64,
+          widthCells: 10,
+          heightCells: 3,
+          naturalWidth: 80,
+          naturalHeight: 24,
+        }));
+
+        const writeText = vi.fn().mockResolvedValue(undefined);
+        const restoreClipboard = installNavigatorClipboard(writeText);
+        const onCopy = vi.fn();
+        const onPreview = vi.fn();
 
         try {
           const cols = 32;
@@ -575,7 +838,9 @@ describe("TMermaidImage", () => {
                 y: 0,
                 w: 20,
                 content: SAMPLE_SOURCE,
+                previewOnClick: false,
                 onCopy,
+                onPreview,
               }),
             cols,
             rows,
@@ -584,12 +849,13 @@ describe("TMermaidImage", () => {
           try {
             await settle(mounted);
             setDeterministicMetrics(mounted, cols, rows);
-            // Click inside the content area (below the header row), on the image.
             clickCell(mounted, 5, 2);
             await settle(mounted);
 
             expect(writeText).toHaveBeenCalledWith(SAMPLE_SOURCE);
             expect(onCopy).toHaveBeenCalledWith({ text: SAMPLE_SOURCE, ok: true });
+            expect(onPreview).not.toHaveBeenCalled();
+            expect(rowText(mounted, 1)).not.toContain("mermaid preview");
           } finally {
             mounted.unmount();
           }
