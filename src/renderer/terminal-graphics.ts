@@ -91,6 +91,12 @@ export type TerminalGraphicsOutput = Readonly<{
   queue: (payload: TerminalGraphicsPayload) => boolean;
   clear?: (id: string) => boolean;
   clearAll?: () => boolean;
+  /**
+   * Remove every drawn placement while keeping the transmitted image data, so a
+   * fullscreen overlay can cover the screen and the covered images come back
+   * as placement-only draws (a=p) instead of re-sending their PNGs.
+   */
+  hideAll?: () => boolean;
   isActive?: (id: string) => boolean;
 }>;
 

@@ -312,9 +312,19 @@ export const TMermaidImage = defineComponent({
     let rootRenderStack = renderStack.value;
     while (rootRenderStack.parent) rootRenderStack = rootRenderStack.parent;
     // The lightbox must outrank every page stack, not only its own message
-    // subtree: register it as a high-z child of the render root.
-    const previewRenderStack = render.createStack(rootRenderStack, MERMAID_PREVIEW_Z);
-    const previewTerminal = getPlaneTerminal(getRootTerminal(terminal), "overlay");
+    // subtree: it is a high-z child of the render root. Both the stack and the
+    // overlay terminal are created on the first open, so a transcript that is
+    // never clicked allocates nothing for the preview.
+    let previewRenderStack: ReturnType<typeof render.createStack> | null = null;
+    let previewTerminal: ReturnType<typeof getPlaneTerminal> | null = null;
+    function ensurePreviewRenderStack(): ReturnType<typeof render.createStack> {
+      previewRenderStack ??= render.createStack(rootRenderStack, MERMAID_PREVIEW_Z);
+      return previewRenderStack;
+    }
+    function ensurePreviewTerminal(): ReturnType<typeof getPlaneTerminal> {
+      previewTerminal ??= getPlaneTerminal(getRootTerminal(terminal), "overlay");
+      return previewTerminal;
+    }
     const parentEventZ = inject(EventZIndexContextKey, computed(() => 0) as any);
     const previewOwner = Symbol(`TMermaidImagePreview:${instance?.uid ?? "unknown"}`);
 
@@ -347,7 +357,13 @@ export const TMermaidImage = defineComponent({
     let copiedTimer: ReturnType<typeof setTimeout> | null = null;
     let copyRequestVersion = 0;
     let activeGraphicId: string | null = null;
-    let activePreviewGraphicId: string | null = null;
+    let previewGraphicCache: {
+      cells: TuiMermaidImageCells;
+      protocol: string;
+      renderVersion: number;
+      rectKey: string;
+      built: NonNullable<ReturnType<typeof createTerminalGraphicPngSequence>>;
+    } | null = null;
     let releasePreviewGraphicsSuspension: (() => void) | null = null;
     let activeImageSignature = "";
 
@@ -1124,7 +1140,9 @@ export const TMermaidImage = defineComponent({
       const protocol = graphicsProtocol.value;
       const cells = imageCells.value;
       if (activeMermaidPreviewOwners.has(terminal)) {
-        queueClearGraphic();
+        // A preview owns the screen and already hid this placement while
+        // keeping its data; clearing here would drop the cached raster and
+        // force a PNG re-upload once the preview closes.
         return;
       }
       if (!protocol || !cells) {
@@ -1239,14 +1257,11 @@ export const TMermaidImage = defineComponent({
     }
 
     function queuePreviewClearGraphic(): void {
-      if (activePreviewGraphicId == null) return;
-      const id = activePreviewGraphicId;
-      activePreviewGraphicId = null;
-      try {
-        graphicsOutput.value?.clear?.(id);
-      } catch {
-        // Best-effort cleanup; the preview must never affect text rendering.
-      }
+      // The preview and the inline image share one graphic id, so only an open
+      // preview owns it. While it is closed that id is the inline placement and
+      // clearing it would drop the cached raster the next draw relies on.
+      if (!previewOpen.value) return;
+      queueClearGraphic();
     }
 
     function queuePreviewImageGraphic(): void {
@@ -1269,51 +1284,71 @@ export const TMermaidImage = defineComponent({
         w: fit.displayW,
         h: fit.displayH,
       };
-      const imageId = stableTerminalGraphicNumericId(`mermaid-preview:${uid}:${renderVersion}:img`);
+      // Same image and placement ids as the inline drawing: the preview is a
+      // placement of the already transmitted raster, so opening it is a
+      // placement move (a=p) instead of a second PNG upload, and closing it
+      // moves the same placement back.
+      const imageId = stableTerminalGraphicNumericId(`mermaid-image:${uid}:${renderVersion}:img`);
       const placementId = stableTerminalGraphicNumericId(
-        `mermaid-preview:${uid}:${renderVersion}:plc`,
+        `mermaid-image:${uid}:${renderVersion}:plc`,
       );
-      const built = createTerminalGraphicPngSequence({
-        protocol,
-        base64: cells.base64,
-        imageId,
-        placementId,
-        // iTerm2 reads display size from cols/rows; Kitty uses the placement
-        // controls below. Both get the enlarged preview rect.
-        cols: rect.w,
-        rows: rect.h,
-        sourceWidth: cells.naturalWidth,
-        sourceHeight: cells.naturalHeight,
-        placementColumns: rect.w,
-        placementRows: rect.h,
-        transmissionColumns: fit.displayW,
-        transmissionRows: fit.displayH,
-        cropTransmission: false,
-        rect,
-        fullRect: rect,
-        zIndex: 0,
-        fallback: source.value,
-      });
+      // Kept while the lightbox stays open at the same size: an underlying
+      // transcript keeps streaming, and every such frame repaints the overlay.
+      // Rebuilding (and re-validating) a 50-100KB base64 sequence per frame is
+      // pure garbage, so reuse the previous build.
+      const rectKey = `${rect.x},${rect.y},${rect.w},${rect.h}`;
+      const cached =
+        previewGraphicCache &&
+        previewGraphicCache.cells === cells &&
+        previewGraphicCache.protocol === protocol &&
+        previewGraphicCache.renderVersion === renderVersion &&
+        previewGraphicCache.rectKey === rectKey
+          ? previewGraphicCache
+          : null;
+      const built =
+        cached?.built ??
+        createTerminalGraphicPngSequence({
+          protocol,
+          base64: cells.base64,
+          imageId,
+          placementId,
+          // iTerm2 reads display size from cols/rows; Kitty uses the placement
+          // controls below. Both get the enlarged preview rect.
+          cols: rect.w,
+          rows: rect.h,
+          sourceWidth: cells.naturalWidth,
+          sourceHeight: cells.naturalHeight,
+          placementColumns: rect.w,
+          placementRows: rect.h,
+          transmissionColumns: fit.displayW,
+          transmissionRows: fit.displayH,
+          cropTransmission: false,
+          rect,
+          fullRect: rect,
+          zIndex: 0,
+          fallback: source.value,
+        });
       if (!built) {
         queuePreviewClearGraphic();
         return;
       }
 
-      const id = `mermaid-preview:${uid}:${renderVersion}`;
+      if (!cached) {
+        previewGraphicCache = { cells, protocol, renderVersion, rectKey, built };
+      }
+
+      const id = `mermaid-image:${uid}:${renderVersion}`;
       const output = graphicsOutput.value;
       if (!output) {
         queuePreviewClearGraphic();
         return;
       }
 
-      if (activePreviewGraphicId != null && activePreviewGraphicId !== id) {
-        try {
-          output.clear?.(activePreviewGraphicId);
-        } catch {
-          // Best-effort cleanup.
-        }
-        activePreviewGraphicId = null;
-      }
+      // The placement id is derived from renderVersion, which a re-render bumps
+      // (a source change also closes the lightbox). Keep the invariant local:
+      // this function owns exactly one fullscreen placement, so any previous
+      // one must go before queueing the new one.
+      if (activeGraphicId != null && activeGraphicId !== id) queueClearGraphic();
 
       const accepted = output.queue({
         id,
@@ -1330,7 +1365,7 @@ export const TMermaidImage = defineComponent({
         placementMoveWithoutClear: protocol === "kitty",
       });
       if (accepted) {
-        activePreviewGraphicId = id;
+        activeGraphicId = id;
       } else {
         queuePreviewClearGraphic();
       }
@@ -1442,12 +1477,15 @@ export const TMermaidImage = defineComponent({
       );
       previewOpen.value = true;
       try {
-        graphicsOutput.value?.clearAll?.();
+        // Hide the placements the overlay covers, but keep their raster data:
+        // closing the preview then restores every diagram as a placement-only
+        // draw instead of re-sending one PNG per diagram (a chat page can show
+        // a handful of large diagrams at once).
+        const output = graphicsOutput.value;
+        if (!output?.hideAll?.()) output?.clearAll?.();
       } catch {
         // Best-effort: the text backdrop and preview placement still render.
       }
-      queueClearGraphic();
-      queuePreviewClearGraphic();
       bump();
       emit("preview", { text: source.value, open: true });
     }
@@ -1462,7 +1500,12 @@ export const TMermaidImage = defineComponent({
       releasePreviewGraphicsSuspension?.();
       releasePreviewGraphicsSuspension = null;
       previewOpen.value = false;
-      queuePreviewClearGraphic();
+      previewGraphicCache = null;
+      // No explicit clear: the inline paint re-places the same kitty placement
+      // over the raster that the preview already had in the terminal.
+      // If this diagram cannot draw right now (scrolled away, raster gone),
+      // the paint will not run, so drop the stale fullscreen placement here.
+      if (!visible.value || !imageCells.value || !displayFit.value) queueClearGraphic();
       bump();
       emit("preview", { text: source.value, open: false });
     }
@@ -1731,10 +1774,15 @@ export const TMermaidImage = defineComponent({
             }
           };
 
-          if (imageCells.value && displayFit.value && !previewOpen.value) {
-            queueImageGraphic(full, displayFit.value);
-          } else {
-            queueClearGraphic();
+          // While the preview is open it owns the placement; leave the graphic
+          // alone so closing the preview can re-place it without re-sending
+          // the PNG.
+          if (!previewOpen.value) {
+            if (imageCells.value && displayFit.value) {
+              queueImageGraphic(full, displayFit.value);
+            } else {
+              queueClearGraphic();
+            }
           }
 
           if (dirtyRows?.length) {
@@ -1754,6 +1802,7 @@ export const TMermaidImage = defineComponent({
         return;
       }
 
+      const previewTerminal = ensurePreviewTerminal();
       const frame = previewFrame.value;
       const chars = boxChars.value;
       const style = currentStyle.value;
@@ -1811,43 +1860,50 @@ export const TMermaidImage = defineComponent({
       queuePreviewImageGraphic();
     }
 
-    useRenderNode(() => ({
-      stack: previewRenderStack,
-      plane: "overlay",
-      zIndex: 0,
-      priority: "high",
-      rect: previewOpen.value ? previewViewport.value : { x: 0, y: 0, w: 0, h: 0 },
-      deps: [
-        previewOpen.value,
-        visible.value,
-        previewViewport.value,
-        previewFrame.value,
-        previewContentRect.value,
-        previewImageFit.value,
-        imageCells.value,
-        source.value,
-        currentStyle.value,
-        defaultStyle.value,
-        boxChars.value,
-        props.previewTitle,
-        props.previewHint,
-        documentVersion.value,
-        graphicsOutputVersion.value,
-      ],
-      paint: (dirtyRows) => {
-        if (!previewOpen.value || !visible.value) {
-          queuePreviewClearGraphic();
-          return;
-        }
-        withTextWidthProvider(widthProvider, () => {
-          const viewport = previewViewport.value;
-          const rows = dirtyRows?.length
-            ? dirtyRows
-            : Array.from({ length: viewport.h }, (_, index) => viewport.y + index);
-          paintPreview(rows);
-        });
-      },
-    }));
+    useRenderNode(() => {
+      if (!previewOpen.value) {
+        // Nothing exists before the click: no node in the render manager, no
+        // viewport/frame/content/fit geometry, no overlay terminal write path.
+        // A closed lightbox costs a single boolean.
+        return { enabled: false, paint: () => {} };
+      }
+      return {
+        stack: ensurePreviewRenderStack(),
+        plane: "overlay",
+        zIndex: 0,
+        priority: "high",
+        rect: previewViewport.value,
+        deps: [
+          visible.value,
+          previewViewport.value,
+          previewFrame.value,
+          previewContentRect.value,
+          previewImageFit.value,
+          imageCells.value,
+          source.value,
+          currentStyle.value,
+          defaultStyle.value,
+          boxChars.value,
+          props.previewTitle,
+          props.previewHint,
+          documentVersion.value,
+          graphicsOutputVersion.value,
+        ],
+        paint: (dirtyRows) => {
+          if (!visible.value) {
+            queuePreviewClearGraphic();
+            return;
+          }
+          withTextWidthProvider(widthProvider, () => {
+            const viewport = previewViewport.value;
+            const rows = dirtyRows?.length
+              ? dirtyRows
+              : Array.from({ length: viewport.h }, (_, index) => viewport.y + index);
+            paintPreview(rows);
+          });
+        },
+      };
+    });
 
     return () => h("span", rootProps);
   },

@@ -15,7 +15,14 @@ import {
   type TuiMermaidImageRasterizer,
 } from "../src/mermaid.js";
 import { TRenderPlane, TText, TView } from "../src/vue.js";
-import { h, mountTerminal, nextTick } from "./ui-regressions-support.js";
+import {
+  defineComponent,
+  h,
+  mountTerminal,
+  nextTick,
+  ref,
+  useTerminal,
+} from "./ui-regressions-support.js";
 
 type MountedTerminal = Awaited<ReturnType<typeof mountTerminal>>;
 
@@ -53,6 +60,17 @@ function countTransmissionSize(stdout: string, cols: number, rows: number): numb
   return [...stdout.matchAll(/a=T[^\u001B\\]*\bc=(\d+),r=(\d+)/g)].filter(
     (match) => Number(match[1]) === cols && Number(match[2]) === rows,
   ).length;
+}
+
+function countTransmissions(stdout: string): number {
+  return [...stdout.matchAll(/a=T/g)].length;
+}
+
+function lastPlacementCells(stdout: string): { cols: number; rows: number } | null {
+  const matches = [...stdout.matchAll(/a=p[^\u001B\\]*\bc=(\d+),r=(\d+)/g)];
+  if (matches.length === 0) return null;
+  const last = matches[matches.length - 1]!;
+  return { cols: Number(last[1]), rows: Number(last[2]) };
 }
 
 function setDeterministicMetrics(mounted: MountedTerminal, cols: number, rows: number): void {
@@ -671,16 +689,20 @@ describe("TMermaidImage", () => {
             (stdoutRenderer as any).render(undefined, true);
             const inline = lastTransmissionCells(stdout);
             expect(inline).not.toBeNull();
+            const inlineTransmissions = countTransmissions(stdout);
 
             // Click inside the content area (below the header row), on the image.
             clickCell(mounted, 5, 2);
             await settle(mounted);
             (stdoutRenderer as any).render(undefined, true);
 
-            const preview = lastTransmissionCells(stdout);
+            // The preview is a placement of the raster the inline drawing
+            // already sent: it must not upload the PNG a second time.
+            const preview = lastPlacementCells(stdout);
             expect(preview).not.toBeNull();
             expect(preview!.cols).toBeGreaterThan(inline!.cols);
             expect(preview!.rows).toBeGreaterThanOrEqual(inline!.rows);
+            expect(countTransmissions(stdout)).toBe(inlineTransmissions);
             expect(rowText(mounted, 0)).toContain("mermaid preview");
             expect(rowText(mounted, 7)).not.toContain("background-row");
             expect(onPreview).toHaveBeenCalledWith({ text: SAMPLE_SOURCE, open: true });
@@ -700,6 +722,9 @@ describe("TMermaidImage", () => {
 
             expect(rowText(mounted, 0)).not.toContain("mermaid preview");
             expect(rowText(mounted, 7)).toContain("background-row");
+            // Closing moves the placement back; the raster stays in the terminal.
+            expect(lastPlacementCells(stdout)).toEqual(inline);
+            expect(countTransmissions(stdout)).toBe(inlineTransmissions);
             expect(onPreview).toHaveBeenLastCalledWith({ text: SAMPLE_SOURCE, open: false });
             expect(writeText).not.toHaveBeenCalled();
           } finally {
@@ -713,7 +738,7 @@ describe("TMermaidImage", () => {
     );
   });
 
-  it("clears other mermaid images while the preview is open and restores them on close", async () => {
+  it("hides other mermaid images under the preview and restores them without re-sending PNGs", async () => {
     await withEnv(
       {
         KITTY_WINDOW_ID: "vue-tui-test",
@@ -772,16 +797,25 @@ describe("TMermaidImage", () => {
           setDeterministicMetrics(mounted, cols, rows);
           (stdoutRenderer as any).render(undefined, true);
           expect(countTransmissionSize(stdout, 10, 3)).toBe(2);
+          const inlineTransmissions = countTransmissions(stdout);
+          const openPhaseStart = stdout.length;
 
           clickCell(mounted, 5, 2);
           await settle(mounted);
           (stdoutRenderer as any).render(undefined, true);
+          const openPhase = stdout.slice(openPhaseStart);
 
           expect(rowText(mounted, 0)).toContain("mermaid preview");
-          // The preview is one new transmission; neither inline diagram is
-          // retransmitted behind the lightbox.
-          expect(lastTransmissionCells(stdout)).toEqual({ cols: 30, rows: 9 });
+          // The preview re-places the raster it was opened from, and neither
+          // inline diagram is retransmitted behind the lightbox.
+          expect(lastPlacementCells(stdout)).toEqual({ cols: 30, rows: 9 });
           expect(countTransmissionSize(stdout, 10, 3)).toBe(2);
+          expect(countTransmissions(stdout)).toBe(inlineTransmissions);
+          expect(openPhase).not.toContain("a=T");
+          // Hiding the covered diagrams removes placements only: the kitty
+          // rasters stay so closing the preview never re-uploads them.
+          expect(openPhase).toContain("a=d,d=i,");
+          expect(openPhase).not.toContain("d=I");
 
           mounted.container()?.dispatchEvent(
             new KeyboardEvent("keydown", {
@@ -795,7 +829,175 @@ describe("TMermaidImage", () => {
           (stdoutRenderer as any).render(undefined, true);
 
           expect(rowText(mounted, 0)).not.toContain("mermaid preview");
-          expect(countTransmissionSize(stdout, 10, 3)).toBeGreaterThan(2);
+          // Both inline diagrams come back as placement draws over the rasters
+          // the terminal still holds.
+          expect(lastPlacementCells(stdout)).toEqual({ cols: 10, rows: 3 });
+          expect(countTransmissions(stdout)).toBe(inlineTransmissions);
+        } finally {
+          stdoutRenderer.dispose();
+          mounted.unmount();
+        }
+      },
+    );
+  });
+
+  it("closes the lightbox and restores the inline drawing when the source changes", async () => {
+    await withEnv(
+      {
+        KITTY_WINDOW_ID: "vue-tui-test",
+        TERM: "xterm-kitty",
+        TERM_PROGRAM: "kitty",
+        CI: undefined,
+        TMUX: undefined,
+        VUE_TUI_GRAPHICS_FORCE: "1",
+      },
+      async () => {
+        setMermaidImageRasterizer(async () => ({
+          base64: TINY_PNG_BASE64,
+          widthCells: 10,
+          heightCells: 3,
+          naturalWidth: 80,
+          naturalHeight: 24,
+        }));
+
+        const source = ref(SAMPLE_SOURCE);
+        const cols = 32;
+        // Tall enough that the lightbox fit (30x9) differs from the inline fit
+        // (20x6), so the assertions below really identify the fullscreen
+        // placement.
+        const rows = 16;
+        const mounted = await mountTerminal(
+          () => h(TMermaidImage, { x: 0, y: 0, w: 20, content: source.value }),
+          cols,
+          rows,
+        );
+
+        let stdout = "";
+        const stdoutRenderer = createStdoutRenderer(mounted.terminal, {
+          output: {
+            isTTY: true,
+            write(chunk: string) {
+              stdout += chunk;
+            },
+          },
+          clear: false,
+          hideCursor: false,
+          altScreen: false,
+          terminalGraphics: { protocol: "kitty", force: true },
+        });
+
+        try {
+          await settle(mounted);
+          setDeterministicMetrics(mounted, cols, rows);
+          (stdoutRenderer as any).render(undefined, true);
+
+          clickCell(mounted, 5, 2);
+          await settle(mounted);
+          (stdoutRenderer as any).render(undefined, true);
+          expect(rowText(mounted, 0)).toContain("mermaid preview");
+          expect(lastPlacementCells(stdout)).toEqual({ cols: 30, rows: 9 });
+
+          // A new source while the lightbox is open closes it: the lightbox is
+          // bound to the raster it was opened from, so it must not keep showing
+          // the old picture while a fresh one rasterizes underneath.
+          const inlineBefore = countTransmissionSize(stdout, 10, 3);
+          const changeStart = stdout.length;
+          source.value = `${SAMPLE_SOURCE}\n  %% changed`;
+          await settle(mounted);
+          (stdoutRenderer as any).render(undefined, true);
+          const afterChange = stdout.slice(changeStart);
+
+          expect(rowText(mounted, 0)).not.toContain("mermaid preview");
+          expect(rowText(mounted, 0)).toContain("mermaid");
+          // The fullscreen placement is dropped right away.
+          expect(afterChange).toContain("a=d");
+
+          // Once the new raster is cached the inline drawing takes over again:
+          // it uploads the new picture at the inline size.
+          expect(countTransmissionSize(stdout, 10, 3)).toBeGreaterThan(inlineBefore);
+        } finally {
+          stdoutRenderer.dispose();
+          mounted.unmount();
+        }
+      },
+    );
+  });
+
+  it("allocates no lightbox state before the image is clicked", async () => {
+    await withEnv(
+      {
+        KITTY_WINDOW_ID: "vue-tui-test",
+        TERM: "xterm-kitty",
+        TERM_PROGRAM: "kitty",
+        CI: undefined,
+        TMUX: undefined,
+        VUE_TUI_GRAPHICS_FORCE: "1",
+      },
+      async () => {
+        setMermaidImageRasterizer(async () => ({
+          base64: TINY_PNG_BASE64,
+          widthCells: 10,
+          heightCells: 3,
+          naturalWidth: 80,
+          naturalHeight: 24,
+        }));
+
+        // Spies install during the first child's setup, before TMermaidImage's
+        // setup runs, so anything the lightbox allocates at mount is counted.
+        const counts = { stacks: 0, overlayNodes: 0 };
+        const Probe = defineComponent({
+          name: "RenderManagerProbe",
+          setup() {
+            const render = useTerminal().render as any;
+            const createStack = render.createStack;
+            render.createStack = (...args: any[]) => {
+              counts.stacks++;
+              return createStack.apply(render, args);
+            };
+            const register = render.register;
+            render.register = (node: any) => {
+              if (node?.plane === "overlay") counts.overlayNodes++;
+              return register.call(render, node);
+            };
+            return () => null;
+          },
+        });
+
+        const source = ref(SAMPLE_SOURCE);
+        const mounted = await mountTerminal(
+          () => [h(Probe), h(TMermaidImage, { x: 0, y: 0, w: 20, content: source.value })],
+          32,
+          8,
+        );
+
+        // The lightbox needs a graphics output to be available at all.
+        const stdoutRenderer = createStdoutRenderer(mounted.terminal, {
+          output: {
+            isTTY: true,
+            write() {},
+          },
+          clear: false,
+          hideCursor: false,
+          altScreen: false,
+          terminalGraphics: { protocol: "kitty", force: true },
+        });
+
+        try {
+          await settle(mounted);
+          setDeterministicMetrics(mounted, 32, 8);
+          // Streaming before the click must not warm up lightbox geometry.
+          source.value = `${SAMPLE_SOURCE}\n  %% tick 1`;
+          await settle(mounted);
+          source.value = `${SAMPLE_SOURCE}\n  %% tick 2`;
+          await settle(mounted);
+
+          expect(counts).toEqual({ stacks: 0, overlayNodes: 0 });
+
+          clickCell(mounted, 5, 2);
+          await settle(mounted);
+
+          expect(counts).toEqual({ stacks: 1, overlayNodes: 1 });
+          expect(rowText(mounted, 0)).toContain("mermaid preview");
         } finally {
           stdoutRenderer.dispose();
           mounted.unmount();

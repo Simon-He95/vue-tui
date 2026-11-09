@@ -9,6 +9,12 @@ import { useTerminal } from "./use-terminal.js";
 import { withTextWidthProvider } from "../utils/text.js";
 
 export interface RenderNodeOptions {
+  /**
+   * Whether this node is registered at all. `false` unregisters it and skips
+   * its paint work; the node registers again when this becomes true. Use it
+   * for overlays that must not allocate or compute anything until they open.
+   */
+  enabled?: boolean;
   /** Render plane for this node; defaults to the surrounding plane context. */
   plane?: TerminalRenderPlane;
   zIndex?: number;
@@ -114,6 +120,19 @@ export function useRenderNode(getOptions: () => RenderNodeOptions): {
   const stop = watchEffect(
     () => {
       const opt = options.value;
+      if (opt.enabled === false) {
+        if (!id.value) return;
+        render.unregister(id.value);
+        id.value = null;
+        lastStack = null;
+        lastZIndex = 0;
+        lastHasRect = false;
+        lastRect = null;
+        lastHasDeps = false;
+        lastDeps = undefined;
+        requestBatchedInvalidate(scheduler, lastPlane.value, opt.priority ?? "normal");
+        return;
+      }
       void opt.deps;
       const stack = opt.stack ?? parentStack.value;
       const nextPlane = opt.plane ?? plane.value;
