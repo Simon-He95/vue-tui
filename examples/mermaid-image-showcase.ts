@@ -4,7 +4,9 @@
  * Renders a mermaid diagram as a PNG through the Kitty/iTerm2 graphics
  * protocol (beautiful-mermaid SVG -> @resvg/resvg-js -> PNG). Terminals
  * without graphics support fall back to showing the raw mermaid source.
- * Clicking the diagram or the header copy button copies the full raw source.
+ * Clicking the diagram opens a terminal-wide preview lightbox; the header
+ * copy button still copies the full raw source. Escape or a click closes the
+ * preview.
  *
  * Run: pnpm run run:mermaid-image-showcase:terminal
  */
@@ -20,6 +22,7 @@ import {
   TMermaidImage,
   loadMermaidImageRenderer,
   type TMermaidImageCopyPayload,
+  type TMermaidImagePreviewPayload,
 } from "../src/mermaid.js";
 import { detectTerminalGraphicsCapabilities } from "../src/renderer/terminal-graphics.js";
 import { TText, useLayout, useTerminal } from "../src/vue.js";
@@ -49,7 +52,8 @@ const App = defineComponent({
       diag.value =
         `graphics=${caps.protocol} supported=${caps.supported ? "yes" : "NO"} ` +
         `(reason: ${caps.reason ?? "auto-detected"}) ` +
-        `raster=${raster ? "ready" : "missing (install beautiful-mermaid + @resvg/resvg-js)"}`;
+        `raster=${raster ? "ready" : "missing (install beautiful-mermaid + @resvg/resvg-js)"} ` +
+        `(click image = preview, q = quit)`;
       scheduler.flushNow();
     })();
 
@@ -60,6 +64,13 @@ const App = defineComponent({
       scheduler.flushNow();
     }
 
+    function onPreview(payload: TMermaidImagePreviewPayload): void {
+      status.value = payload.open
+        ? "Preview opened - click the image or press Esc to close"
+        : "Preview closed";
+      scheduler.flushNow();
+    }
+
     return () => [
       h(TMermaidImage, {
         x: 1,
@@ -67,7 +78,9 @@ const App = defineComponent({
         w: MERMAID_W,
         content: DIAGRAM,
         final: true,
+        previewOnClick: true,
         onCopy,
+        onPreview,
       }),
       status.value
         ? h(TText, {
@@ -137,10 +150,7 @@ if (process.stdout.isTTY) process.stdout.on("resize", onResize);
 
 driver = createStdinDriver({
   dispatch: (event) => {
-    if (
-      event.type === "keydown" &&
-      (event.key === "q" || event.key === "Escape" || (event.key === "c" && event.ctrl))
-    ) {
+    if (event.type === "keydown" && (event.key === "q" || (event.key === "c" && event.ctrl))) {
       cleanupHandle.uninstall();
       cleanup();
       process.exit(0);

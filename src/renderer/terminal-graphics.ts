@@ -79,6 +79,8 @@ export type TerminalGraphicsPayload = Readonly<{
   deferFlush?: boolean;
   retainOnClear?: boolean;
   op?: TerminalGraphicsOperation;
+  /** A preview owns the terminal and must draw through its own suspension. */
+  bypassSuspension?: boolean;
   order?: number;
   fallbackText?: string;
   clearSequence?: string;
@@ -89,6 +91,12 @@ export type TerminalGraphicsOutput = Readonly<{
   queue: (payload: TerminalGraphicsPayload) => boolean;
   clear?: (id: string) => boolean;
   clearAll?: () => boolean;
+  /**
+   * Remove every drawn placement while keeping the transmitted image data, so a
+   * fullscreen overlay can cover the screen and the covered images come back
+   * as placement-only draws (a=p) instead of re-sending their PNGs.
+   */
+  hideAll?: () => boolean;
   isActive?: (id: string) => boolean;
 }>;
 
@@ -131,6 +139,43 @@ terminalGraphicsGlobal[TERMINAL_GRAPHICS_REGISTRY] = terminalGraphicsRegistry;
 const terminalGraphicsOutputs = terminalGraphicsRegistry.outputs;
 const terminalGraphicsOutputVersions = terminalGraphicsRegistry.outputVersions;
 const terminalGraphicsOutputListeners = terminalGraphicsRegistry.outputListeners;
+
+const TERMINAL_GRAPHICS_SUSPENSIONS = Symbol.for(
+  "@simon_he/vue-tui:v1:terminal-graphics-suspensions",
+);
+const terminalGraphicsSuspensions =
+  (terminalGraphicsGlobal[TERMINAL_GRAPHICS_SUSPENSIONS] as
+    | WeakMap<Terminal, Set<string>>
+    | undefined) ?? new WeakMap<Terminal, Set<string>>();
+terminalGraphicsGlobal[TERMINAL_GRAPHICS_SUSPENSIONS] = terminalGraphicsSuspensions;
+
+/**
+ * Pause non-preview graphics writes for a terminal. The returned release is
+ * idempotent; callers clear active images before suspending and repaint after
+ * releasing.
+ */
+export function suspendTerminalGraphics(terminal: Terminal, owner: string): () => void {
+  const rootTerminal = getRootTerminal(terminal);
+  let owners = terminalGraphicsSuspensions.get(rootTerminal);
+  if (!owners) {
+    owners = new Set();
+    terminalGraphicsSuspensions.set(rootTerminal, owners);
+  }
+  owners.add(owner);
+
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    const current = terminalGraphicsSuspensions.get(rootTerminal);
+    current?.delete(owner);
+    if (current && current.size === 0) terminalGraphicsSuspensions.delete(rootTerminal);
+  };
+}
+
+export function isTerminalGraphicsSuspended(terminal: Terminal): boolean {
+  return (terminalGraphicsSuspensions.get(getRootTerminal(terminal))?.size ?? 0) > 0;
+}
 
 function notifyTerminalGraphicsOutputChange(terminal: Terminal): void {
   const version = (terminalGraphicsOutputVersions.get(terminal) ?? 0) + 1;

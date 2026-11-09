@@ -94,6 +94,15 @@ AI 输出 Mermaid fence 时经常先产生不完整源码：
 
 关闭：`:zoom-on-wheel="false"`；调范围：`:min-zoom="1" :max-zoom="8"`。
 
+## 全屏预览（点击打开大图）
+
+图片模式下点击图片打开终端全屏预览：图片按视口等比缩放居中，dim 遮罩 + 边框标题，`Esc` / `Enter` / 空格 / 再次点击关闭。预览开关只在那一帧产生输出，预览期间没有逐帧重绘：
+
+- 预览是**同一张已发送 PNG 的 placement**（复用 inline 的 image id / placement id），打开和关闭都只是一次 `a=p` placement 移动，不会重传 PNG。
+- 遮罩会盖住转写区里的其它图；这些图只删 placement（`a=d,d=i`），终端里的图像数据保留，关闭预览时逐个按 placement 放回，同样不重传。
+- 预览的 render node、overlay 终端句柄和视口几何都在**第一次点击时**创建；没有点击过的图不注册 overlay 节点、不建 z-stack、不算 fit，长 thread 里多张图也不会提前准备。
+- 依赖 Kitty 图形协议；iTerm2 没有 in-place placement，退回「清除 + 重传」。
+
 ## 固定呈现方式
 
 需要固定行为时使用专用组件：
@@ -156,6 +165,7 @@ const textRenderer = async (code, options) => "┌───┐\n│ A │\n└�
 | `padding`                                       | `number`                                   | 40           | SVG 画布内边距                                                        |
 | `ascii`                                         | `boolean`                                  | `false`      | ASCII 边框字符（同时透传给 ANSI renderer）                            |
 | `box` / `title` / `copyButton` / `copyOnClick`  | —                                          | —            | 外框与复制交互（与 `TMermaidText` 一致）                              |
+| `previewOnClick`                                | `true`                                     | —            | 图片模式下点击图片打开全屏预览；`false` 恢复点击复制                  |
 | `maxRenderSourceChars` / `maxRenderSourceLines` | `number`                                   | 20000 / 400  | 超大源码跳过渲染，直接显示源码                                        |
 | `zoomOnWheel`                                   | `boolean`                                  | `true`       | Kitty 图形协议下缩放 + 拖拽平移；iTerm2 自动禁用                      |
 | `zoomModifier`                                  | `"meta" \| "ctrl" \| "metaCtrl" \| "none"` | `"metaCtrl"` | 缩放需要的修饰键；不带修饰键的滚轮透传给滚动容器                      |

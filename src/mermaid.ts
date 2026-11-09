@@ -28,6 +28,7 @@ export {
 export { TMermaidImage } from "./vue/components/TMermaidImage.js";
 export type {
   TMermaidImageCopyPayload,
+  TMermaidImagePreviewPayload,
   TMermaidImageProps,
 } from "./vue/components/TMermaidImage.js";
 export {

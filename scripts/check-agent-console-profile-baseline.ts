@@ -97,9 +97,13 @@ for (const runtime of ["cli", "browser"]) {
     for (const name of ["B/A", "C/B"]) {
       const comparison = data.comparisons[name][key];
       const inconclusiveCliFramed = name === "B/A" && key === "cli/tail-append-burst-framed";
-      const browserFramedLazy = name === "C/B" && key === "browser/tail-append-burst-framed";
-      const medianLimit = browserFramedLazy ? 1 : 0.95;
-      const ciLimit = browserFramedLazy ? 1.02 : 0.95;
+      // Browser framed bursts are paced by animation frames, so once A's replay
+      // copying fits inside the frame budget every variant sits on the floor and
+      // the arm can only attest non-regression (see validate-agent-console-abc).
+      const browserFramedFloorBound =
+        key === "browser/tail-append-burst-framed" && (name === "B/A" || name === "C/B");
+      const medianLimit = browserFramedFloorBound ? 1 : 0.95;
+      const ciLimit = browserFramedFloorBound ? 1.02 : 0.95;
       if (
         comparison.pairedMedianRatio > medianLimit ||
         (inconclusiveCliFramed

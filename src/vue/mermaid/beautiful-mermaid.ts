@@ -12,6 +12,7 @@ import {
   TMermaidImage as TBaseMermaidImage,
   tMermaidImageProps,
   type TMermaidImageCopyPayload,
+  type TMermaidImagePreviewPayload,
 } from "../components/TMermaidImage.js";
 
 const BEAUTIFUL_MERMAID_INSTALL_HINT =
@@ -232,6 +233,7 @@ export const TMermaid = defineComponent({
   props: tMermaidImageProps,
   emits: {
     copy: (_payload: TMermaidImageCopyPayload) => true,
+    preview: (_payload: TMermaidImagePreviewPayload) => true,
   },
   setup(props, { attrs, emit, slots }) {
     return () => {
@@ -251,6 +253,7 @@ export const TMermaid = defineComponent({
           textRenderer,
           shouldRenderSource: props.shouldRenderSource ?? isSimpleMermaidFlowchartSource,
           onCopy: (payload: TMermaidImageCopyPayload) => emit("copy", payload),
+          onPreview: (payload: TMermaidImagePreviewPayload) => emit("preview", payload),
         },
         slots,
       );

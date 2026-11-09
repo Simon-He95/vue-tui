@@ -3,6 +3,7 @@ export type {
   TMermaidAsciiTheme,
   TMermaidCopyPayload,
   TMermaidImageCopyPayload,
+  TMermaidImagePreviewPayload,
   TMermaidImageProps,
   TMermaidRenderer,
   TMermaidRenderEligibility,

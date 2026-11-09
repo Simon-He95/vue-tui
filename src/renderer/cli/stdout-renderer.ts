@@ -56,6 +56,7 @@ import {
   hashTerminalGraphicsString,
   isSafeTerminalGraphicsSequence,
   isTerminalGraphicsProtocol,
+  isTerminalGraphicsSuspended,
   normalizeTerminalGraphicSize,
   registerTerminalGraphicsOutput,
   validateTerminalGraphicsPayload,
@@ -940,6 +941,78 @@ export function createStdoutRenderer(
     return true;
   }
 
+  /**
+   * Hide every drawn placement but keep the transmitted rasters. A fullscreen
+   * overlay (the mermaid preview) covers the whole viewport, so the images
+   * underneath must stop being drawn; keeping their data means closing the
+   * overlay is a placement-only draw per image instead of a PNG upload per
+   * image, which is what a chat transcript with several diagrams costs.
+   */
+  function hideAllTerminalGraphics(): boolean {
+    if (disposed || graphicsCapabilities.preferredProtocol !== "kitty") return false;
+
+    // Queued draws would land under the overlay after the hides below.
+    pendingGraphics.clear();
+    pendingGraphicSignatures.clear();
+    pendingGraphicClears.clear();
+    validatedGraphicFrames.clear();
+    graphicSequenceHashes.clear();
+    terminalResizeDirtyGraphics.clear();
+
+    let hid = false;
+    for (const [id, active] of activeGraphics) {
+      const keepsData =
+        active.protocol === "kitty" &&
+        active.clearSequence != null &&
+        active.resizeSequence != null &&
+        kittyClearSequenceKeepsImageData(active.clearSequence);
+
+      if (keepsData) {
+        const payload: QueuedTerminalGraphicsPayload = {
+          id,
+          x: active.x,
+          y: active.y,
+          w: active.w,
+          h: active.h,
+          protocol: active.protocol,
+          sequence: active.clearSequence!,
+          retainOnClear: true,
+          op: "clear",
+          order: nextGraphicsOrder++,
+        };
+        if (validateTerminalGraphicsPayload(payload, graphicsCapabilities)) {
+          pendingGraphics.set(`${id}:clear`, payload);
+          hid = true;
+          continue;
+        }
+      }
+
+      // No data-preserving clear: release the raster instead of leaving a
+      // placement on screen that the overlay cannot cover.
+      const imageId = kittyImageId(active.sequence) ?? kittyImageId(active.resizeSequence);
+      if (imageId == null) continue;
+      const payload: QueuedTerminalGraphicsPayload = {
+        id: `__terminal_graphics_hide_image_${imageId}__`,
+        x: 0,
+        y: 0,
+        w: 1,
+        h: 1,
+        protocol: "kitty",
+        sequence: createKittyDeleteGraphicsSequence({ imageId, freeImageData: true }),
+        op: "clear",
+        order: nextGraphicsOrder++,
+      };
+      if (validateTerminalGraphicsPayload(payload, graphicsCapabilities)) {
+        pendingGraphics.set(`${payload.id}:clear`, payload);
+        hid = true;
+      }
+    }
+
+    if (!hid) return false;
+    requestTerminalGraphicsFlush();
+    return true;
+  }
+
   function queueTerminalGraphicsForResizeRedraw(
     size: Readonly<{ cols: number; rows: number }>,
   ): void {
@@ -1050,6 +1123,9 @@ export function createStdoutRenderer(
       if (!canUseTerminalGraphicsProtocol(normalized.protocol, graphicsCapabilities)) return false;
 
       if (op === "draw") {
+        if (!normalized.bypassSuspension && isTerminalGraphicsSuspended(terminal)) {
+          return false;
+        }
         const cachedFrame = validatedGraphicFrames.get(normalized.id);
         const width = normalized.w ?? 1;
         const height = normalized.h ?? 1;
@@ -1325,6 +1401,9 @@ export function createStdoutRenderer(
     },
     clearAll() {
       return clearAllTerminalGraphics();
+    },
+    hideAll() {
+      return hideAllTerminalGraphics();
     },
   };
   const unregisterGraphicsOutput = registerTerminalGraphicsOutput(terminal, graphicsOutput);
